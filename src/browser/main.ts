@@ -19,11 +19,6 @@ import {
 } from "./remote-reader.js";
 
 type AuthConfig = {
-  local: {
-    enabled: boolean;
-    registrationEnabled: boolean;
-    minimumPasswordBytes: number;
-  };
   oidcProviders: string[];
 };
 
@@ -50,10 +45,11 @@ type BrowserConfig = {
 
 const status = element<HTMLDivElement>("status");
 const authPanel = element<HTMLElement>("auth-panel");
-const localAuthControls =
-  element<HTMLElement>("local-auth-controls");
-const authLogin = element<HTMLInputElement>("auth-login");
-const authPassword = element<HTMLInputElement>("auth-password");
+const externalAuthControls =
+  element<HTMLElement>("external-auth-controls");
+const authProvider =
+  element<HTMLSelectElement>("auth-provider");
+const authToken = element<HTMLTextAreaElement>("auth-token");
 const authMessage = element<HTMLParagraphElement>("auth-message");
 const cachePolicy = element<HTMLSelectElement>("cache-policy");
 const productId = element<HTMLInputElement>("product-id");
@@ -74,43 +70,10 @@ try {
   setStatus("Startup failed", "error");
 }
 
-element<HTMLButtonElement>("login").addEventListener(
+element<HTMLButtonElement>("oidc-login").addEventListener(
   "click",
   async () => {
-    await authenticate("/api/auth/login", "Signing in...");
-  },
-);
-
-element<HTMLButtonElement>("register").addEventListener(
-  "click",
-  async () => {
-    try {
-      setStatus("Creating account...", "working");
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          login: authLogin.value,
-          password: authPassword.value,
-        }),
-      });
-      const result = await response.json().catch(() => ({})) as {
-        message?: string;
-      };
-      authMessage.textContent =
-        result.message ??
-        "If registration is available, the account can now sign in.";
-      setStatus(
-        response.ok
-          ? "Registration request complete"
-          : "Registration failed",
-        response.ok ? "ready" : "error",
-      );
-    } catch {
-      authMessage.textContent = "Registration request failed";
-      setStatus("Registration failed", "error");
-    }
+    await authenticateExternal();
   },
 );
 
@@ -327,14 +290,7 @@ async function bootstrap(): Promise<void> {
   });
   if (response.status === 401) {
     authPanel.hidden = false;
-    localAuthControls.hidden = !auth.local.enabled;
-    element<HTMLButtonElement>("register").hidden =
-      !auth.local.registrationEnabled;
-    if (!auth.local.enabled) {
-      authMessage.textContent = auth.oidcProviders.length
-        ? "Use the host application's OIDC flow to create a ThimbleDB session."
-        : "No interactive authentication provider is enabled.";
-    }
+    renderAuthProviders(auth);
     setStatus("Sign in required", "ready");
     return;
   }
@@ -385,29 +341,35 @@ async function bootstrap(): Promise<void> {
   renderMetrics();
 }
 
-async function authenticate(
-  endpoint: string,
-  statusMessage: string,
-): Promise<void> {
+async function authenticateExternal(): Promise<void> {
   try {
-    setStatus(statusMessage, "working");
-    const response = await fetch(endpoint, {
+    const provider = authProvider.value;
+    const token = authToken.value.trim();
+    if (!provider || !token) {
+      throw new Error("Select a provider and supply an access token");
+    }
+    setStatus("Validating external identity...", "working");
+    const response = await fetch(
+      `/api/auth/oidc/${encodeURIComponent(provider)}/session`,
+      {
       method: "POST",
       credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        login: authLogin.value,
-        password: authPassword.value,
-      }),
-    });
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: "{}",
+      },
+    );
     if (!response.ok) {
-      authMessage.textContent = "Invalid login or password";
+      authMessage.textContent =
+        "The identity provider token was not accepted.";
       setStatus("Sign in failed", "error");
       return;
     }
     window.location.reload();
-  } catch {
-    authMessage.textContent = "Invalid login or password";
+  } catch (error) {
+    authMessage.textContent = errorMessage(error);
     setStatus("Sign in failed", "error");
   }
 }
@@ -546,9 +508,11 @@ function showSignedOut(error?: unknown): void {
     section.hidden = true;
   }
   authPanel.hidden = false;
-  localAuthControls.hidden = !(authConfig?.local.enabled ?? true);
-  element<HTMLButtonElement>("register").hidden =
-    !(authConfig?.local.registrationEnabled ?? false);
+  if (authConfig) {
+    renderAuthProviders(authConfig);
+  } else {
+    externalAuthControls.hidden = true;
+  }
   authMessage.textContent = error
     ? "The session ended, but persistent cache removal failed."
     : "";
@@ -556,6 +520,22 @@ function showSignedOut(error?: unknown): void {
     error ? "Local cache purge failed" : "Sign in required",
     error ? "error" : "ready",
   );
+}
+
+function renderAuthProviders(auth: AuthConfig): void {
+  authProvider.replaceChildren(
+    ...auth.oidcProviders.map((provider) => {
+      const option = document.createElement("option");
+      option.value = provider;
+      option.textContent = provider;
+      return option;
+    }),
+  );
+  const available = auth.oidcProviders.length > 0;
+  externalAuthControls.hidden = !available;
+  authMessage.textContent = available
+    ? "Obtain an API access token through the host application's OIDC flow."
+    : "No external identity provider is configured.";
 }
 
 function requireClient(): ThimbleClient {

@@ -7,7 +7,6 @@ import {
   AuthError,
   AuthService,
 } from "../src/auth/service.js";
-import { PasswordHasher } from "../src/auth/password.js";
 import { DefaultScopeAuthorizer } from "../src/auth/policy.js";
 import { InMemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
 import { AuthRepository } from "../src/auth/repository.js";
@@ -20,17 +19,13 @@ import { importAesGcmKey } from "../src/envelope.js";
 import { LocalObjectStore } from "../src/stores.js";
 
 describe("AuthService", () => {
-  it("registers, authenticates, authorises, and revokes a local session", async () => {
-    const fixture = await authFixture();
+  it("authenticates, authorises, and revokes an external session", async () => {
+    const adapter = mutableAdapter(externalIdentity());
+    const fixture = await authFixture(adapter);
     try {
-      await fixture.auth.register(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.1",
-      );
-      const authenticated = await fixture.auth.login(
-        "person@example.test",
-        "correct horse battery staple",
+      const authenticated = await fixture.auth.loginExternal(
+        adapter.id,
+        "token",
         "127.0.0.1",
       );
 
@@ -60,40 +55,18 @@ describe("AuthService", () => {
     }
   });
 
-  it("returns the same invalid-credentials error for missing and incorrect accounts", async () => {
-    const fixture = await authFixture();
+  it("uses one invalid-credentials response for missing providers and rejected tokens", async () => {
+    const adapter = mutableAdapter(null);
+    const fixture = await authFixture(adapter);
     try {
-      await fixture.auth.register(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.1",
-      );
-
-      const missing = fixture.auth.login(
-        "missing@example.test",
-        "incorrect but long enough",
-        "198.51.100.1",
-      );
-      const wrong = fixture.auth.login(
-        "person@example.test",
-        "incorrect but long enough",
-        "198.51.100.2",
-      );
-
-      await expect(missing).rejects.toMatchObject({
-        status: 401,
-        code: "invalid_credentials",
-      });
-      await expect(wrong).rejects.toMatchObject({
+      await expect(
+        fixture.auth.loginExternal("missing", "token", null),
+      ).rejects.toMatchObject({
         status: 401,
         code: "invalid_credentials",
       });
       await expect(
-        fixture.auth.login(
-          "x",
-          "incorrect but long enough",
-          "198.51.100.3",
-        ),
+        fixture.auth.loginExternal(adapter.id, "token", null),
       ).rejects.toMatchObject({
         status: 401,
         code: "invalid_credentials",
@@ -103,161 +76,14 @@ describe("AuthService", () => {
     }
   });
 
-  it("bounds password work even when no source IP is available", async () => {
-    const fixture = await authFixture({
-      passwordWorkLimit: 2,
-    });
-    try {
-      await expect(
-        fixture.auth.login("x", "long enough password", null),
-      ).rejects.toMatchObject({ status: 401 });
-      await expect(
-        fixture.auth.login("y", "long enough password", null),
-      ).rejects.toMatchObject({ status: 401 });
-      await expect(
-        fixture.auth.login("z", "long enough password", null),
-      ).rejects.toMatchObject({
-        status: 429,
-        code: "rate_limited",
-      });
-    } finally {
-      await fixture.cleanup();
-    }
-  });
-
-  it("changes passwords and revokes every existing session", async () => {
-    const fixture = await authFixture();
-    try {
-      await fixture.auth.register(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.1",
-      );
-      const first = await fixture.auth.login(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.1",
-      );
-      const second = await fixture.auth.login(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.2",
-      );
-
-      await fixture.auth.changePassword(
-        first,
-        "correct horse battery staple",
-        "a different secure horse battery",
-      );
-      await expect(
-        fixture.auth.changePassword(
-          second,
-          "correct horse battery staple",
-          "attacker selected replacement",
-        ),
-      ).rejects.toMatchObject({
-        status: 409,
-        code: "reauthentication_required",
-      });
-
-      expect(
-        await fixture.auth.authenticate(first.cookieValue),
-      ).toBeNull();
-      expect(
-        await fixture.auth.authenticate(second.cookieValue),
-      ).toBeNull();
-      await expect(
-        fixture.auth.login(
-          "person@example.test",
-          "correct horse battery staple",
-          "127.0.0.3",
-        ),
-      ).rejects.toMatchObject({
-        code: "invalid_credentials",
-      });
-      await expect(
-        fixture.auth.login(
-          "person@example.test",
-          "a different secure horse battery",
-          "127.0.0.4",
-        ),
-      ).resolves.toMatchObject({
-        user: { id: first.user.id },
-      });
-    } finally {
-      await fixture.cleanup();
-    }
-  });
-
-  it("allows only one concurrent password change from stale sessions", async () => {
-    const fixture = await authFixture();
-    try {
-      await fixture.auth.register(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.1",
-      );
-      const first = await fixture.auth.login(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.1",
-      );
-      const second = await fixture.auth.login(
-        "person@example.test",
-        "correct horse battery staple",
-        "127.0.0.2",
-      );
-
-      const results = await Promise.allSettled([
-        fixture.auth.changePassword(
-          first,
-          "correct horse battery staple",
-          "first concurrent replacement",
-        ),
-        fixture.auth.changePassword(
-          second,
-          "correct horse battery staple",
-          "second concurrent replacement",
-        ),
-      ]);
-
-      expect(results.filter((result) => result.status === "fulfilled"))
-        .toHaveLength(1);
-      const rejected = results.find(
-        (result) => result.status === "rejected",
-      );
-      expect(rejected).toMatchObject({
-        status: "rejected",
-        reason: {
-          status: 409,
-          code: "reauthentication_required",
-        },
-      });
-    } finally {
-      await fixture.cleanup();
-    }
-  });
-
-  it("removes stale external roles and recalculates grants", async () => {
-    let identity: ExternalIdentity = {
-      provider: "entra",
-      issuer: "https://issuer.example",
-      subject: "object-1",
-      tenantId: "tenant-1",
-      roles: ["thimble.tenant.writer"],
-      scopes: ["thimble.read"],
-    };
-    const adapter: IdentityAdapter = {
-      id: "entra",
-      authenticate: async () => identity,
-    };
-    const fixture = await authFixture({
-      identityAdapters: new Map([[adapter.id, adapter]]),
-      externalAutoProvision: true,
-    });
+  it("refreshes removed external roles for new and existing sessions", async () => {
+    const adapter = mutableAdapter(
+      externalIdentity(["thimble.tenant.writer"]),
+    );
+    const fixture = await authFixture(adapter);
     try {
       const first = await fixture.auth.loginExternal(
-        "entra",
+        adapter.id,
         "token",
         null,
       );
@@ -266,12 +92,9 @@ describe("AuthService", () => {
         permissions: ["read", "write"],
       });
 
-      identity = {
-        ...identity,
-        roles: [],
-      };
+      adapter.identity = externalIdentity([]);
       const second = await fixture.auth.loginExternal(
-        "entra",
+        adapter.id,
         "token",
         null,
       );
@@ -299,11 +122,9 @@ describe("AuthService", () => {
   });
 });
 
-async function authFixture(options?: {
-  identityAdapters?: Map<string, IdentityAdapter>;
-  externalAutoProvision?: boolean;
-  passwordWorkLimit?: number;
-}): Promise<{
+async function authFixture(
+  adapter: MutableIdentityAdapter,
+): Promise<{
   auth: AuthService;
   cleanup(): Promise<void>;
 }> {
@@ -331,34 +152,45 @@ async function authFixture(options?: {
     (value) =>
       createHash("sha256").update(value).digest("hex"),
   );
-  await repository.ensureDummyUser();
   return {
     auth: new AuthService({
       repository,
-      passwords: new PasswordHasher(
-        crypto.getRandomValues(new Uint8Array(32)),
-        { memorySizeKiB: 1_024, iterations: 2 },
-      ),
       authorizer: new DefaultScopeAuthorizer(),
       rateLimiter: new InMemoryAuthRateLimiter(20),
-      passwordWorkRateLimiter: new InMemoryAuthRateLimiter(
-        options?.passwordWorkLimit ?? 100,
-      ),
-      registrationEnabled: true,
+      identityAdapters: new Map([[adapter.id, adapter]]),
       sessionTtlSeconds: 3_600,
       secureCookies: true,
-      minimumLoginDurationMs: 0,
-      ...(options?.identityAdapters
-        ? { identityAdapters: options.identityAdapters }
-        : {}),
-      ...(options?.externalAutoProvision !== undefined
-        ? {
-            externalAutoProvision:
-              options.externalAutoProvision,
-          }
-        : {}),
     }),
     cleanup: () =>
       rm(directory, { recursive: true, force: true }),
+  };
+}
+
+type MutableIdentityAdapter = IdentityAdapter & {
+  identity: ExternalIdentity | null;
+};
+
+function mutableAdapter(
+  identity: ExternalIdentity | null,
+): MutableIdentityAdapter {
+  return {
+    id: "entra",
+    identity,
+    async authenticate() {
+      return this.identity;
+    },
+  };
+}
+
+function externalIdentity(
+  roles = ["reader"],
+): ExternalIdentity {
+  return {
+    provider: "entra",
+    issuer: "https://issuer.example",
+    subject: "object-1",
+    tenantId: "tenant-1",
+    roles,
+    scopes: ["thimble.read"],
   };
 }

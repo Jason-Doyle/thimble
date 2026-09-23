@@ -4,176 +4,128 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AuthRepository } from "../src/auth/repository.js";
+import type { ExternalIdentity } from "../src/auth/types.js";
 import { EnvelopeObjectStore } from "../src/envelope-store.js";
 import { importAesGcmKey } from "../src/envelope.js";
 import { LocalObjectStore } from "../src/stores.js";
 
 describe("AuthRepository", () => {
-  it("creates unique local users and revocable opaque sessions", async () => {
-    const directory = await mkdtemp(
-      path.join(os.tmpdir(), "thimbledb-auth-"),
-    );
+  it("maps an external identity to a stable user and revocable session", async () => {
+    const fixture = await repositoryFixture("session");
     try {
-      const key = await importAesGcmKey(
-        crypto.getRandomValues(new Uint8Array(32)),
-        ["encrypt", "decrypt"],
-      );
-      const indexKey = crypto.getRandomValues(new Uint8Array(32));
-      const repository = new AuthRepository(
-        new EnvelopeObjectStore(
-          new LocalObjectStore(directory),
-          {
-            key,
-            keyId: "system-auth:v1",
-            objectKeyPrefix: "auth-v1",
-          },
-        ),
-        (value) =>
-          createHmac("sha256", indexKey)
-            .update(value)
-            .digest("hex"),
-        (value) =>
-          createHash("sha256").update(value).digest("hex"),
-      );
+      const identity = externalIdentity();
+      const user =
+        await fixture.repository.findOrCreateExternalUser(identity);
+      const found =
+        await fixture.repository.findExternalUser(identity);
+      expect(found?.id).toBe(user.id);
 
-      const user = await repository.createLocalUser(
-        "User@Example.test",
-        "$argon2id$fake",
-      );
-      expect(user).not.toBeNull();
-      await expect(
-        repository.createLocalUser(
-          "user@example.test",
-          "$argon2id$other",
-        ),
-      ).resolves.toBeNull();
-      await expect(
-        repository.findLocalUser("USER@example.test"),
-      ).resolves.toMatchObject({ id: user!.id });
-
-      const handle = await repository.createSession(
-        user!,
+      const handle = await fixture.repository.createSession(
+        user,
         [
           {
-            scopeId: `user:${user!.id}`,
+            scopeId: `user:${user.id}`,
             permissions: ["read", "write"],
           },
         ],
         3_600,
-        "local",
+        "entra",
       );
-      expect(handle.cookieValue).not.toContain("$argon2id$");
       await expect(
-        repository.getSession(handle.cookieValue),
-      ).resolves.toMatchObject({ userId: user!.id });
+        fixture.repository.getSession(handle.cookieValue),
+      ).resolves.toMatchObject({ userId: user.id });
 
-      await repository.revokeSession(handle.cookieValue);
+      await fixture.repository.revokeSession(handle.cookieValue);
       await expect(
-        repository.getSession(handle.cookieValue),
+        fixture.repository.getSession(handle.cookieValue),
       ).resolves.toBeNull();
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await fixture.cleanup();
     }
   });
 
   it("updates external tenant and role claims on later authentication", async () => {
-    const directory = await mkdtemp(
-      path.join(os.tmpdir(), "thimbledb-auth-claims-"),
-    );
+    const fixture = await repositoryFixture("claims");
     try {
-      const key = await importAesGcmKey(
-        crypto.getRandomValues(new Uint8Array(32)),
-        ["encrypt", "decrypt"],
-      );
-      const indexKey = crypto.getRandomValues(new Uint8Array(32));
-      const repository = new AuthRepository(
-        new EnvelopeObjectStore(
-          new LocalObjectStore(directory),
-          {
-            key,
-            keyId: "system-auth:v1",
-            objectKeyPrefix: "auth-v1",
-          },
-        ),
-        (value) =>
-          createHmac("sha256", indexKey)
-            .update(value)
-            .digest("hex"),
-        (value) =>
-          createHash("sha256").update(value).digest("hex"),
-      );
-
-      const first = await repository.findOrCreateExternalUser({
-        provider: "entra",
-        issuer: "https://issuer.example",
-        subject: "object-1",
-        tenantId: "tenant-1",
-        roles: ["reader"],
-        scopes: ["thimble.read"],
-      });
-      const second = await repository.findOrCreateExternalUser({
-        provider: "entra",
-        issuer: "https://issuer.example",
-        subject: "object-1",
-        tenantId: "tenant-1",
-        roles: ["admin"],
-        scopes: ["thimble.read"],
-      });
+      const first =
+        await fixture.repository.findOrCreateExternalUser(
+          externalIdentity(["reader"]),
+        );
+      const second =
+        await fixture.repository.findOrCreateExternalUser(
+          externalIdentity(["admin"]),
+        );
 
       expect(second.id).toBe(first.id);
       expect(second.roles).toEqual(["admin"]);
       expect(second.tenants).toEqual(["tenant-1"]);
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await fixture.cleanup();
     }
   });
 
   it("recovers when the same external identity is provisioned concurrently", async () => {
-    const directory = await mkdtemp(
-      path.join(os.tmpdir(), "thimbledb-auth-race-"),
-    );
+    const fixture = await repositoryFixture("race");
     try {
-      const key = await importAesGcmKey(
-        crypto.getRandomValues(new Uint8Array(32)),
-        ["encrypt", "decrypt"],
-      );
-      const indexKey = crypto.getRandomValues(new Uint8Array(32));
-      const repository = new AuthRepository(
-        new EnvelopeObjectStore(
-          new LocalObjectStore(directory),
-          {
-            key,
-            keyId: "system-auth:v1",
-            objectKeyPrefix: "auth-v1",
-          },
-        ),
-        (value) =>
-          createHmac("sha256", indexKey)
-            .update(value)
-            .digest("hex"),
-        (value) =>
-          createHash("sha256").update(value).digest("hex"),
-      );
-      const identity = {
-        provider: "entra" as const,
-        issuer: "https://issuer.example",
-        subject: "object-race",
-        tenantId: "tenant-1",
-        roles: ["reader"],
-        scopes: ["thimble.read"],
-      };
-
+      const identity = externalIdentity();
       const [first, second] = await Promise.all([
-        repository.findOrCreateExternalUser(identity),
-        repository.findOrCreateExternalUser(identity),
+        fixture.repository.findOrCreateExternalUser(identity),
+        fixture.repository.findOrCreateExternalUser(identity),
       ]);
 
       expect(second.id).toBe(first.id);
       await expect(
-        repository.findExternalUser(identity),
+        fixture.repository.findExternalUser(identity),
       ).resolves.toMatchObject({ id: first.id });
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await fixture.cleanup();
     }
   });
 });
+
+async function repositoryFixture(label: string): Promise<{
+  repository: AuthRepository;
+  cleanup(): Promise<void>;
+}> {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), `thimbledb-auth-${label}-`),
+  );
+  const key = await importAesGcmKey(
+    crypto.getRandomValues(new Uint8Array(32)),
+    ["encrypt", "decrypt"],
+  );
+  const indexKey = crypto.getRandomValues(new Uint8Array(32));
+  return {
+    repository: new AuthRepository(
+      new EnvelopeObjectStore(
+        new LocalObjectStore(directory),
+        {
+          key,
+          keyId: "system-auth:v1",
+          objectKeyPrefix: "auth-v1",
+        },
+      ),
+      (value) =>
+        createHmac("sha256", indexKey)
+          .update(value)
+          .digest("hex"),
+      (value) =>
+        createHash("sha256").update(value).digest("hex"),
+    ),
+    cleanup: () =>
+      rm(directory, { recursive: true, force: true }),
+  };
+}
+
+function externalIdentity(
+  roles = ["reader"],
+): ExternalIdentity {
+  return {
+    provider: "entra",
+    issuer: "https://issuer.example",
+    subject: "object-1",
+    tenantId: "tenant-1",
+    roles,
+    scopes: ["thimble.read"],
+  };
+}

@@ -22,9 +22,6 @@ export type SessionHandle = {
 };
 
 export class AuthRepository {
-  private static readonly DUMMY_USER_ID =
-    "00000000-0000-0000-0000-000000000000";
-
   constructor(
     private readonly store: ObjectStore,
     private readonly indexValue: (
@@ -34,63 +31,6 @@ export class AuthRepository {
       value: string,
     ) => Promise<string> | string,
   ) {}
-
-  async createLocalUser(
-    login: string,
-    passwordHash: string,
-  ): Promise<AuthUser | null> {
-    const normalised = normalizeLogin(login);
-    const indexKey = await this.identityIndexKey(
-      `local|${normalised}`,
-    );
-    const now = new Date().toISOString();
-    const user: AuthUser = {
-      id: crypto.randomUUID(),
-      status: "active",
-      authVersion: 1,
-      identities: [
-        { provider: "local", subject: normalised },
-      ],
-      roles: [],
-      tenants: [],
-      password: {
-        encoded: passwordHash,
-        changedAt: now,
-      },
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    try {
-      await this.putJson(this.userKey(user.id), user, {
-        ifNoneMatch: true,
-      });
-      try {
-        await this.putJson<IdentityIndex>(
-          indexKey,
-          { userId: user.id },
-          { ifNoneMatch: true },
-        );
-        return user;
-      } catch (error) {
-        await this.store.delete(this.userKey(user.id));
-        if (isPreconditionFailure(error)) {
-          return null;
-        }
-        throw error;
-      }
-    } catch (error) {
-      if (isPreconditionFailure(error)) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  async findLocalUser(login: string): Promise<AuthUser | null> {
-    const normalised = normalizeLogin(login);
-    return this.findByIdentity(`local|${normalised}`);
-  }
 
   async findOrCreateExternalUser(
     identity: ExternalIdentity,
@@ -137,41 +77,7 @@ export class AuthRepository {
   }
 
   getUser(userId: string): Promise<AuthUser | null> {
-    return this.getJson<AuthUser>(this.userKey(userId));
-  }
-
-  async ensureDummyUser(): Promise<void> {
-    const now = new Date(0).toISOString();
-    const dummy: AuthUser = {
-      id: AuthRepository.DUMMY_USER_ID,
-      status: "disabled",
-      authVersion: 0,
-      identities: [
-        {
-          provider: "local",
-          subject: "dummy",
-        },
-      ],
-      roles: [],
-      tenants: [],
-      createdAt: now,
-      updatedAt: now,
-    };
-    try {
-      await this.putJson(
-        this.userKey(AuthRepository.DUMMY_USER_ID),
-        dummy,
-        { ifNoneMatch: true },
-      );
-    } catch (error) {
-      if (!isPreconditionFailure(error)) {
-        throw error;
-      }
-    }
-  }
-
-  readDummyUser(): Promise<AuthUser | null> {
-    return this.getUser(AuthRepository.DUMMY_USER_ID);
+    return this.getExternalUser(this.userKey(userId));
   }
 
   async createSession(
@@ -221,6 +127,12 @@ export class AuthRepository {
     if (!session) {
       return null;
     }
+    if (!isExternalProvider(session.provider)) {
+      await this.store.delete(
+        this.sessionKey(parsed.userId, digest),
+      );
+      return null;
+    }
     if (session.expiresAt <= new Date().toISOString()) {
       await this.store.delete(
         this.sessionKey(parsed.userId, digest),
@@ -253,47 +165,6 @@ export class AuthRepository {
     const prefix = `sessions/${userId}/`;
     const keys = await this.store.list(prefix);
     await Promise.all(keys.map((key) => this.store.delete(key)));
-  }
-
-  async updatePassword(
-    userId: string,
-    encoded: string,
-    expectedAuthVersion: number,
-    expectedPasswordHash: string,
-  ): Promise<AuthUser | null> {
-    const key = this.userKey(userId);
-    const object = await this.store.get(key);
-    if (!object) {
-      throw new Error(`User ${userId} is missing`);
-    }
-    const current = decodeJson<AuthUser>(object.bytes);
-    if (
-      current.authVersion !== expectedAuthVersion ||
-      current.password?.encoded !== expectedPasswordHash
-    ) {
-      return null;
-    }
-    const now = new Date().toISOString();
-    const updated: AuthUser = {
-      ...current,
-      authVersion: current.authVersion + 1,
-      password: {
-        encoded,
-        changedAt: now,
-      },
-      updatedAt: now,
-    };
-    try {
-      await this.putJson(key, updated, {
-        ifMatch: object.etag,
-      });
-      return updated;
-    } catch (error) {
-      if (isPreconditionFailure(error)) {
-        return null;
-      }
-      throw error;
-    }
   }
 
   private async findByIdentity(
@@ -382,6 +253,13 @@ export class AuthRepository {
     return object ? decodeJson<T>(object.bytes) : null;
   }
 
+  private async getExternalUser(
+    key: string,
+  ): Promise<AuthUser | null> {
+    const value = await this.getJson<unknown>(key);
+    return isExternalAuthUser(value) ? value : null;
+  }
+
   private putJson<T>(
     key: string,
     value: T,
@@ -398,16 +276,59 @@ export class AuthRepository {
   }
 }
 
-export function normalizeLogin(login: string): string {
-  const normalised = login.normalize("NFKC").trim().toLowerCase();
+function isExternalAuthUser(value: unknown): value is AuthUser {
   if (
-    normalised.length < 3 ||
-    normalised.length > 254 ||
-    /[\u0000-\u001f\u007f]/.test(normalised)
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    "password" in value
   ) {
-    throw new Error("Login identifier is invalid");
+    return false;
   }
-  return normalised;
+  const candidate = value as Partial<AuthUser>;
+  return (
+    typeof candidate.id === "string" &&
+    (candidate.status === "active" ||
+      candidate.status === "disabled") &&
+    typeof candidate.authVersion === "number" &&
+    Array.isArray(candidate.identities) &&
+    candidate.identities.every(isStoredExternalIdentity) &&
+    Array.isArray(candidate.roles) &&
+    candidate.roles.every((role) => typeof role === "string") &&
+    Array.isArray(candidate.tenants) &&
+    candidate.tenants.every(
+      (tenant) => typeof tenant === "string",
+    ) &&
+    typeof candidate.createdAt === "string" &&
+    typeof candidate.updatedAt === "string"
+  );
+}
+
+function isStoredExternalIdentity(
+  value: unknown,
+): value is Identity {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+  const candidate = value as Partial<Identity>;
+  return (
+    (candidate.provider === "entra" ||
+      candidate.provider === "oidc") &&
+    typeof candidate.issuer === "string" &&
+    typeof candidate.subject === "string" &&
+    (candidate.provider !== "entra" ||
+      typeof candidate.tenantId === "string")
+  );
+}
+
+function isExternalProvider(
+  value: unknown,
+): value is Identity["provider"] {
+  return value === "entra" || value === "oidc";
 }
 
 function parseSessionCookieValue(

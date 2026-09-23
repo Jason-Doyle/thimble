@@ -72,8 +72,8 @@ Only bindings, credentials, and browser read authorisation differ.
 - object-key-bound authenticated encryption
 - HMAC-derived private node addresses
 - authority-only conditional writes with route and document ID validation
-- local Argon2id accounts and revocable sessions
-- Microsoft Entra and generic OIDC token adapters
+- Microsoft Entra and generic OIDC identity mapping
+- opaque revocable sessions tied to stable internal user IDs
 - per-user and per-tenant scope grants
 - write responses that update all open browser tabs
 - Cloudflare Worker and native R2 binding
@@ -83,9 +83,8 @@ Only bindings, credentials, and browser read authorisation differ.
 - typed package exports for the browser/core and auth APIs
 - Docker, Wrangler, Bicep, and CloudFormation deployment paths
 
-The browser bundle is about 26.4 KB uncompressed and 8.4 KB gzip. No database
-runtime or WASM module is shipped to the browser. Local password hashing uses
-Argon2id WASM in the authority.
+The browser bundle is about 26.0 KB uncompressed and 8.4 KB gzip. It ships no
+database runtime or WASM module.
 
 ## Quick start
 
@@ -95,6 +94,10 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:5173`.
+
+Configure Entra or a generic OIDC provider before signing in. The browser
+harness accepts an API access token and exchanges it for a ThimbleDB session.
+See [Authentication](docs/AUTHENTICATION.md).
 
 The local provider is intended for development and one Node process. It is not
 a multi-process coordination backend.
@@ -139,7 +142,7 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [System diagrams](docs/DIAGRAMS.md) | Trust boundaries, sequences, keys, and providers |
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |
 | [Security](docs/SECURITY.md) | Threat model, encryption, keys, and revocation |
-| [Authentication](docs/AUTHENTICATION.md) | Local accounts, sessions, scope grants, and Entra |
+| [Authentication](docs/AUTHENTICATION.md) | External identity mapping, sessions, and scope grants |
 | [Protocol](docs/PROTOCOL.md) | Binary envelope and object layout |
 | [Versioning](docs/VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
 | [Proof of concept](docs/POC.md) | Browser harness, sample application, and benchmark usage |
@@ -156,7 +159,6 @@ The current candidate passes the repository's unit, cross-browser, package,
 container, and deployment-template checks. That does not make it a true v1.
 ThimbleDB remains private research and still needs:
 
-- password reset, email verification, passkeys, and MFA
 - identity linking and administrative account controls
 - document deletion semantics and a safe retention or garbage-collection design
 - adaptive snapshot versus trie selection

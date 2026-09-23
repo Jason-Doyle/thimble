@@ -46,7 +46,6 @@ Set secrets in the current shell:
 
 ```powershell
 $env:THIMBLE_MASTER_KEY = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-$env:THIMBLE_PASSWORD_PEPPER = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Deploy:
@@ -60,15 +59,20 @@ az deployment group create `
                deployAuthority=true `
                containerImage=<registry/image:tag> `
                masterKey=$env:THIMBLE_MASTER_KEY `
-               passwordPepper=$env:THIMBLE_PASSWORD_PEPPER
+               entraTenantId=<tenant-id> `
+               entraAudience=<api-audience> `
+               entraRequiredScope=thimble.access
 ```
 
 Remove shell values afterwards:
 
 ```powershell
 Remove-Item Env:THIMBLE_MASTER_KEY
-Remove-Item Env:THIMBLE_PASSWORD_PEPPER
 ```
+
+For a non-Entra provider, set `oidcProviderId`, `oidcIssuer`, `oidcAudience`,
+`oidcJwksUri`, and at least one of `oidcRequiredScope` or
+`oidcRequiredRole`. `oidcAllowedTenants` is optional.
 
 For key rotation, set `keyVersion` to the current write version and
 `readKeyVersions` to the comma-separated historical versions that remain
@@ -95,8 +99,8 @@ complete but does not provision Key Vault.
 
 The example disables source-IP rate limiting because Container Apps ingress
 does not provide a peer address that this implementation independently
-verifies. Per-account and per-subject limits remain active. Enable source-IP
-limits only after configuring and testing a trusted proxy boundary.
+verifies. Per-subject limits remain active. Enable source-IP limits only after
+configuring and testing a trusted proxy boundary.
 
 ## References
 

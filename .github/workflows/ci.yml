@@ -45,7 +45,7 @@ jobs:
       - name: Verify package exports
         run: |
           npm pack --dry-run
-          node -e "Promise.all([import('./dist/package/index.js'), import('./dist/package/auth/index.js')]).then(([core, auth]) => { if (!core.ThimbleClient || !core.encodeEnvelope || !auth.PasswordHasher || !auth.OidcIdentityAdapter) process.exit(1) })"
+          node -e "Promise.all([import('./dist/package/index.js'), import('./dist/package/auth/index.js')]).then(([core, auth]) => { if (!core.ThimbleClient || !core.encodeEnvelope || !auth.AuthService || !auth.OidcIdentityAdapter) process.exit(1) })"
 
       - name: Build container
         run: docker build --tag thimbledb:ci .

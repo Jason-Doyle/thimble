@@ -15,9 +15,13 @@ versioning once its public API is declared stable.
 - Added historical key reads and a collection key-migration command.
 - Disabled destructive garbage collection in production engines.
 - Added bounded request parsing, trusted proxy handling, and provider-backed
-  account rate limits.
-- Hardened logout/cache races, external identity refresh, password-change
-  concurrency, and first-use key creation.
+  external-identity rate limits.
+- Hardened logout/cache races, external identity refresh, and first-use key
+  creation.
+- Removed local password accounts and delegated credentials, recovery,
+  verification, passkeys, and MFA to Entra or another OIDC provider.
+- Added an external-auth migration that preserves internal user IDs while
+  removing legacy password material, local identity indexes, and sessions.
 
 ## 0.1.0
 

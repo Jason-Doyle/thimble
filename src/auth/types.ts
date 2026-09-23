@@ -1,9 +1,5 @@
 export type Identity =
   | {
-      provider: "local";
-      subject: string;
-    }
-  | {
       provider: "entra";
       issuer: string;
       subject: string;
@@ -22,10 +18,6 @@ export type AuthUser = {
   identities: Identity[];
   roles: string[];
   tenants: string[];
-  password?: {
-    encoded: string;
-    changedAt: string;
-  };
   createdAt: string;
   updatedAt: string;
 };

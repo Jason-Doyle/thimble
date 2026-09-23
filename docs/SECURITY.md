@@ -101,10 +101,11 @@ device key in one controlled operation.
 Encryption keys follow authorisation scopes. A user receives only keys for
 scopes the authority allows.
 
-Local accounts use Argon2id and an authority-only encrypted auth store.
-External identities use a validated OIDC access token. Both create opaque,
-revocable sessions. The authority reloads current user claims and recalculates
-scope grants when it authenticates a request.
+External identities use a validated OIDC access token. ThimbleDB stores a
+minimal encrypted identity mapping and opaque, revocable sessions. The
+authority reloads current user claims and recalculates scope grants when it
+authenticates a request. Passwords, recovery, verification, passkeys, and MFA
+remain with the identity provider.
 
 See [Authentication and identity](AUTHENTICATION.md).
 
@@ -136,7 +137,6 @@ boundary.
 Never commit:
 
 - `THIMBLE_MASTER_KEY`
-- `THIMBLE_PASSWORD_PEPPER`
 - Azure connection strings or SAS tokens
 - AWS credentials
 - R2 access keys

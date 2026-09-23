@@ -8,6 +8,41 @@ import { describe, expect, it } from "vitest";
 import { OidcIdentityAdapter } from "../src/auth/oidc.js";
 
 describe("OidcIdentityAdapter", () => {
+  it("maps generic OIDC identities by issuer and subject", async () => {
+    const { privateKey, publicKey } = await generateKeyPair("RS256");
+    const publicJwk = await exportJWK(publicKey);
+    publicJwk.kid = "generic-key";
+    publicJwk.alg = "RS256";
+    const issuer = "https://identity.example.test";
+    const token = await new SignJWT({
+      scope: "thimble.access",
+      roles: ["catalogue.reader"],
+    })
+      .setProtectedHeader({ alg: "RS256", kid: "generic-key" })
+      .setIssuer(issuer)
+      .setAudience("thimbledb-api")
+      .setSubject("provider-user-1")
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(privateKey);
+    const adapter = new OidcIdentityAdapter({
+      id: "generic",
+      issuer,
+      audience: "thimbledb-api",
+      jwksUri: "https://unused.example.test/keys",
+      requiredScopes: ["thimble.access"],
+      keySet: createLocalJWKSet({ keys: [publicJwk] }),
+    });
+
+    await expect(adapter.authenticate(token)).resolves.toMatchObject({
+      provider: "oidc",
+      issuer,
+      subject: "provider-user-1",
+      roles: ["catalogue.reader"],
+      scopes: ["thimble.access"],
+    });
+  });
+
   it("maps Entra identities by tenant and object id, not email", async () => {
     const { privateKey, publicKey } = await generateKeyPair("RS256");
     const publicJwk = await exportJWK(publicKey);

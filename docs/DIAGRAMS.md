@@ -26,12 +26,12 @@ flowchart LR
   end
 
   subgraph Authority["Authenticated authority boundary"]
-    Auth["Local Argon2id or external OIDC authentication"]
+    Auth["External OIDC authentication"]
     Authorise["Scope authorisation"]
     KeyGrant["Short-lived key grant"]
     Validate["Mutation validation"]
     Commit["Conditional HEAD commit"]
-    AuthStore["Private auth store<br/>users + hashes + sessions"]
+    AuthStore["Private auth store<br/>identity mappings + sessions"]
 
     Auth --> AuthStore
     Auth --> Authorise
@@ -134,7 +134,6 @@ sequenceDiagram
 ```mermaid
 flowchart TD
   Master["Deployment master key<br/>platform secret"]
-  Pepper["Password pepper<br/>platform secret"]
   HKDF["HKDF-SHA-256"]
   ScopeData["Scope data key vN<br/>AES-256-GCM"]
   ScopeAddress["Scope address key vN<br/>HMAC-SHA-256"]
@@ -143,7 +142,7 @@ flowchart TD
   DeviceKey["Non-extractable device cache key<br/>IndexedDB CryptoKey"]
   Persistent["Encrypted IndexedDB values"]
   Objects["Encrypted object envelopes"]
-  AuthStore["Encrypted auth records<br/>password hashes + opaque sessions"]
+  AuthStore["Encrypted auth records<br/>identity mappings + opaque sessions"]
 
   Master --> HKDF
   HKDF --> ScopeData
@@ -151,7 +150,6 @@ flowchart TD
   ScopeData --> Objects
   ScopeAddress --> Objects
   Master --> AuthStore
-  Pepper --> AuthStore
   ScopeData --> Grant
   Grant --> BrowserKey
   DeviceKey --> Persistent

@@ -6,7 +6,7 @@
 | [System diagrams](DIAGRAMS.md) | Trust boundaries, sequences, keys, scopes, and providers |
 | [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
-| [Authentication](AUTHENTICATION.md) | Local accounts, sessions, scope grants, and Entra |
+| [Authentication](AUTHENTICATION.md) | External identity mappings, sessions, and scope grants |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |
 | [Versioning](VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
 | [Proof of concept](POC.md) | Browser harness, sample store, and benchmark usage |

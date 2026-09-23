@@ -13,19 +13,21 @@ import {
   AuthService,
   type AuthenticatedSession,
 } from "./auth/service.js";
-import { createEntraAdapter } from "./auth/oidc.js";
-import { PasswordHasher } from "./auth/password.js";
+import {
+  createEntraAdapter,
+  OidcIdentityAdapter,
+} from "./auth/oidc.js";
 import { DefaultScopeAuthorizer } from "./auth/policy.js";
 import { ObjectStoreAuthRateLimiter } from "./auth/rate-limit.js";
 import { AuthRepository } from "./auth/repository.js";
 import type {
+  IdentityAdapter,
   ScopeGrant,
 } from "./auth/types.js";
 import type { JsonDocument, ObjectStore } from "./core.js";
 import { ContentAddressedTrieEngine } from "./engines/content-trie.js";
 import { EnvelopeObjectStore } from "./envelope-store.js";
 import {
-  loadOrCreateSecret,
   loadScopeMaterial,
   scopeKeyResponse,
   type ScopeMaterial,
@@ -41,6 +43,7 @@ import {
   workloadProfiles,
 } from "./workload.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
+import { validateName } from "./shared-utils.js";
 
 type Provider = "local" | "azure" | "s3" | "r2";
 
@@ -56,7 +59,6 @@ type ServerContext = {
   auth: AuthService;
   allowedOrigin: string;
   headTtlMs: number;
-  registrationEnabled: boolean;
   oidcProviders: string[];
   scope(scopeId: string): Promise<ScopeRuntime>;
 };
@@ -129,41 +131,12 @@ async function createContext(): Promise<ServerContext> {
     authIndex,
     (value) => createHash("sha256").update(value).digest("hex"),
   );
-  await repository.ensureDummyUser();
-  const pepper = await loadOrCreateSecret(
-    "THIMBLE_PASSWORD_PEPPER",
-    "password-pepper.key",
-    provider === "local",
-    32,
-  );
-  const identityAdapters = new Map();
-  if (
-    process.env.ENTRA_TENANT_ID &&
-    process.env.ENTRA_AUDIENCE
-  ) {
-    identityAdapters.set(
-      "entra",
-      createEntraAdapter({
-        tenantId: process.env.ENTRA_TENANT_ID,
-        audience: process.env.ENTRA_AUDIENCE,
-        ...(process.env.ENTRA_REQUIRED_SCOPE
-          ? {
-              requiredScope:
-                process.env.ENTRA_REQUIRED_SCOPE,
-            }
-          : {}),
-        ...(process.env.ENTRA_REQUIRED_ROLE
-          ? { requiredRole: process.env.ENTRA_REQUIRED_ROLE }
-          : {}),
-      }),
-    );
-  }
+  const identityAdapters = configuredIdentityAdapters();
   const secureCookies =
     process.env.THIMBLE_SECURE_COOKIES === "true" ||
     provider !== "local";
   const auth = new AuthService({
     repository,
-    passwords: new PasswordHasher(pepper),
     authorizer: new DefaultScopeAuthorizer(),
     rateLimiter: new ObjectStoreAuthRateLimiter(
       authStore,
@@ -171,24 +144,7 @@ async function createContext(): Promise<ServerContext> {
       parseInteger(process.env.THIMBLE_AUTH_RATE_LIMIT, 5),
       parseInteger(process.env.THIMBLE_AUTH_RATE_WINDOW_MS, 60_000),
     ),
-    passwordWorkRateLimiter: new ObjectStoreAuthRateLimiter(
-      authStore,
-      authIndex,
-      parseInteger(
-        process.env.THIMBLE_PASSWORD_WORK_RATE_LIMIT,
-        30,
-      ),
-      parseInteger(
-        process.env.THIMBLE_PASSWORD_WORK_RATE_WINDOW_MS,
-        60_000,
-      ),
-    ),
     identityAdapters,
-    externalAutoProvision:
-      process.env.ENTRA_AUTO_PROVISION === "true",
-    registrationEnabled:
-      process.env.THIMBLE_LOCAL_REGISTRATION === "true" ||
-      provider === "local",
     sessionTtlSeconds: parseInteger(
       process.env.THIMBLE_SESSION_TTL_SECONDS,
       3_600,
@@ -232,9 +188,6 @@ async function createContext(): Promise<ServerContext> {
       process.env.THIMBLE_HEAD_TTL_MS,
       1_000,
     ),
-    registrationEnabled:
-      process.env.THIMBLE_LOCAL_REGISTRATION === "true" ||
-      provider === "local",
     oidcProviders: [...identityAdapters.keys()],
     scope,
   };
@@ -310,57 +263,7 @@ async function handleRequest(
     url.pathname === "/api/auth/config"
   ) {
     sendJson(response, 200, {
-      local: {
-        enabled: true,
-        registrationEnabled: context.registrationEnabled,
-        minimumPasswordBytes: 12,
-      },
       oidcProviders: context.oidcProviders,
-    });
-    return;
-  }
-
-  if (
-    request.method === "POST" &&
-    url.pathname === "/api/auth/register"
-  ) {
-    requireMutationRequest(context, request);
-    const body = await readJsonBody(request);
-    const credentials = localCredentials(body);
-    await context.auth.register(
-      credentials.login,
-      credentials.password,
-      clientRateKey(request),
-    );
-    sendJson(response, 202, {
-      accepted: true,
-      message:
-        "If the account can be created, it is now available for login",
-    });
-    return;
-  }
-
-  if (
-    request.method === "POST" &&
-    url.pathname === "/api/auth/login"
-  ) {
-    requireMutationRequest(context, request);
-    const body = await readJsonBody(request);
-    const credentials = localCredentials(body);
-    await context.auth.logout(
-      sessionCookie(request, context.auth.cookieName()),
-    );
-    const authenticated = await context.auth.login(
-      credentials.login,
-      credentials.password,
-      clientRateKey(request),
-    );
-    response.setHeader(
-      "set-cookie",
-      context.auth.sessionCookie(authenticated.cookieValue),
-    );
-    sendJson(response, 200, {
-      user: publicUser(authenticated),
     });
     return;
   }
@@ -413,40 +316,6 @@ async function handleRequest(
     return;
   }
 
-  if (
-    request.method === "POST" &&
-    url.pathname === "/api/auth/password"
-  ) {
-    requireAuthenticated(authenticated);
-    requireMutationRequest(
-      context,
-      request,
-      authenticated.session.csrfToken,
-    );
-    const body = await readJsonBody(request);
-    if (
-      typeof body !== "object" ||
-      body === null ||
-      Array.isArray(body) ||
-      typeof (body as { currentPassword?: unknown })
-        .currentPassword !== "string" ||
-      typeof (body as { newPassword?: unknown }).newPassword !==
-        "string"
-    ) {
-      throw new AuthError(400, "invalid_request", "Invalid request");
-    }
-    await context.auth.changePassword(
-      authenticated,
-      (body as { currentPassword: string }).currentPassword,
-      (body as { newPassword: string }).newPassword,
-    );
-    response.setHeader(
-      "set-cookie",
-      context.auth.clearSessionCookie(),
-    );
-    sendJson(response, 200, { passwordChanged: true });
-    return;
-  }
 
   if (request.method === "GET" && url.pathname === "/api/config") {
     requireAuthenticated(authenticated);
@@ -797,29 +666,6 @@ function scopeFromObjectKey(key: string): string {
   return decodePathSegment(match[1]);
 }
 
-function localCredentials(
-  value: unknown,
-): { login: string; password: string } {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    throw new AuthError(400, "invalid_request", "Invalid request");
-  }
-  const candidate = value as Record<string, unknown>;
-  if (
-    typeof candidate.login !== "string" ||
-    typeof candidate.password !== "string"
-  ) {
-    throw new AuthError(400, "invalid_request", "Invalid request");
-  }
-  return {
-    login: candidate.login,
-    password: candidate.password,
-  };
-}
-
 async function readJsonBody(
   request: IncomingMessage,
 ): Promise<unknown> {
@@ -909,6 +755,81 @@ function sessionCookie(
 
 function clientRateKey(request: IncomingMessage): string | null {
   return nodeClientIp(request);
+}
+
+function configuredIdentityAdapters(): Map<string, IdentityAdapter> {
+  const adapters = new Map<string, IdentityAdapter>();
+  if (
+    [
+      process.env.ENTRA_TENANT_ID,
+      process.env.ENTRA_AUDIENCE,
+      process.env.ENTRA_REQUIRED_SCOPE,
+      process.env.ENTRA_REQUIRED_ROLE,
+    ].some(Boolean)
+  ) {
+    adapters.set(
+      "entra",
+      createEntraAdapter({
+        tenantId: requiredEnvironment("ENTRA_TENANT_ID"),
+        audience: requiredEnvironment("ENTRA_AUDIENCE"),
+        ...(process.env.ENTRA_REQUIRED_SCOPE
+          ? { requiredScope: process.env.ENTRA_REQUIRED_SCOPE }
+          : {}),
+        ...(process.env.ENTRA_REQUIRED_ROLE
+          ? { requiredRole: process.env.ENTRA_REQUIRED_ROLE }
+          : {}),
+      }),
+    );
+  }
+
+  if (
+    [
+      process.env.OIDC_PROVIDER_ID,
+      process.env.OIDC_ISSUER,
+      process.env.OIDC_AUDIENCE,
+      process.env.OIDC_JWKS_URI,
+      process.env.OIDC_REQUIRED_SCOPE,
+      process.env.OIDC_REQUIRED_ROLE,
+    ].some(Boolean)
+  ) {
+    const id = validateName(
+      requiredEnvironment("OIDC_PROVIDER_ID"),
+      "OIDC provider ID",
+    );
+    if (adapters.has(id)) {
+      throw new Error(`Duplicate OIDC provider ID: ${id}`);
+    }
+    const allowedTenants = (
+      process.env.OIDC_ALLOWED_TENANTS ?? ""
+    )
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    adapters.set(
+      id,
+      new OidcIdentityAdapter({
+        id,
+        issuer: requiredEnvironment("OIDC_ISSUER"),
+        audience: requiredEnvironment("OIDC_AUDIENCE"),
+        jwksUri: requiredEnvironment("OIDC_JWKS_URI"),
+        provider: "oidc",
+        ...(allowedTenants.length > 0 ? { allowedTenants } : {}),
+        ...(process.env.OIDC_REQUIRED_SCOPE
+          ? {
+              requiredScopes: [
+                process.env.OIDC_REQUIRED_SCOPE,
+              ],
+            }
+          : {}),
+        ...(process.env.OIDC_REQUIRED_ROLE
+          ? {
+              requiredRoles: [process.env.OIDC_REQUIRED_ROLE],
+            }
+          : {}),
+      }),
+    );
+  }
+  return adapters;
 }
 
 function providerName(): Provider {

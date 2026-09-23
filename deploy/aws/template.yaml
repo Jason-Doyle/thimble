@@ -26,12 +26,27 @@ Parameters:
   EntraRequiredRole:
     Type: String
     Default: ""
-  EntraAutoProvision:
+  OidcProviderId:
     Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
+    Default: ""
+  OidcIssuer:
+    Type: String
+    Default: ""
+  OidcAudience:
+    Type: String
+    Default: ""
+  OidcJwksUri:
+    Type: String
+    Default: ""
+  OidcAllowedTenants:
+    Type: String
+    Default: ""
+  OidcRequiredScope:
+    Type: String
+    Default: ""
+  OidcRequiredRole:
+    Type: String
+    Default: ""
   ReadKeyVersions:
     Type: String
     Default: ""
@@ -43,10 +58,6 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Base64-encoded 32-byte deployment master key.
-  PasswordPepper:
-    Type: String
-    NoEcho: true
-    Description: Base64-encoded password pepper with at least 32 bytes.
 
 Resources:
   DataBucket:
@@ -158,17 +169,21 @@ Resources:
           S3_AUTH_BUCKET: !Ref AuthBucket
           THIMBLE_PREFIX: !Ref Prefix
           THIMBLE_MASTER_KEY: !Ref MasterKey
-          THIMBLE_PASSWORD_PEPPER: !Ref PasswordPepper
           THIMBLE_SECURE_COOKIES: "true"
           THIMBLE_ALLOWED_ORIGIN: !Ref AllowedOrigin
-          THIMBLE_LOCAL_REGISTRATION: "false"
           THIMBLE_KEY_VERSION: !Ref KeyVersion
           THIMBLE_READ_KEY_VERSIONS: !Ref ReadKeyVersions
           ENTRA_TENANT_ID: !Ref EntraTenantId
           ENTRA_AUDIENCE: !Ref EntraAudience
           ENTRA_REQUIRED_SCOPE: !Ref EntraRequiredScope
           ENTRA_REQUIRED_ROLE: !Ref EntraRequiredRole
-          ENTRA_AUTO_PROVISION: !Ref EntraAutoProvision
+          OIDC_PROVIDER_ID: !Ref OidcProviderId
+          OIDC_ISSUER: !Ref OidcIssuer
+          OIDC_AUDIENCE: !Ref OidcAudience
+          OIDC_JWKS_URI: !Ref OidcJwksUri
+          OIDC_ALLOWED_TENANTS: !Ref OidcAllowedTenants
+          OIDC_REQUIRED_SCOPE: !Ref OidcRequiredScope
+          OIDC_REQUIRED_ROLE: !Ref OidcRequiredRole
 
   AuthorityUrl:
     Type: AWS::Lambda::Url

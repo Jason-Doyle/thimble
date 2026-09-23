@@ -1,96 +1,126 @@
 # Authentication and identity
 
-ThimbleDB supports local accounts and external OIDC identities through one
-internal user model. Identity proves who made a request. Scope authorisation
-decides which encrypted trees that user can read or mutate.
+ThimbleDB delegates credential security to Microsoft Entra or another OIDC
+provider. It does not store passwords, password hashes, recovery tokens,
+verification state, passkeys, or MFA secrets.
 
-## Internal user model
-
-```ts
-interface AuthUser {
-  id: string
-  status: "active" | "disabled"
-  authVersion: number
-  identities: Identity[]
-  tenants: string[]
-  roles: string[]
-}
-```
-
-Identity records can be local, Microsoft Entra, or another OIDC issuer. One
-internal user can eventually link several identities. Automatic linking by
-email is not allowed.
-
-## Authority-only auth store
-
-Credential and session records use a separate provider binding:
+The authority stores a minimal identity mapping so application content can
+remain attached to one stable internal user ID:
 
 ```text
-Data store exposed through brokered reads
-  scopes/user:<id>/...
-  scopes/tenant:<id>/...
-
-Private auth store, never browser-readable
+External provider
+  issuer + subject
+        |
+        v
+Private auth store
   auth-v1/identities/<keyed-hash>
-  auth-v1/users/<uuid>
-  auth-v1/sessions/<user-id>/<token-digest>
+  auth-v1/users/<internal-uuid>
+  auth-v1/sessions/<internal-uuid>/<token-digest>
+        |
+        v
+Data scope
+  user:<internal-uuid>
 ```
 
-The auth store has its own private R2 bucket, S3 bucket, Azure container, or
-local directory. It is encrypted with the `system-auth` key derived from the
-deployment master key. No auth-store key is granted to browsers.
+## Stored identity records
 
-## Local accounts
+An internal user record contains:
 
-The Node authority supports local accounts. Registration is disabled by
-default in cloud deployments and enabled in local development.
+- generated internal UUID
+- active or disabled status
+- account security version
+- provider, issuer, and immutable provider subject
+- current tenant IDs and roles copied from validated claims
+- creation and update timestamps
 
-Passwords use:
+Email, display name, and provider username are not authorization identifiers.
+The identity index is an HMAC-obscured value derived from provider, issuer,
+and subject. Auth records use a separate encrypted object store that is never
+browser-readable.
 
-- Argon2id
-- 19 MiB memory
-- 2 iterations
-- parallelism 1
-- one random 16-byte salt per password
-- a deployment pepper stored separately from auth records
-- encoded, versioned Argon2 parameters
+The first valid token for an accepted identity creates the minimal mapping.
+Later token exchanges refresh tenant and role claims while retaining the same
+internal UUID and therefore the same `user:<uuid>` data scope. A disabled
+internal user remains denied even when the external token is otherwise valid.
 
-Passwords are never encrypted or recoverable.
+Upgrades from the former local-password implementation should run:
 
-Unknown accounts perform a dummy Argon2id verification. Login responses use
-the same error code for missing accounts, wrong passwords, disabled accounts,
-and unavailable external identities.
+```powershell
+npm run migrate:external-auth
+```
 
-Password work has a separate provider-backed global limit in addition to
-source-IP and account limits. This protects the Argon2 path when a deployment
-cannot verify a proxy source address.
+The migration revokes legacy sessions, deletes local identity indexes, removes
+password material, and preserves each internal UUID. A user with no external
+identity is disabled, so its content remains under the same `user:<uuid>`
+scope without remaining accessible through the removed credential path.
 
-The Cloudflare Worker build deliberately disables local password endpoints.
-The current Argon2 dependency requires runtime WebAssembly compilation, which
-Workers does not permit. Cloudflare deployments use Entra or another OIDC
-identity. Deploy the Node authority when local accounts are required. Do not
-reduce Argon2 parameters or substitute a weak browser-compatible hash.
+## Token validation
 
-## Sessions
+Every provider must configure at least one required delegated scope or
+application role. The adapter validates:
 
-The browser cookie contains:
+- JWT signature against the provider JWKS
+- exact issuer
+- exact audience
+- expiry
+- required scope and/or role
+- configured tenant allowlist, when present
+
+Microsoft Entra identities use:
 
 ```text
-<user-id>.<256-bit-random-token>
+tenant = tid
+subject = oid
 ```
 
-The server stores only the token digest in the private auth store. Session
-records contain:
+Generic OIDC identities use the standard `sub` claim. The optional `tid`,
+`roles`, and space-delimited `scp` claims can drive tenant and role grants.
 
-- user ID
-- account `authVersion`
-- expiry
-- CSRF token
-- scope grants captured when the session is issued
+OIDC provider outages and JWKS retrieval failures surface as server errors.
+Malformed, expired, incorrectly signed, or unauthorized tokens receive the
+same invalid-credentials response.
 
-Cookies use HttpOnly, SameSite=Strict, and Secure outside local development.
-Logout deletes the server session. Password reset and account disabling can
-revoke every session below the user's session prefix.
+## Session exchange
+
+The host application obtains an API access token through its reviewed OIDC
+authorization-code flow with PKCE, state, and nonce. It exchanges that token
+for a ThimbleDB session:
+
+```text
+POST /api/auth/oidc/<provider-id>/session
+Content-Type: application/json
+Authorization: Bearer <access-token>
+
+{}
+```
+
+The access token is used only for the exchange and is not stored by
+ThimbleDB. The authority creates a revocable opaque session cookie:
+
+```text
+<internal-user-id>.<256-bit-random-token>
+```
+
+Only the token digest is stored. Session records contain the internal user ID,
+account security version, provider, expiry, CSRF token, and issued scope
+grants. Cookies use HttpOnly, SameSite=Strict, and Secure outside local
+development.
+
+On every authenticated request the authority reloads the current internal user
+record and recalculates grants. Role or tenant removal observed during a later
+OIDC exchange therefore also affects existing sessions.
+
+## Scope grants
+
+The default authorizer grants:
+
+- read and write access to `user:<internal-user-id>`
+- read access to each `tenant:<tenant-id>`
+- tenant write access only for configured writer or admin roles
+- tenant admin access only for configured admin roles
+- read access to `role:<role-name>` scopes
+
+Provider claims are inputs to authorization. Email and display claims are not.
 
 ## CSRF and browser-origin controls
 
@@ -98,94 +128,77 @@ Every state-changing request requires:
 
 - exact configured `Origin`
 - `Content-Type: application/json`
-- a per-session `X-Thimble-CSRF` token after login
-- an authorised `X-Thimble-Scope` where a write scope is selectable
+- a per-session `X-Thimble-CSRF` token after session exchange
+- an authorized `X-Thimble-Scope` where a write scope is selectable
 
 CORS is not a CSRF defence.
 
 ## Private read broker
 
-Authenticated private scopes use:
+Authenticated scopes use:
 
 ```text
 /api/objects/scopes/<scope>/...
 ```
 
-The authority verifies the session and read grant before returning encrypted
-bytes. The browser still decrypts locally and uses the same memory and
+The authority verifies the session and current read grant before returning
+encrypted bytes. The browser decrypts locally and retains its memory and
 IndexedDB caches.
 
-Brokered reads mean a saved scope key is not enough to discover or download
-future objects after session revocation. Already downloaded plaintext and
-ciphertext cannot be revoked.
+A saved scope key is not enough to download future objects after session
+revocation because the object broker still requires authorization. Plaintext
+or ciphertext already downloaded by an authorized user cannot be revoked.
 
-The supported path brokers all scopes. Direct provider URLs are not part of
-the supported authentication boundary.
+## Provider configuration
 
-## Microsoft Entra
-
-The Entra adapter validates JWT signature, issuer, audience, expiry, and
-tenant. It maps identities with:
+Entra uses:
 
 ```text
-tenant = tid
-subject = oid
+ENTRA_TENANT_ID
+ENTRA_AUDIENCE
+ENTRA_REQUIRED_SCOPE and/or ENTRA_REQUIRED_ROLE
 ```
 
-Email, name, and `preferred_username` are display values only. Microsoft
-documents them as mutable and unsuitable for durable identity or
-authorisation.
-
-The current API exchanges an access token already obtained by the application:
+One generic OIDC provider can also be configured:
 
 ```text
-POST /api/auth/oidc/entra/session
-Content-Type: application/json
-Authorization: Bearer <token-for-the-ThimbleDB-API>
+OIDC_PROVIDER_ID
+OIDC_ISSUER
+OIDC_AUDIENCE
+OIDC_JWKS_URI
+OIDC_ALLOWED_TENANTS
+OIDC_REQUIRED_SCOPE and/or OIDC_REQUIRED_ROLE
 ```
 
-The application should use Microsoft Authentication Library or another
-reviewed OIDC client for authorisation code flow with PKCE, state, and nonce.
-ThimbleDB validates the resulting API token and creates its own revocable
-session.
-
-An Entra adapter must configure at least one required delegated scope or
-application role. Automatic internal-user provisioning is disabled by default.
-Set `ENTRA_AUTO_PROVISION=true` only when every principal satisfying the tenant
-and claim rules should receive a ThimbleDB account.
+The provider ID becomes the route segment used during session exchange.
 
 ## Current API
 
-The Node authority exposes the local-account routes. The Cloudflare Worker
-advertises `local.enabled: false` and returns 404 for those routes.
-
 | Route | Authentication | Purpose |
 | --- | --- | --- |
-| `GET /api/auth/config` | Public | Enabled auth providers |
-| `POST /api/auth/register` | Public, rate limited, exact Origin | Optional local registration |
-| `POST /api/auth/login` | Public, rate limited, exact Origin | Local login |
-| `POST /api/auth/oidc/:provider/session` | Bearer token, rate limited, exact Origin | External identity exchange |
-| `POST /api/auth/logout` | Session + CSRF | Revoke current session |
-| `POST /api/auth/password` | Session + CSRF | Change password and revoke every session |
-| `GET /api/config` | Session | User, scope, CSRF, cache config |
+| `GET /api/auth/config` | Public | Configured external provider IDs |
+| `POST /api/auth/oidc/:provider/session` | Bearer token, rate limited, exact Origin | Validate identity, map internal user, issue session |
+| `POST /api/auth/logout` | Exact Origin; CSRF when session is valid | Revoke current session and clear cookie |
+| `GET /api/config` | Session | Current user, scope, CSRF, and cache config |
 | `GET /api/keys/:scope` | Session + read grant | Scope key grant |
 
-## Not implemented yet
+## Deliberately delegated controls
 
-- forgotten-password reset and email delivery
-- email verification
-- passkeys and MFA
-- identity linking UI
-- administrative account disablement
-- automated scope-key rotation after account compromise
-- OIDC login initiation and callback UI
+The identity provider owns:
 
-These features must follow the same authority-only storage and session
-revocation model.
+- password policy and password reset
+- email or phone verification
+- passkeys
+- MFA and recovery factors
+- suspicious-login detection
+- credential breach response
+
+ThimbleDB still needs identity linking and administrative APIs for disabling
+internal mappings, revoking every session, and managing application-specific
+roles or tenant access.
 
 ## References
 
-- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
-- [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
 - [Microsoft Entra ID token claims](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference)
 - [Microsoft Entra OIDC](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc)
+- [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html)

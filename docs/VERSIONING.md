@@ -42,8 +42,7 @@ A true v1 requires:
 - a chosen licence
 - frozen documented package exports
 - successful Cloudflare R2 conformance and cost benchmarks
-- a real application using either local or external authentication
-- a defined password-reset or account-recovery policy for local auth
+- a real application using external OIDC authentication
 - documented document-deletion and retention semantics
 - an explicit decision on adaptive snapshot versus trie layout
 - no high-severity correctness or security findings

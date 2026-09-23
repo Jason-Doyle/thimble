@@ -21,7 +21,7 @@ export class RoutedAuthRateLimiter implements AuthRateLimiter {
   ) {}
 
   consume(key: string): Promise<RateLimitResult> {
-    return /^(register|login|external)-ip:/.test(key)
+    return /^external-ip:/.test(key)
       ? this.edgeIp.consume(key)
       : this.durable.consume(key);
   }

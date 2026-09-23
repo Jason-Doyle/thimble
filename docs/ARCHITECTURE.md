@@ -27,7 +27,7 @@ Browser mutations
           |
           v
 Cloudflare Worker
-  local Argon2id or external OIDC authentication
+  external OIDC authentication and identity mapping
   scope authorisation
   validation
   gzip then AES-256-GCM
@@ -122,8 +122,8 @@ Cloudflare is preferred, not required.
 - One HEAD serialises writes within a collection and scope.
 - Production engines retain old generations. Destructive garbage collection is
   available only in an explicitly enabled, quiescent benchmark mode.
-- The Cloudflare Worker build uses external OIDC identities. Local password
-  auth is available through the Node authority.
+- Every deployment uses an external OIDC identity provider. ThimbleDB stores
+  only the stable provider-to-internal-user mapping and revocable sessions.
 - Revoking a user cannot erase plaintext they already downloaded.
 - Full-text search, joins, analytics, and cross-scope queries require derived
   indexes or another system.

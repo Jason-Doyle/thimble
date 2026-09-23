@@ -44,13 +44,15 @@ describe("ObjectStoreAuthRateLimiter", () => {
       recordingLimiter(edgeKeys),
     );
 
-    await limiter.consume("login-ip:198.51.100.1");
-    await limiter.consume("login-account:hash");
+    await limiter.consume("external-ip:entra:198.51.100.1");
+    await limiter.consume("external-subject:hash");
     await limiter.consume("external-subject:hash");
 
-    expect(edgeKeys).toEqual(["login-ip:198.51.100.1"]);
+    expect(edgeKeys).toEqual([
+      "external-ip:entra:198.51.100.1",
+    ]);
     expect(durableKeys).toEqual([
-      "login-account:hash",
+      "external-subject:hash",
       "external-subject:hash",
     ]);
   });

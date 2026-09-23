@@ -3,7 +3,10 @@ import {
   AuthService,
   type AuthenticatedSession,
 } from "./auth/service.js";
-import { createEntraAdapter } from "./auth/oidc.js";
+import {
+  createEntraAdapter,
+  OidcIdentityAdapter,
+} from "./auth/oidc.js";
 import { DefaultScopeAuthorizer } from "./auth/policy.js";
 import type {
   AuthRateLimiter,
@@ -14,7 +17,10 @@ import {
   RoutedAuthRateLimiter,
 } from "./auth/rate-limit.js";
 import { AuthRepository } from "./auth/repository.js";
-import type { ScopeGrant } from "./auth/types.js";
+import type {
+  IdentityAdapter,
+  ScopeGrant,
+} from "./auth/types.js";
 import { AsyncLruCache } from "./async-lru-cache.js";
 import {
   R2ObjectStore,
@@ -34,6 +40,7 @@ import {
   workloadProfiles,
 } from "./workload.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
+import { validateName } from "./shared-utils.js";
 
 type RateLimitBinding = {
   limit(options: { key: string }): Promise<{ success: boolean }>;
@@ -54,7 +61,13 @@ type Env = {
   ENTRA_AUDIENCE?: string;
   ENTRA_REQUIRED_SCOPE?: string;
   ENTRA_REQUIRED_ROLE?: string;
-  ENTRA_AUTO_PROVISION?: string;
+  OIDC_PROVIDER_ID?: string;
+  OIDC_ISSUER?: string;
+  OIDC_AUDIENCE?: string;
+  OIDC_JWKS_URI?: string;
+  OIDC_ALLOWED_TENANTS?: string;
+  OIDC_REQUIRED_SCOPE?: string;
+  OIDC_REQUIRED_ROLE?: string;
 };
 
 type ScopeRuntime = {
@@ -76,8 +89,6 @@ type Runtime = {
   auth: AuthService;
   dataRootStore: ObjectStore;
   headTtlMs: number;
-  localAuthEnabled: boolean;
-  registrationEnabled: boolean;
   oidcProviders: string[];
   allowedOrigin: string;
   scope(scopeId: string): Promise<ScopeRuntime>;
@@ -128,68 +139,8 @@ async function route(
     url.pathname === "/api/auth/config"
   ) {
     return json({
-      local: {
-        enabled: runtime.localAuthEnabled,
-        registrationEnabled: runtime.registrationEnabled,
-        minimumPasswordBytes: 12,
-      },
       oidcProviders: runtime.oidcProviders,
     });
-  }
-
-  if (
-    request.method === "POST" &&
-    url.pathname === "/api/auth/register"
-  ) {
-    requireLocalAuth(runtime);
-    requireMutationRequest(runtime, request);
-    const credentials = localCredentials(
-      await readJsonRequest(request),
-    );
-    await runtime.auth.register(
-      credentials.login,
-      credentials.password,
-      clientRateKey(request),
-    );
-    return json(
-      {
-        accepted: true,
-        message:
-          "If the account can be created, it is now available for login",
-      },
-      202,
-    );
-  }
-
-  if (
-    request.method === "POST" &&
-    url.pathname === "/api/auth/login"
-  ) {
-    requireLocalAuth(runtime);
-    requireMutationRequest(runtime, request);
-    const credentials = localCredentials(
-      await readJsonRequest(request),
-    );
-    await runtime.auth.logout(
-      cookieValue(
-        request.headers.get("cookie"),
-        runtime.auth.cookieName(),
-      ),
-    );
-    const authenticated = await runtime.auth.login(
-      credentials.login,
-      credentials.password,
-      clientRateKey(request),
-    );
-    return json(
-      { user: publicUser(authenticated) },
-      200,
-      new Headers({
-        "set-cookie": runtime.auth.sessionCookie(
-          authenticated.cookieValue,
-        ),
-      }),
-    );
   }
 
   const oidcRoute = /^\/api\/auth\/oidc\/([^/]+)\/session$/.exec(
@@ -250,42 +201,6 @@ async function route(
     );
   }
 
-  if (
-    request.method === "POST" &&
-    url.pathname === "/api/auth/password"
-  ) {
-    requireLocalAuth(runtime);
-    requireAuthenticated(authenticated);
-    requireMutationRequest(
-      runtime,
-      request,
-      authenticated.session.csrfToken,
-    );
-    const body = await readJsonRequest(request);
-    if (
-      typeof body !== "object" ||
-      body === null ||
-      Array.isArray(body) ||
-      typeof (body as { currentPassword?: unknown })
-        .currentPassword !== "string" ||
-      typeof (body as { newPassword?: unknown }).newPassword !==
-        "string"
-    ) {
-      throw new AuthError(400, "invalid_request", "Invalid request");
-    }
-    await runtime.auth.changePassword(
-      authenticated,
-      (body as { currentPassword: string }).currentPassword,
-      (body as { newPassword: string }).newPassword,
-    );
-    return json(
-      { passwordChanged: true },
-      200,
-      new Headers({
-        "set-cookie": runtime.auth.clearSessionCookie(),
-      }),
-    );
-  }
 
   if (request.method === "GET" && url.pathname === "/api/config") {
     requireAuthenticated(authenticated);
@@ -416,7 +331,13 @@ async function route(
     return json(await scope.engine.readBundle(collection, id));
   }
 
-  if (env.ASSETS) {
+  if (url.pathname.startsWith("/api/")) {
+    return json({ error: "not_found" }, 404);
+  }
+  if (
+    env.ASSETS &&
+    (request.method === "GET" || request.method === "HEAD")
+  ) {
     return secureAssetResponse(await env.ASSETS.fetch(request));
   }
   return json({ error: "not_found" }, 404);
@@ -461,22 +382,7 @@ async function createRuntime(env: Env): Promise<Runtime> {
     authIndex,
     hashText,
   );
-  const adapters = new Map();
-  if (env.ENTRA_TENANT_ID && env.ENTRA_AUDIENCE) {
-    adapters.set(
-      "entra",
-      createEntraAdapter({
-        tenantId: env.ENTRA_TENANT_ID,
-        audience: env.ENTRA_AUDIENCE,
-        ...(env.ENTRA_REQUIRED_SCOPE
-          ? { requiredScope: env.ENTRA_REQUIRED_SCOPE }
-          : {}),
-        ...(env.ENTRA_REQUIRED_ROLE
-          ? { requiredRole: env.ENTRA_REQUIRED_ROLE }
-          : {}),
-      }),
-    );
-  }
+  const adapters = configuredIdentityAdapters(env);
   const rateLimiter = workerRateLimiter(
     env,
     authStore,
@@ -484,14 +390,9 @@ async function createRuntime(env: Env): Promise<Runtime> {
   );
   const auth = new AuthService({
     repository,
-    passwords: unavailableWorkerPasswords,
     authorizer: new DefaultScopeAuthorizer(),
     rateLimiter,
-    passwordWorkRateLimiter: rateLimiter,
     identityAdapters: adapters,
-    externalAutoProvision:
-      env.ENTRA_AUTO_PROVISION === "true",
-    registrationEnabled: false,
     sessionTtlSeconds: 3_600,
     secureCookies: true,
   });
@@ -518,8 +419,6 @@ async function createRuntime(env: Env): Promise<Runtime> {
     auth,
     dataRootStore,
     headTtlMs: parseInteger(env.THIMBLE_HEAD_TTL_MS, 1_000),
-    localAuthEnabled: false,
-    registrationEnabled: false,
     oidcProviders: [...adapters.keys()],
     allowedOrigin: env.THIMBLE_ALLOWED_ORIGIN,
     scope,
@@ -619,6 +518,97 @@ function workerRateLimiter(
   return new RoutedAuthRateLimiter(durable, edge);
 }
 
+function configuredIdentityAdapters(
+  env: Env,
+): Map<string, IdentityAdapter> {
+  const adapters = new Map<string, IdentityAdapter>();
+  if (
+    [
+      env.ENTRA_TENANT_ID,
+      env.ENTRA_AUDIENCE,
+      env.ENTRA_REQUIRED_SCOPE,
+      env.ENTRA_REQUIRED_ROLE,
+    ].some(Boolean)
+  ) {
+    adapters.set(
+      "entra",
+      createEntraAdapter({
+        tenantId: requiredConfig(
+          env.ENTRA_TENANT_ID,
+          "ENTRA_TENANT_ID",
+        ),
+        audience: requiredConfig(
+          env.ENTRA_AUDIENCE,
+          "ENTRA_AUDIENCE",
+        ),
+        ...(env.ENTRA_REQUIRED_SCOPE
+          ? { requiredScope: env.ENTRA_REQUIRED_SCOPE }
+          : {}),
+        ...(env.ENTRA_REQUIRED_ROLE
+          ? { requiredRole: env.ENTRA_REQUIRED_ROLE }
+          : {}),
+      }),
+    );
+  }
+
+  if (
+    [
+      env.OIDC_PROVIDER_ID,
+      env.OIDC_ISSUER,
+      env.OIDC_AUDIENCE,
+      env.OIDC_JWKS_URI,
+      env.OIDC_REQUIRED_SCOPE,
+      env.OIDC_REQUIRED_ROLE,
+    ].some(Boolean)
+  ) {
+    const id = validateName(
+      requiredConfig(env.OIDC_PROVIDER_ID, "OIDC_PROVIDER_ID"),
+      "OIDC provider ID",
+    );
+    if (adapters.has(id)) {
+      throw new Error(`Duplicate OIDC provider ID: ${id}`);
+    }
+    const allowedTenants = (env.OIDC_ALLOWED_TENANTS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    adapters.set(
+      id,
+      new OidcIdentityAdapter({
+        id,
+        issuer: requiredConfig(env.OIDC_ISSUER, "OIDC_ISSUER"),
+        audience: requiredConfig(
+          env.OIDC_AUDIENCE,
+          "OIDC_AUDIENCE",
+        ),
+        jwksUri: requiredConfig(
+          env.OIDC_JWKS_URI,
+          "OIDC_JWKS_URI",
+        ),
+        provider: "oidc",
+        ...(allowedTenants.length > 0 ? { allowedTenants } : {}),
+        ...(env.OIDC_REQUIRED_SCOPE
+          ? { requiredScopes: [env.OIDC_REQUIRED_SCOPE] }
+          : {}),
+        ...(env.OIDC_REQUIRED_ROLE
+          ? { requiredRoles: [env.OIDC_REQUIRED_ROLE] }
+          : {}),
+      }),
+    );
+  }
+  return adapters;
+}
+
+function requiredConfig(
+  value: string | undefined,
+  name: string,
+): string {
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+}
+
 async function runtimeFor(env: Env): Promise<Runtime> {
   runtimePromise ??= createRuntime(env).catch((error) => {
     runtimePromise = undefined;
@@ -659,16 +649,6 @@ function requireAuthenticated(
       401,
       "authentication_required",
       "Authentication is required",
-    );
-  }
-}
-
-function requireLocalAuth(runtime: Runtime): void {
-  if (!runtime.localAuthEnabled) {
-    throw new AuthError(
-      404,
-      "local_auth_unavailable",
-      "Local password authentication is unavailable",
     );
   }
 }
@@ -786,24 +766,6 @@ function securityHeaders(
       "camera=(), microphone=(), geolocation=(), payment=()",
     ...additional,
   });
-}
-
-function localCredentials(
-  value: unknown,
-): { login: string; password: string } {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    Array.isArray(value) ||
-    typeof (value as { login?: unknown }).login !== "string" ||
-    typeof (value as { password?: unknown }).password !== "string"
-  ) {
-    throw new AuthError(400, "invalid_request", "Invalid request");
-  }
-  return {
-    login: (value as { login: string }).login,
-    password: (value as { password: string }).password,
-  };
 }
 
 function asDocument(value: unknown, id: string): JsonDocument {
@@ -1056,20 +1018,3 @@ function bufferView(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   copy.set(bytes);
   return copy;
 }
-
-const unavailableWorkerPasswords = {
-  hash(_password: string): Promise<string> {
-    return Promise.reject(
-      new Error("Local password authentication is unavailable"),
-    );
-  },
-  verify(
-    _password: string,
-    _encoded: string,
-  ): Promise<boolean> {
-    return Promise.resolve(false);
-  },
-  runDummyVerification(_password: string): Promise<void> {
-    return Promise.resolve();
-  },
-};

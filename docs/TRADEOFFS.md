@@ -28,7 +28,7 @@
 - Application code must understand eventual cache freshness.
 - Key grants and revocation become part of application security.
 - A collection root is a write-contention point.
-- Strong local password hashing adds material CPU and memory cost.
+- Identity-provider availability affects new session creation.
 - Garbage collection and lifecycle policy are required.
 - Browser storage quotas and eviction differ by browser.
 - Encrypted object access still exposes ciphertext sizes and traffic patterns

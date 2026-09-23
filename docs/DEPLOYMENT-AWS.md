@@ -25,7 +25,6 @@ Generate secrets in the shell:
 
 ```powershell
 $env:THIMBLE_MASTER_KEY = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-$env:THIMBLE_PASSWORD_PEPPER = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Deploy the template:
@@ -40,10 +39,16 @@ aws cloudformation deploy `
     ImageUri=<account>.dkr.ecr.<region>.amazonaws.com/thimbledb:<tag> `
     AllowedOrigin=https://<application-origin> `
     MasterKey=$env:THIMBLE_MASTER_KEY `
-    PasswordPepper=$env:THIMBLE_PASSWORD_PEPPER
+    EntraTenantId=<tenant-id> `
+    EntraAudience=<api-audience> `
+    EntraRequiredScope=thimble.access
 ```
 
 Remove the shell values after deployment.
+
+The template also accepts `OidcProviderId`, `OidcIssuer`, `OidcAudience`,
+`OidcJwksUri`, `OidcAllowedTenants`, `OidcRequiredScope`, and
+`OidcRequiredRole` for a non-Entra provider.
 
 For key rotation, deploy `KeyVersion` as the current write version and
 `ReadKeyVersions` as the comma-separated historical versions that remain
@@ -69,7 +74,7 @@ The browser has no S3 write credentials.
 The Node authority reads the trusted client source address from the Lambda Web
 Adapter's `x-amzn-request-context` header when running inside Lambda. It does
 not trust caller-controlled `X-Forwarded-For` values. If the request context is
-unavailable, account-based limits still apply and source-IP limiting is
+unavailable, external-subject limits still apply and source-IP limiting is
 skipped rather than collapsing all users onto the adapter loopback address.
 
 ## Verify
@@ -84,10 +89,9 @@ skipped rather than collapsing all users onto the adapter loopback address.
 ## Public transport endpoint
 
 The Function URL is publicly reachable, but application data routes require a
-ThimbleDB session and scope grant. Local registration remains disabled by
-default. Configure Entra or provision local accounts deliberately. AWS WAF,
-API Gateway, or another edge control can add cost and abuse protection without
-replacing application authorisation.
+ThimbleDB session and scope grant created from a validated external identity.
+AWS WAF, API Gateway, or another edge control can add cost and abuse protection
+without replacing application authorisation.
 
 The auth bucket expires current and noncurrent session and rate-limit objects
 after seven days, then removes expired delete markers. Adjust that period if a

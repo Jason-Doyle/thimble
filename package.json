@@ -27,8 +27,8 @@
     "dev:server": "tsx watch src/server.ts",
     "build": "npm run build:client && npm run build:package && npm run build:server && npm run build:worker",
     "build:client": "vite build",
-    "build:package": "tsc -p tsconfig.package.json",
-    "build:server": "tsc -p tsconfig.server.json",
+    "build:package": "node -e \"require('node:fs').rmSync('dist/package',{recursive:true,force:true})\" && tsc -p tsconfig.package.json",
+    "build:server": "node -e \"require('node:fs').rmSync('dist/server',{recursive:true,force:true})\" && tsc -p tsconfig.server.json",
     "build:worker": "wrangler deploy --dry-run --outdir dist/worker src/cloudflare-worker.ts --name thimbledb-worker --compatibility-date 2026-09-01",
     "start:server": "tsx src/server.ts",
     "start:prod": "node dist/server/server.js",
@@ -37,6 +37,7 @@
     "benchmark:azure": "tsx src/cli.ts --provider azure --profile tiny",
     "benchmark:s3": "tsx src/cli.ts --provider s3 --profile tiny",
     "migrate:keys": "tsx src/key-migrate.ts",
+    "migrate:external-auth": "tsx src/remove-local-auth.ts",
     "fixtures:generate": "tsx scripts/generate-protocol-fixtures.ts",
     "check": "tsc --noEmit",
     "test": "vitest run",
@@ -45,7 +46,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.896.0",
     "@azure/storage-blob": "^12.28.0",
-    "hash-wasm": "^4.12.0",
     "jose": "^6.1.0"
   },
   "devDependencies": {

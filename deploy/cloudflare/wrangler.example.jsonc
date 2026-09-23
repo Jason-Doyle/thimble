@@ -21,7 +21,14 @@
     // "ENTRA_AUDIENCE": "api://your-application-id",
     // "ENTRA_REQUIRED_SCOPE": "thimble.access",
     // "ENTRA_REQUIRED_ROLE": "Thimble.User",
-    // "ENTRA_AUTO_PROVISION": "false"
+    // Optional generic OIDC configuration:
+    // "OIDC_PROVIDER_ID": "auth0",
+    // "OIDC_ISSUER": "https://tenant.example.com/",
+    // "OIDC_AUDIENCE": "https://db.example.com",
+    // "OIDC_JWKS_URI": "https://tenant.example.com/.well-known/jwks.json",
+    // "OIDC_ALLOWED_TENANTS": "",
+    // "OIDC_REQUIRED_SCOPE": "thimble.access",
+    // "OIDC_REQUIRED_ROLE": ""
   },
 
   // Intentionally disabled. Copy this file to wrangler.jsonc, create the
@@ -38,9 +45,8 @@
   //   }
   // ],
   //
-  // Optional low-latency source-IP limiting. Account and OIDC-subject limits
-  // remain in the encrypted R2 auth store. Choose a namespace_id unique to
-  // this account.
+  // Optional low-latency source-IP limiting. OIDC-subject limits remain in
+  // the encrypted R2 auth store. Choose a namespace_id unique to this account.
   //
   // "ratelimits": [
   //   {

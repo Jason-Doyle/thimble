@@ -82,43 +82,49 @@ describe("Cloudflare Worker request parsing", () => {
     }
   });
 
-  it("advertises Worker local password authentication as unavailable", async () => {
+  it("advertises only configured external identity providers", async () => {
     const bucket = emptyBucket();
     const environment = {
       DB: bucket,
       AUTH_DB: bucket,
       THIMBLE_MASTER_KEY: Buffer.alloc(32, 7).toString("base64"),
       THIMBLE_ALLOWED_ORIGIN: "https://db.example.test",
+      ASSETS: {
+        fetch: async () =>
+          new Response("<html>fallback</html>", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          }),
+      },
+      OIDC_PROVIDER_ID: "generic",
+      OIDC_ISSUER: "https://identity.example.test",
+      OIDC_AUDIENCE: "thimbledb",
+      OIDC_JWKS_URI: "https://identity.example.test/jwks",
+      OIDC_REQUIRED_SCOPE: "thimble.access",
     };
 
     const config = await worker.fetch(
       new Request("https://db.example.test/api/auth/config"),
       environment as never,
     );
-    await expect(config.json()).resolves.toMatchObject({
-      local: {
-        enabled: false,
-        registrationEnabled: false,
-      },
+    await expect(config.json()).resolves.toEqual({
+      oidcProviders: ["generic"],
     });
 
-    const login = await worker.fetch(
-      new Request("https://db.example.test/api/auth/login", {
+    const removedRoute = await worker.fetch(
+      new Request("https://db.example.test/api/auth/register", {
         method: "POST",
         headers: {
           origin: "https://db.example.test",
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          login: "person@example.test",
-          password: "correct horse battery staple",
-        }),
+        body: "{}",
       }),
       environment as never,
     );
-    expect(login.status).toBe(404);
-    await expect(login.json()).resolves.toMatchObject({
-      error: "local_auth_unavailable",
+    expect(removedRoute.status).toBe(404);
+    await expect(removedRoute.json()).resolves.toEqual({
+      error: "not_found",
     });
   });
 });

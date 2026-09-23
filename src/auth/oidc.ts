@@ -147,10 +147,16 @@ export function createEntraAdapter(options: {
 }
 
 function scopeClaim(payload: JWTPayload): string[] {
-  const value = payload.scp;
-  return typeof value === "string"
-    ? value.split(/\s+/).filter(Boolean)
-    : [];
+  return [
+    ...new Set(
+      [payload.scope, payload.scp]
+        .filter(
+          (value): value is string =>
+            typeof value === "string",
+        )
+        .flatMap((value) => value.split(/\s+/).filter(Boolean)),
+    ),
+  ];
 }
 
 function stringClaim(

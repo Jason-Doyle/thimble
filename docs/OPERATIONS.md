@@ -5,11 +5,24 @@
 | Secret | Purpose | Rotation effect |
 | --- | --- | --- |
 | `THIMBLE_MASTER_KEY` | Derives scope encryption and address keys | Requires planned data re-encryption if changed |
-| `THIMBLE_PASSWORD_PEPPER` | Defends local password hashes if the auth store leaks | Requires password reset to replace |
 | Provider write credential | Lets the authority mutate object storage | No stored-data rewrite |
 
 Back up the deployment master key through the cloud secret manager's supported
 process. Losing it makes encrypted scopes unrecoverable.
+
+## External-only authentication upgrade
+
+Before deploying this version over an installation that used local password
+accounts, run:
+
+```powershell
+npm run migrate:external-auth
+```
+
+Use the same provider and auth-store environment variables as the authority.
+The command preserves internal user UUIDs and their data scopes, removes
+password material and local identity indexes, revokes every legacy session,
+and disables mappings that do not already contain an external identity.
 
 ## Key rotation
 
@@ -80,7 +93,7 @@ caller-controlled forwarding headers.
   `THIMBLE_TRUSTED_PROXY_IPS`. Forwarding chains are evaluated from right to
   left, skipping only configured trusted peers.
 - Set `THIMBLE_DISABLE_IP_RATE_LIMIT=true` when the deployment cannot verify
-  its immediate proxy. Account and external-subject limits still apply.
+  its immediate proxy. External-subject limits still apply.
 
 Do not enable forwarding-header trust merely to obtain a more specific address.
 An incorrect proxy boundary lets callers rotate spoofed addresses.
@@ -107,14 +120,6 @@ Leaked master key:
 3. Introduce a new master key.
 4. Re-encrypt all live scopes.
 5. Revoke all sessions.
-
-Leaked password pepper:
-
-1. Preserve evidence and stop public login traffic.
-2. Replace the pepper.
-3. Require password resets because existing hashes cannot be re-peppered
-   without plaintext passwords.
-4. Revoke every active session.
 
 ## Cleanup
 

@@ -1,22 +1,22 @@
 import { expect, test } from "@playwright/test";
 
-test("registers, reads, writes, persists cache, and logs out", async ({
+test("authenticates externally, reads, writes, persists cache, and logs out", async ({
   page,
   browserName,
+  request,
 }) => {
-  const login = `${browserName}-${crypto.randomUUID()}@example.test`;
-  const password = "correct horse battery staple";
+  const subject = `${browserName}-${crypto.randomUUID()}`;
+  const token = await request
+    .get(
+      `http://127.0.0.1:8790/token?subject=${encodeURIComponent(subject)}`,
+    )
+    .then((response) => response.text());
 
   await page.goto("/");
   await expect(page.locator("#auth-panel")).toBeVisible();
-  await page.locator("#auth-login").fill(login);
-  await page.locator("#auth-password").fill(password);
-  await page.locator("#register").click();
-  await expect(page.locator("#auth-message")).toContainText(
-    "available for login",
-  );
-
-  await page.locator("#login").click();
+  await page.locator("#auth-provider").selectOption("e2e");
+  await page.locator("#auth-token").fill(token);
+  await page.locator("#oidc-login").click();
   await expect(page.locator("#status")).toContainText("Ready:");
   await expect(page.locator("#auth-panel")).toBeHidden();
 

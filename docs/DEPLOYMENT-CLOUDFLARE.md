@@ -21,7 +21,7 @@ npm run build:client
 npm run build:worker
 ```
 
-The current dry-run Worker bundle is about 28.4 KB gzip. Record the compressed
+The current dry-run Worker bundle is about 27.2 KB gzip. Record the compressed
 size during release checks.
 
 ## 2. Authenticate Wrangler
@@ -67,7 +67,7 @@ Edit `deploy\cloudflare\wrangler.local.jsonc`:
 1. Uncomment the `r2_buckets` block.
 2. Set the real data and auth bucket names.
 3. Optionally configure `AUTH_RATE_LIMITER` for low-latency source-IP limits.
-   Account and OIDC-subject limits always use the encrypted R2-backed limiter.
+   OIDC-subject limits always use the encrypted R2-backed limiter.
 4. Uncomment the Worker custom-domain route.
 5. Set the exact `THIMBLE_ALLOWED_ORIGIN`.
 
@@ -76,17 +76,20 @@ cannot deploy infrastructure accidentally.
 
 ## 6. Configure authentication
 
-The Worker build uses Entra or another OIDC identity provider. Local password
-authentication is disabled because the current Argon2 dependency requires
-runtime WebAssembly compilation, which Workers does not permit. Use the Node
-authority deployment when local accounts are required.
+Every deployment uses Entra or another OIDC identity provider. ThimbleDB stores
+only the stable external-identity mapping, current application roles and
+tenants, and revocable sessions.
 
 For Entra, set `ENTRA_TENANT_ID` and `ENTRA_AUDIENCE`. The application obtains
 an API access token through a reviewed OIDC client and exchanges it at
 `/api/auth/oidc/entra/session`.
 
-Also set `ENTRA_REQUIRED_SCOPE` or `ENTRA_REQUIRED_ROLE`. Automatic user
-provisioning remains disabled unless `ENTRA_AUTO_PROVISION=true`.
+Also set `ENTRA_REQUIRED_SCOPE` or `ENTRA_REQUIRED_ROLE`.
+
+For another provider, set `OIDC_PROVIDER_ID`, `OIDC_ISSUER`,
+`OIDC_AUDIENCE`, and `OIDC_JWKS_URI`, plus at least one of
+`OIDC_REQUIRED_SCOPE` or `OIDC_REQUIRED_ROLE`. A valid first exchange creates
+the minimal internal mapping and stable `user:<uuid>` data scope.
 
 Cloudflare Access can remain an additional outer boundary around the
 application hostname.
@@ -116,7 +119,7 @@ npx wrangler deploy --config deploy\cloudflare\wrangler.local.jsonc
 ## 9. Verify
 
 1. Open `https://db.example.com`.
-2. Register or sign in through the configured identity provider.
+2. Sign in through the configured identity provider.
 3. Seed the tiny store.
 4. Confirm `/api/config` returns provider `r2`.
 5. Confirm private object GETs use `/api/objects/scopes/...`.

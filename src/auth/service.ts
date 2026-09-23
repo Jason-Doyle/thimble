@@ -1,11 +1,7 @@
 import type {
   AuthRateLimiter,
 } from "./rate-limit.js";
-import type { PasswordHasher } from "./password.js";
-import {
-  normalizeLogin,
-  type AuthRepository,
-} from "./repository.js";
+import type { AuthRepository } from "./repository.js";
 import type {
   AuthSession,
   AuthUser,
@@ -14,114 +10,17 @@ import type {
   ScopeAuthorizer,
 } from "./types.js";
 
-type PasswordService = Pick<
-  PasswordHasher,
-  "hash" | "verify" | "runDummyVerification"
->;
-
 export class AuthService {
   constructor(
     private readonly options: {
       repository: AuthRepository;
-      passwords: PasswordService;
       authorizer: ScopeAuthorizer;
       rateLimiter: AuthRateLimiter;
-      passwordWorkRateLimiter: AuthRateLimiter;
       identityAdapters?: Map<string, IdentityAdapter>;
-      registrationEnabled?: boolean;
       sessionTtlSeconds?: number;
       secureCookies?: boolean;
-      minimumLoginDurationMs?: number;
-      externalAutoProvision?: boolean;
     },
   ) {}
-
-  async register(
-    login: string,
-    password: string,
-    rateKey: string | null,
-  ): Promise<void> {
-    if (!this.options.registrationEnabled) {
-      throw new AuthError(
-        404,
-        "registration_disabled",
-        "Registration is unavailable",
-      );
-    }
-    let normalised: string;
-    try {
-      normalised = normalizeLogin(login);
-    } catch {
-      throw new AuthError(
-        400,
-        "invalid_login",
-        "Login identifier is invalid",
-      );
-    }
-    if (rateKey) {
-      await this.requireRateLimit(`register-ip:${rateKey}`);
-    }
-    await this.requireRateLimit(
-      `register-account:${await digestText(normalised)}`,
-    );
-    await this.requirePasswordWorkLimit();
-    let hash: string;
-    try {
-      hash = await this.options.passwords.hash(password);
-    } catch {
-      throw new AuthError(
-        400,
-        "invalid_password",
-        "Password does not meet the configured policy",
-      );
-    }
-    await this.options.repository.createLocalUser(normalised, hash);
-  }
-
-  async login(
-    login: string,
-    password: string,
-    rateKey: string | null,
-  ): Promise<AuthenticatedSession> {
-    const started = performance.now();
-    if (rateKey) {
-      await this.requireRateLimit(`login-ip:${rateKey}`);
-    }
-    await this.requirePasswordWorkLimit();
-    let normalised: string;
-    try {
-      normalised = normalizeLogin(login);
-    } catch {
-      await this.options.repository.readDummyUser();
-      await this.options.passwords.runDummyVerification(password);
-      await this.finishLoginDelay(started);
-      throw invalidCredentials();
-    }
-    await this.requireRateLimit(
-      `login-account:${await digestText(
-        normalised,
-      )}`,
-    );
-
-    const user =
-      await this.options.repository.findLocalUser(normalised);
-    const valid =
-      user?.password &&
-      (await this.options.passwords.verify(
-        password,
-        user.password.encoded,
-      ));
-    if (!user || !valid || user.status !== "active") {
-      if (!user) {
-        await this.options.repository.readDummyUser();
-        await this.options.passwords.runDummyVerification(password);
-      }
-      await this.finishLoginDelay(started);
-      throw invalidCredentials();
-    }
-    await this.finishLoginDelay(started);
-    return this.createSession(user, "local");
-  }
 
   async loginExternal(
     adapterId: string,
@@ -146,20 +45,8 @@ export class AuthService {
         `${identity.issuer}|${identity.subject}`,
       )}`,
     );
-    let user: AuthUser | null;
-    if (this.options.externalAutoProvision) {
-      user =
-        await this.options.repository.findOrCreateExternalUser(identity);
-    } else {
-      const existing =
-        await this.options.repository.findExternalUser(identity);
-      user = existing
-        ? await this.options.repository.refreshExternalUser(
-            existing.id,
-            identity,
-          )
-        : null;
-    }
+    const user =
+      await this.options.repository.findOrCreateExternalUser(identity);
     if (!user || user.status !== "active") {
       throw invalidCredentials();
     }
@@ -198,48 +85,6 @@ export class AuthService {
     return cookieValue
       ? this.options.repository.revokeSession(cookieValue)
       : Promise.resolve();
-  }
-
-  async changePassword(
-    authenticated: AuthenticatedSession,
-    currentPassword: string,
-    newPassword: string,
-  ): Promise<void> {
-    const user = authenticated.user;
-    await this.requirePasswordWorkLimit();
-    if (
-      !user.password ||
-      !(await this.options.passwords.verify(
-        currentPassword,
-        user.password.encoded,
-      ))
-    ) {
-      throw invalidCredentials();
-    }
-    let encoded: string;
-    try {
-      encoded = await this.options.passwords.hash(newPassword);
-    } catch {
-      throw new AuthError(
-        400,
-        "invalid_password",
-        "Password does not meet the configured policy",
-      );
-    }
-    const updated = await this.options.repository.updatePassword(
-      user.id,
-      encoded,
-      user.authVersion,
-      user.password.encoded,
-    );
-    if (!updated) {
-      throw new AuthError(
-        409,
-        "reauthentication_required",
-        "Sign in again before changing the password",
-      );
-    }
-    await this.options.repository.revokeAllSessions(user.id);
   }
 
   sessionCookie(cookieValue: string): string {
@@ -308,14 +153,6 @@ export class AuthService {
     this.throwIfLimited(result);
   }
 
-  private async requirePasswordWorkLimit(): Promise<void> {
-    const result =
-      await this.options.passwordWorkRateLimiter.consume(
-        "password-work:global",
-      );
-    this.throwIfLimited(result);
-  }
-
   private throwIfLimited(
     result: Awaited<ReturnType<AuthRateLimiter["consume"]>>,
   ): void {
@@ -329,13 +166,6 @@ export class AuthService {
     }
   }
 
-  private async finishLoginDelay(started: number): Promise<void> {
-    const minimum = this.options.minimumLoginDurationMs ?? 250;
-    const remaining = minimum - (performance.now() - started);
-    if (remaining > 0) {
-      await new Promise((resolve) => setTimeout(resolve, remaining));
-    }
-  }
 }
 
 export type AuthenticatedSession = {
@@ -361,6 +191,9 @@ function principalFor(
   user: AuthUser,
   provider: Principal["provider"],
 ): Principal {
+  if (provider !== "entra" && provider !== "oidc") {
+    throw new Error(`Unsupported identity provider: ${String(provider)}`);
+  }
   const identity =
     user.identities.find((item) => item.provider === provider) ??
     user.identities[0];
@@ -381,7 +214,7 @@ function invalidCredentials(): AuthError {
   return new AuthError(
     401,
     "invalid_credentials",
-    "Invalid login or password",
+    "Invalid external credentials",
   );
 }
 

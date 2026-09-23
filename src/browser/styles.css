@@ -17,7 +17,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -44,13 +45,18 @@ button.secondary:hover {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid #c9cfda;
   border-radius: 0.5rem;
   padding: 0.65rem 0.75rem;
   color: inherit;
   background: white;
+}
+
+textarea {
+  resize: vertical;
 }
 
 label {

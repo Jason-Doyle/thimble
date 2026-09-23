@@ -1,5 +1,4 @@
 export * from "./oidc.js";
-export * from "./password.js";
 export * from "./policy.js";
 export * from "./rate-limit.js";
 export * from "./repository.js";

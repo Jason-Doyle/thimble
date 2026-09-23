@@ -16,10 +16,6 @@ param allowedOrigin string
 @secure()
 param masterKey string = ''
 
-@description('Base64-encoded password pepper containing at least 32 bytes.')
-@secure()
-param passwordPepper string = ''
-
 @description('Deploy the Container App after the image and secrets are ready.')
 param deployAuthority bool = false
 
@@ -48,8 +44,26 @@ param entraRequiredScope string = ''
 @description('Required Entra application role.')
 param entraRequiredRole string = ''
 
-@description('Allow first successful Entra login to create an internal user.')
-param entraAutoProvision bool = false
+@description('Optional generic OIDC provider ID used in the session route.')
+param oidcProviderId string = ''
+
+@description('Optional generic OIDC issuer.')
+param oidcIssuer string = ''
+
+@description('Optional generic OIDC API audience.')
+param oidcAudience string = ''
+
+@description('Optional generic OIDC JWKS URI.')
+param oidcJwksUri string = ''
+
+@description('Optional comma-separated generic OIDC tenant allowlist.')
+param oidcAllowedTenants string = ''
+
+@description('Required generic OIDC delegated scope.')
+param oidcRequiredScope string = ''
+
+@description('Required generic OIDC application role.')
+param oidcRequiredRole string = ''
 
 var compactName = toLower(replace(appName, '-', ''))
 var storageName = take('${compactName}${uniqueString(resourceGroup().id)}', 24)
@@ -180,10 +194,6 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
           name: 'master-key'
           value: masterKey
         }
-        {
-          name: 'password-pepper'
-          value: passwordPepper
-        }
       ]
     }
     template: {
@@ -213,20 +223,12 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
               secretRef: 'master-key'
             }
             {
-              name: 'THIMBLE_PASSWORD_PEPPER'
-              secretRef: 'password-pepper'
-            }
-            {
               name: 'AZURE_AUTH_STORAGE_CONTAINER'
               value: authContainer.name
             }
             {
               name: 'THIMBLE_ALLOWED_ORIGIN'
               value: allowedOrigin
-            }
-            {
-              name: 'THIMBLE_LOCAL_REGISTRATION'
-              value: 'false'
             }
             {
               name: 'THIMBLE_KEY_VERSION'
@@ -253,8 +255,32 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
               value: entraRequiredRole
             }
             {
-              name: 'ENTRA_AUTO_PROVISION'
-              value: string(entraAutoProvision)
+              name: 'OIDC_PROVIDER_ID'
+              value: oidcProviderId
+            }
+            {
+              name: 'OIDC_ISSUER'
+              value: oidcIssuer
+            }
+            {
+              name: 'OIDC_AUDIENCE'
+              value: oidcAudience
+            }
+            {
+              name: 'OIDC_JWKS_URI'
+              value: oidcJwksUri
+            }
+            {
+              name: 'OIDC_ALLOWED_TENANTS'
+              value: oidcAllowedTenants
+            }
+            {
+              name: 'OIDC_REQUIRED_SCOPE'
+              value: oidcRequiredScope
+            }
+            {
+              name: 'OIDC_REQUIRED_ROLE'
+              value: oidcRequiredRole
             }
             {
               name: 'THIMBLE_SECURE_COOKIES'

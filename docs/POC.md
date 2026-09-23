@@ -13,9 +13,15 @@ npm run dev
 
 Open `http://127.0.0.1:5173`.
 
-Create a local account with a password of at least 12 UTF-8 bytes, then sign
-in. Local development enables registration by default. Cloud deployments
-disable it unless `THIMBLE_LOCAL_REGISTRATION=true`.
+Configure Entra or a generic OIDC provider, obtain an API access token through
+the provider's application flow, select the provider in the harness, and
+exchange the token for a ThimbleDB session.
+
+The Playwright suite includes a self-contained signed test provider:
+
+```powershell
+npm run test:e2e
+```
 
 The UI can:
 
@@ -50,21 +56,15 @@ On first local startup:
 1. The authority creates a local deployment master key under
    `.thimble-data`.
 2. It derives one scope encryption key and one node-address HMAC key.
-3. The browser receives an HttpOnly signed session cookie.
-4. The authorised key endpoint returns the scope key once.
-5. The browser imports it as a non-extractable memory-only CryptoKey.
-6. Persistent cache values are encrypted with a separate non-extractable
+3. A validated external identity is mapped to a stable internal user UUID.
+4. The browser receives an HttpOnly opaque session cookie.
+5. The authorised key endpoint returns the scope key once.
+6. The browser imports it as a non-extractable memory-only CryptoKey.
+7. Persistent cache values are encrypted with a separate non-extractable
    browser device key.
 
 Raw stored objects begin with the `TDB1` envelope magic and do not contain
 plaintext JSON.
-
-Set a public scope for compression without encryption:
-
-```powershell
-$env:THIMBLE_SCOPE_MODE = "public"
-npm run dev
-```
 
 ## Browser cache policies
 
@@ -104,8 +104,10 @@ $env:AZURE_STORAGE_CONTAINER = "thimbledb"
 $env:AZURE_AUTH_STORAGE_CONTAINER = "thimbledb-auth"
 $env:THIMBLE_PREFIX = "demo"
 $env:THIMBLE_MASTER_KEY = "<base64-encoded 32-byte key>"
-$env:THIMBLE_PASSWORD_PEPPER = "<base64-encoded 32-byte value>"
 $env:THIMBLE_ALLOWED_ORIGIN = "http://127.0.0.1:5173"
+$env:ENTRA_TENANT_ID = "<tenant-id>"
+$env:ENTRA_AUDIENCE = "<api-audience>"
+$env:ENTRA_REQUIRED_SCOPE = "thimble.access"
 npm run dev
 ```
 

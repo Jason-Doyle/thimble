@@ -25,27 +25,25 @@
       </header>
 
       <section id="auth-panel" class="panel auth-panel" hidden>
-        <h2>Sign in</h2>
-        <div id="local-auth-controls">
+        <h2>External identity</h2>
+        <div id="external-auth-controls">
           <div class="auth-fields">
             <label>
-              Login
-              <input id="auth-login" autocomplete="username" />
+              Provider
+              <select id="auth-provider"></select>
             </label>
             <label>
-              Password
-              <input
-                id="auth-password"
-                type="password"
-                autocomplete="current-password"
-              />
+              OIDC access token
+              <textarea
+                id="auth-token"
+                rows="4"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
             </label>
           </div>
           <div class="button-row">
-            <button id="login">Sign in</button>
-            <button id="register" class="secondary">
-              Create local account
-            </button>
+            <button id="oidc-login">Create session</button>
           </div>
         </div>
         <p id="auth-message" class="auth-message"></p>
