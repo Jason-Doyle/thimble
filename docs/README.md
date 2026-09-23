@@ -7,6 +7,7 @@
 | [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |
+| [Proof of concept](POC.md) | Browser harness, sample store, and benchmark usage |
 | [Benchmarks](BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
 | [Tradeoffs](TRADEOFFS.md) | Proven, expected, and unsuitable use cases |
 | [Cloudflare deployment](DEPLOYMENT-CLOUDFLARE.md) | Reference Worker and R2 deployment |
