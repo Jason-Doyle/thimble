@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.bench-data/
+.thimble-data/
+benchmark-results/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+deploy/cloudflare/wrangler.local.jsonc

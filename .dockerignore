@@ -1,0 +1,9 @@
+node_modules
+dist
+.bench-data
+.thimble-data
+benchmark-results
+.git
+.env
+.env.*
+npm-debug.log

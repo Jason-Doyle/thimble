@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="ThimbleDB browser-first object storage database proof of concept"
+    />
+    <title>ThimbleDB POC</title>
+    <link rel="stylesheet" href="/src/browser/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">Browser read replica POC</p>
+          <h1>ThimbleDB</h1>
+          <p class="lede">
+            Reads come directly from object storage through memory and
+            IndexedDB caches. Writes go through the local authority.
+          </p>
+        </div>
+        <div id="status" class="status">Starting...</div>
+      </header>
+
+      <section class="panel controls">
+        <label>
+          Cache policy
+          <select id="cache-policy">
+            <option value="content">Content</option>
+            <option value="locations">Locations only</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <button id="seed">Seed tiny store</button>
+        <button id="clear-memory" class="secondary">Clear memory</button>
+        <button id="clear-all" class="secondary">Clear all cache</button>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Product read</h2>
+          <label>
+            Product ID
+            <input id="product-id" value="product-00000" />
+          </label>
+          <div class="button-row">
+            <button id="read-product">Read product</button>
+            <button id="update-stock" class="secondary">
+              Decrement stock
+            </button>
+          </div>
+          <pre id="product-output">No product loaded.</pre>
+        </article>
+
+        <article class="panel">
+          <h2>Browser workload</h2>
+          <div class="button-stack">
+            <button id="benchmark-reads">Run 100 hot reads</button>
+            <button id="scan-products" class="secondary">
+              Scan products
+            </button>
+          </div>
+          <pre id="benchmark-output">No benchmark run.</pre>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Client metrics</h2>
+          <button id="reset-metrics" class="secondary">Reset metrics</button>
+        </div>
+        <div id="metrics" class="metrics"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/browser/main.ts"></script>
+  </body>
+</html>

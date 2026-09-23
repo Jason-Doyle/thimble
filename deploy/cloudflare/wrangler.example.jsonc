@@ -1,0 +1,42 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "thimbledb",
+  "main": "../../src/cloudflare-worker.ts",
+  "compatibility_date": "2026-09-23",
+  "workers_dev": false,
+  "assets": {
+    "directory": "../../dist/browser",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "THIMBLE_PREFIX": "demo",
+    "THIMBLE_SCOPE_ID": "demo-user",
+    "THIMBLE_SCOPE_MODE": "encrypted",
+    "THIMBLE_KEY_VERSION": "1",
+    "THIMBLE_HEAD_TTL_MS": "1000",
+    "THIMBLE_DEMO_MODE": "true",
+    "THIMBLE_READ_BASE_URL": "https://data.example.com/demo"
+  },
+
+  // Intentionally disabled. Copy this file to wrangler.jsonc, create the
+  // bucket, then uncomment and set the real bucket name.
+  //
+  // "r2_buckets": [
+  //   {
+  //     "binding": "DB",
+  //     "bucket_name": "your-real-r2-bucket"
+  //   }
+  // ],
+  //
+  // Intentionally disabled. Add a real route only after Cloudflare Access is
+  // protecting the application hostname.
+  //
+  // "routes": [
+  //   {
+  //     "pattern": "db.example.com",
+  //     "custom_domain": true
+  //   }
+  // ]
+}

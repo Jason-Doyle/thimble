@@ -1,0 +1,1652 @@
+{
+  "generatedAt": "2026-09-23T00:54:41.673Z",
+  "provider": "azure",
+  "profile": {
+    "name": "small",
+    "products": 512,
+    "customers": 128,
+    "orders": 512,
+    "pointReads": 100,
+    "catalogueScans": 5,
+    "updates": 50,
+    "concurrentWrites": 40,
+    "checkouts": 20
+  },
+  "simulatedLatencyMs": 0,
+  "mutableCacheTtlMs": 1000,
+  "engines": [
+    {
+      "engine": "monolithic-json",
+      "phases": [
+        {
+          "name": "seed-and-snapshot",
+          "durationMs": 821.74,
+          "operationCount": 6,
+          "latencyP50Ms": 0.16,
+          "latencyP95Ms": 560.48,
+          "store": {
+            "get": {
+              "count": 3,
+              "bytes": 0,
+              "durationMs": 437.04
+            },
+            "put": {
+              "count": 3,
+              "bytes": 366825,
+              "durationMs": 360.24
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 0,
+            "misses": 3,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 3,
+            "bytes": 366825
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "cold-point-read",
+          "durationMs": 6934.38,
+          "operationCount": 100,
+          "latencyP50Ms": 64.34,
+          "latencyP95Ms": 84.96,
+          "store": {
+            "get": {
+              "count": 100,
+              "bytes": 19243400,
+              "durationMs": 6740.96
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 100,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "location-cache-point-read",
+          "durationMs": 6545.67,
+          "operationCount": 100,
+          "latencyP50Ms": 64.58,
+          "latencyP95Ms": 71.76,
+          "store": {
+            "get": {
+              "count": 100,
+              "bytes": 19243400,
+              "durationMs": 6362.4
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 0,
+            "misses": 100,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "content-cache-point-read",
+          "durationMs": 115.85,
+          "operationCount": 100,
+          "latencyP50Ms": 0.44,
+          "latencyP95Ms": 0.61,
+          "store": {
+            "get": {
+              "count": 1,
+              "bytes": 192434,
+              "durationMs": 66.77
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 99,
+            "misses": 1,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 1,
+            "bytes": 192434
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "cold-catalogue-scan",
+          "durationMs": 65.24,
+          "operationCount": 1,
+          "latencyP50Ms": 65.16,
+          "latencyP95Ms": 65.16,
+          "store": {
+            "get": {
+              "count": 1,
+              "bytes": 192434,
+              "durationMs": 63.17
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 1,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "location-cache-scan",
+          "durationMs": 344.4,
+          "operationCount": 5,
+          "latencyP50Ms": 65.14,
+          "latencyP95Ms": 87.02,
+          "store": {
+            "get": {
+              "count": 5,
+              "bytes": 962170,
+              "durationMs": 331.81
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 0,
+            "misses": 5,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "content-cache-scan",
+          "durationMs": 71.06,
+          "operationCount": 5,
+          "latencyP50Ms": 1.01,
+          "latencyP95Ms": 66.48,
+          "store": {
+            "get": {
+              "count": 1,
+              "bytes": 192434,
+              "durationMs": 63.81
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 4,
+            "misses": 1,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 1,
+            "bytes": 192434
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "sequential-updates",
+          "durationMs": 7864.74,
+          "operationCount": 50,
+          "latencyP50Ms": 154.15,
+          "latencyP95Ms": 174.02,
+          "store": {
+            "get": {
+              "count": 50,
+              "bytes": 9669537,
+              "durationMs": 3083.03
+            },
+            "put": {
+              "count": 50,
+              "bytes": 9671489,
+              "durationMs": 4505.44
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 0,
+            "misses": 50,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "concurrent-writes",
+          "durationMs": 28154.17,
+          "operationCount": 40,
+          "latencyP50Ms": 19734.06,
+          "latencyP95Ms": 27469.38,
+          "store": {
+            "get": {
+              "count": 648,
+              "bytes": 127179678,
+              "durationMs": 102835.17
+            },
+            "put": {
+              "count": 648,
+              "bytes": 7889812,
+              "durationMs": 615348.69
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 608
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 0,
+            "misses": 648,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 608
+          }
+        },
+        {
+          "name": "checkout-flow",
+          "durationMs": 4468.61,
+          "operationCount": 20,
+          "latencyP50Ms": 200.09,
+          "latencyP95Ms": 287.36,
+          "store": {
+            "get": {
+              "count": 2,
+              "bytes": 341516,
+              "durationMs": 125.06
+            },
+            "put": {
+              "count": 40,
+              "bytes": 6875804,
+              "durationMs": 3990.61
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 58,
+            "misses": 2,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 2,
+            "bytes": 345848
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "maintenance",
+          "durationMs": 0.89,
+          "operationCount": 3,
+          "latencyP50Ms": 0.05,
+          "latencyP95Ms": 0.17,
+          "store": {
+            "get": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 0,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        },
+        {
+          "name": "post-maintenance-read",
+          "durationMs": 60.5,
+          "operationCount": 1,
+          "latencyP50Ms": 60.42,
+          "latencyP95Ms": 60.42,
+          "store": {
+            "get": {
+              "count": 1,
+              "bytes": 199967,
+              "durationMs": 58.72
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 1,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0
+          }
+        }
+      ],
+      "finalObjectCount": 3,
+      "finalStoredBytes": 378689,
+      "diagnostics": {
+        "casRetries": 608
+      }
+    },
+    {
+      "engine": "append-log-snapshot",
+      "phases": [
+        {
+          "name": "seed-and-snapshot",
+          "durationMs": 1683.91,
+          "operationCount": 6,
+          "latencyP50Ms": 269.18,
+          "latencyP95Ms": 344.47,
+          "store": {
+            "get": {
+              "count": 6,
+              "bytes": 0,
+              "durationMs": 307.7
+            },
+            "put": {
+              "count": 15,
+              "bytes": 755213,
+              "durationMs": 987.63
+            },
+            "delete": {
+              "count": 3,
+              "bytes": 0,
+              "durationMs": 175.12
+            },
+            "list": {
+              "count": 6,
+              "bytes": 469,
+              "durationMs": 324.57
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 12,
+            "misses": 6,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 6,
+            "bytes": 367322
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 3,
+            "garbageCollected": 3
+          }
+        },
+        {
+          "name": "cold-point-read",
+          "durationMs": 17136.93,
+          "operationCount": 100,
+          "latencyP50Ms": 168.84,
+          "latencyP95Ms": 186.69,
+          "store": {
+            "get": {
+              "count": 300,
+              "bytes": 19260000,
+              "durationMs": 16897.31
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 300,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "location-cache-point-read",
+          "durationMs": 12415.62,
+          "operationCount": 100,
+          "latencyP50Ms": 115.95,
+          "latencyP95Ms": 175.02,
+          "store": {
+            "get": {
+              "count": 212,
+              "bytes": 19245392,
+              "durationMs": 12154.03
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 88,
+            "misses": 212,
+            "expired": 11,
+            "evictions": 0,
+            "entries": 1,
+            "bytes": 166
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "content-cache-point-read",
+          "durationMs": 6229.31,
+          "operationCount": 100,
+          "latencyP50Ms": 54.87,
+          "latencyP95Ms": 104.24,
+          "store": {
+            "get": {
+              "count": 107,
+              "bytes": 193430,
+              "durationMs": 5846.45
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 193,
+            "misses": 107,
+            "expired": 5,
+            "evictions": 0,
+            "entries": 2,
+            "bytes": 192600
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "cold-catalogue-scan",
+          "durationMs": 169.77,
+          "operationCount": 1,
+          "latencyP50Ms": 169.73,
+          "latencyP95Ms": 169.73,
+          "store": {
+            "get": {
+              "count": 3,
+              "bytes": 192600,
+              "durationMs": 165.96
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 3,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "location-cache-scan",
+          "durationMs": 649.42,
+          "operationCount": 5,
+          "latencyP50Ms": 119.48,
+          "latencyP95Ms": 176.56,
+          "store": {
+            "get": {
+              "count": 11,
+              "bytes": 962336,
+              "durationMs": 633.89
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 4,
+            "misses": 11,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 1,
+            "bytes": 166
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "content-cache-scan",
+          "durationMs": 381.82,
+          "operationCount": 5,
+          "latencyP50Ms": 54.32,
+          "latencyP95Ms": 165.98,
+          "store": {
+            "get": {
+              "count": 7,
+              "bytes": 192600,
+              "durationMs": 362.29
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 8,
+            "misses": 7,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 2,
+            "bytes": 192600
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "sequential-updates",
+          "durationMs": 5696.34,
+          "operationCount": 50,
+          "latencyP50Ms": 110.21,
+          "latencyP95Ms": 135.43,
+          "store": {
+            "get": {
+              "count": 1,
+              "bytes": 166,
+              "durationMs": 55.05
+            },
+            "put": {
+              "count": 100,
+              "bytes": 31447,
+              "durationMs": 5616.41
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 99,
+            "misses": 1,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 1,
+            "bytes": 167
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "concurrent-writes",
+          "durationMs": 2694.68,
+          "operationCount": 40,
+          "latencyP50Ms": 1536.81,
+          "latencyP95Ms": 2543.24,
+          "store": {
+            "get": {
+              "count": 165,
+              "bytes": 27555,
+              "durationMs": 9500.53
+            },
+            "put": {
+              "count": 966,
+              "bytes": 11301,
+              "durationMs": 52756.74
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 903
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 21,
+            "misses": 165,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "appendRetries": 780,
+            "hintConflicts": 123,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "checkout-flow",
+          "durationMs": 6368.48,
+          "operationCount": 20,
+          "latencyP50Ms": 279.41,
+          "latencyP95Ms": 331.73,
+          "store": {
+            "get": {
+              "count": 114,
+              "bytes": 223517,
+              "durationMs": 19829.98
+            },
+            "put": {
+              "count": 81,
+              "bytes": 20591,
+              "durationMs": 4573.64
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 1
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 2016,
+            "misses": 114,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 133,
+            "bytes": 237279
+          },
+          "diagnostics": {
+            "appendRetries": 1,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "maintenance",
+          "durationMs": 2380.5,
+          "operationCount": 3,
+          "latencyP50Ms": 774.24,
+          "latencyP95Ms": 1403.83,
+          "store": {
+            "get": {
+              "count": 139,
+              "bytes": 411837,
+              "durationMs": 16666
+            },
+            "put": {
+              "count": 4,
+              "bytes": 346184,
+              "durationMs": 537.67
+            },
+            "delete": {
+              "count": 132,
+              "bytes": 0,
+              "durationMs": 11654.84
+            },
+            "list": {
+              "count": 4,
+              "bytes": 6002,
+              "durationMs": 470.89
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 139,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 2,
+            "garbageCollected": 132
+          }
+        },
+        {
+          "name": "post-maintenance-read",
+          "durationMs": 170.33,
+          "operationCount": 1,
+          "latencyP50Ms": 170.32,
+          "latencyP95Ms": 170.32,
+          "store": {
+            "get": {
+              "count": 3,
+              "bytes": 200137,
+              "durationMs": 168.76
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 3,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "appendRetries": 0,
+            "hintConflicts": 0,
+            "compactionRetries": 0,
+            "compactions": 0,
+            "garbageCollected": 0
+          }
+        }
+      ],
+      "finalObjectCount": 6,
+      "finalStoredBytes": 379192,
+      "diagnostics": {
+        "appendRetries": 781,
+        "hintConflicts": 123,
+        "compactionRetries": 0,
+        "compactions": 5,
+        "garbageCollected": 135
+      }
+    },
+    {
+      "engine": "content-addressed-trie",
+      "phases": [
+        {
+          "name": "seed-and-snapshot",
+          "durationMs": 2464.58,
+          "operationCount": 6,
+          "latencyP50Ms": 326.89,
+          "latencyP95Ms": 874,
+          "store": {
+            "get": {
+              "count": 3,
+              "bytes": 0,
+              "durationMs": 151.02
+            },
+            "put": {
+              "count": 602,
+              "bytes": 426749,
+              "durationMs": 131772.15
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 3,
+              "bytes": 57736,
+              "durationMs": 702.69
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 54,
+            "misses": 3,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 602,
+            "bytes": 426749
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 599,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "cold-point-read",
+          "durationMs": 21464.67,
+          "operationCount": 100,
+          "latencyP50Ms": 212.21,
+          "latencyP95Ms": 232.95,
+          "store": {
+            "get": {
+              "count": 400,
+              "bytes": 328336,
+              "durationMs": 21435.22
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 400,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "location-cache-point-read",
+          "durationMs": 6043.18,
+          "operationCount": 100,
+          "latencyP50Ms": 52.94,
+          "latencyP95Ms": 106.14,
+          "store": {
+            "get": {
+              "count": 113,
+              "bytes": 105780,
+              "durationMs": 6013.15
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 287,
+            "misses": 113,
+            "expired": 5,
+            "evictions": 0,
+            "entries": 8,
+            "bytes": 7400
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "content-cache-point-read",
+          "durationMs": 855.64,
+          "operationCount": 100,
+          "latencyP50Ms": 0.05,
+          "latencyP95Ms": 103.83,
+          "store": {
+            "get": {
+              "count": 16,
+              "bytes": 15172,
+              "durationMs": 847.17
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 384,
+            "misses": 16,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 16,
+            "bytes": 15172
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "cold-catalogue-scan",
+          "durationMs": 318,
+          "operationCount": 1,
+          "latencyP50Ms": 317.98,
+          "latencyP95Ms": 317.98,
+          "store": {
+            "get": {
+              "count": 241,
+              "bytes": 216442,
+              "durationMs": 23773.74
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 241,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "location-cache-scan",
+          "durationMs": 864.81,
+          "operationCount": 5,
+          "latencyP50Ms": 152.2,
+          "latencyP95Ms": 288.95,
+          "store": {
+            "get": {
+              "count": 1133,
+              "bytes": 1011934,
+              "durationMs": 120987.28
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 72,
+            "misses": 1133,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 18,
+            "bytes": 17569
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "content-cache-scan",
+          "durationMs": 279.12,
+          "operationCount": 5,
+          "latencyP50Ms": 1.64,
+          "latencyP95Ms": 269.78,
+          "store": {
+            "get": {
+              "count": 241,
+              "bytes": 216442,
+              "durationMs": 15211.08
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 964,
+            "misses": 241,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 241,
+            "bytes": 216442
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "sequential-updates",
+          "durationMs": 14866.54,
+          "operationCount": 50,
+          "latencyP50Ms": 277.93,
+          "latencyP95Ms": 343.77,
+          "store": {
+            "get": {
+              "count": 67,
+              "bytes": 66784,
+              "durationMs": 3516.11
+            },
+            "put": {
+              "count": 200,
+              "bytes": 167155,
+              "durationMs": 11283.78
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 133,
+            "misses": 67,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 117,
+            "bytes": 127153
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 150,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "concurrent-writes",
+          "durationMs": 13472.35,
+          "operationCount": 40,
+          "latencyP50Ms": 6589.64,
+          "latencyP95Ms": 12623.22,
+          "store": {
+            "get": {
+              "count": 1753,
+              "bytes": 891247,
+              "durationMs": 93337.69
+            },
+            "put": {
+              "count": 3280,
+              "bytes": 1086062,
+              "durationMs": 177962.36
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 2292
+          },
+          "cache": {
+            "policy": "locations",
+            "hits": 1521,
+            "misses": 1753,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 865,
+            "bytes": 999414
+          },
+          "diagnostics": {
+            "casRetries": 780,
+            "nodesCreated": 948,
+            "reusedNodes": 1512,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "checkout-flow",
+          "durationMs": 12644.13,
+          "operationCount": 20,
+          "latencyP50Ms": 618.11,
+          "latencyP95Ms": 699.49,
+          "store": {
+            "get": {
+              "count": 62,
+              "bytes": 53297,
+              "durationMs": 3368.36
+            },
+            "put": {
+              "count": 160,
+              "bytes": 126955,
+              "durationMs": 9234.44
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "content",
+            "hits": 176,
+            "misses": 62,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 182,
+            "bytes": 176530
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 120,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        },
+        {
+          "name": "maintenance",
+          "durationMs": 4745.35,
+          "operationCount": 3,
+          "latencyP50Ms": 596.4,
+          "latencyP95Ms": 3758.45,
+          "store": {
+            "get": {
+              "count": 54,
+              "bytes": 44474,
+              "durationMs": 3357.13
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 1213,
+              "bytes": 0,
+              "durationMs": 2103955.71
+            },
+            "list": {
+              "count": 3,
+              "bytes": 175762,
+              "durationMs": 1371.87
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 54,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 1213
+          }
+        },
+        {
+          "name": "post-maintenance-read",
+          "durationMs": 209.11,
+          "operationCount": 1,
+          "latencyP50Ms": 209.09,
+          "latencyP95Ms": 209.09,
+          "store": {
+            "get": {
+              "count": 4,
+              "bytes": 4348,
+              "durationMs": 208.72
+            },
+            "put": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "delete": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "list": {
+              "count": 0,
+              "bytes": 0,
+              "durationMs": 0
+            },
+            "preconditionFailures": 0
+          },
+          "cache": {
+            "policy": "none",
+            "hits": 0,
+            "misses": 4,
+            "expired": 0,
+            "evictions": 0,
+            "entries": 0,
+            "bytes": 0
+          },
+          "diagnostics": {
+            "casRetries": 0,
+            "nodesCreated": 0,
+            "reusedNodes": 0,
+            "garbageCollected": 0
+          }
+        }
+      ],
+      "finalObjectCount": 607,
+      "finalStoredBytes": 439113,
+      "diagnostics": {
+        "casRetries": 780,
+        "nodesCreated": 1817,
+        "reusedNodes": 1512,
+        "garbageCollected": 1213
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "name": "thimbledb-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n server,client \"npm run start:server\" \"npm run dev:client\"",
+    "dev:client": "vite",
+    "dev:server": "tsx watch src/server.ts",
+    "build": "npm run build:client && npm run build:server && npm run build:worker",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:worker": "wrangler deploy --dry-run --outdir dist/worker src/cloudflare-worker.ts --name thimbledb-worker --compatibility-date 2026-09-01",
+    "start:server": "tsx src/server.ts",
+    "start:prod": "node dist/server/server.js",
+    "benchmark": "tsx src/cli.ts",
+    "benchmark:local": "tsx src/cli.ts --provider local --profile tiny --latency-ms 8",
+    "benchmark:azure": "tsx src/cli.ts --provider azure --profile tiny",
+    "benchmark:s3": "tsx src/cli.ts --provider s3 --profile tiny",
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.896.0",
+    "@azure/storage-blob": "^12.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.6",
+    "@cloudflare/workers-types": "^5.20260923.1",
+    "concurrently": "^9.2.1",
+    "fake-indexeddb": "^6.2.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.137.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

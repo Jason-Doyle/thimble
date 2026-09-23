@@ -1,0 +1,282 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Secondary AWS deployment for the ThimbleDB Node authority.
+
+Parameters:
+  ApplicationName:
+    Type: String
+    Default: thimbledb
+  ImageUri:
+    Type: String
+    Description: ECR image URI built with the AWS Lambda Web Adapter.
+  AllowedOrigin:
+    Type: String
+    Description: Exact browser application origin allowed by CloudFront.
+  Prefix:
+    Type: String
+    Default: demo
+  ScopeId:
+    Type: String
+    Default: demo-user
+  MasterKey:
+    Type: String
+    NoEcho: true
+    Description: Base64-encoded 32-byte deployment master key.
+  SessionSecret:
+    Type: String
+    NoEcho: true
+    Description: High-entropy session signing secret.
+
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Ref AllowedOrigin
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedHeaders:
+              - If-None-Match
+            ExposedHeaders:
+              - ETag
+              - Content-Length
+            MaxAge: 3600
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  ReadOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${ApplicationName}-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ReadCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub ${ApplicationName}-objects
+        DefaultTTL: 60
+        MaxTTL: 31536000
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - Origin
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
+  ReadOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub ${ApplicationName}-cors
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: whitelist
+          Headers:
+            - Origin
+            - Access-Control-Request-Headers
+            - Access-Control-Request-Method
+            - If-None-Match
+        QueryStringsConfig:
+          QueryStringBehavior: none
+
+  ReadResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub ${ApplicationName}-cors
+        CorsConfig:
+          AccessControlAllowCredentials: false
+          AccessControlAllowHeaders:
+            Items:
+              - If-None-Match
+          AccessControlAllowMethods:
+            Items:
+              - GET
+              - HEAD
+              - OPTIONS
+          AccessControlAllowOrigins:
+            Items:
+              - !Ref AllowedOrigin
+          AccessControlExposeHeaders:
+            Items:
+              - ETag
+              - Content-Length
+          AccessControlMaxAgeSec: 3600
+          OriginOverride: true
+
+  HeadCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub ${ApplicationName}-head
+        DefaultTTL: 0
+        MaxTTL: 0
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - Origin
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
+  ReadDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2and3
+        Origins:
+          - Id: data
+            DomainName: !GetAtt DataBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt ReadOriginAccessControl.Id
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: data
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: false
+          CachePolicyId: !Ref ReadCachePolicy
+          OriginRequestPolicyId: !Ref ReadOriginRequestPolicy
+          ResponseHeadersPolicyId: !Ref ReadResponseHeadersPolicy
+        CacheBehaviors:
+          - PathPattern: "*/HEAD.json"
+            TargetOriginId: data
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: false
+            CachePolicyId: !Ref HeadCachePolicy
+            OriginRequestPolicyId: !Ref ReadOriginRequestPolicy
+            ResponseHeadersPolicyId: !Ref ReadResponseHeadersPolicy
+
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${DataBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${ReadDistribution}
+
+  AuthorityRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ScopedObjectAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub ${DataBucket.Arn}/${Prefix}/*
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt DataBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - !Sub ${Prefix}/*
+
+  AuthorityFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref ApplicationName
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt AuthorityRole.Arn
+      MemorySize: 1024
+      Timeout: 30
+      Environment:
+        Variables:
+          AWS_LWA_PORT: "8787"
+          THIMBLE_HOST: "0.0.0.0"
+          THIMBLE_PROVIDER: s3
+          S3_BUCKET: !Ref DataBucket
+          THIMBLE_PREFIX: !Ref Prefix
+          THIMBLE_SCOPE_ID: !Ref ScopeId
+          THIMBLE_MASTER_KEY: !Ref MasterKey
+          THIMBLE_SESSION_SECRET: !Ref SessionSecret
+          THIMBLE_SECURE_COOKIES: "true"
+          THIMBLE_READ_BASE_URL: !Sub https://${ReadDistribution.DomainName}/${Prefix}
+
+  AuthorityUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref AuthorityFunction
+      AuthType: NONE
+
+  AuthorityUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthorityFunction
+      Principal: "*"
+      Action: lambda:InvokeFunctionUrl
+      FunctionUrlAuthType: NONE
+
+Outputs:
+  AuthorityUrl:
+    Value: !GetAtt AuthorityUrl.FunctionUrl
+  ReadBaseUrl:
+    Value: !Sub https://${ReadDistribution.DomainName}/${Prefix}
+  BucketName:
+    Value: !Ref DataBucket
