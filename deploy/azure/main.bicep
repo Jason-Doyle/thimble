@@ -12,19 +12,15 @@ param containerImage string = ''
 @description('Exact browser origin allowed to read Blob Storage.')
 param allowedOrigin string
 
-@description('Read-only SAS base URL ending in /<container>/<prefix>.')
-@secure()
-param readBaseUrl string = ''
-
 @description('Base64-encoded 32-byte deployment master key.')
 @secure()
 param masterKey string = ''
 
-@description('High-entropy application session secret.')
+@description('Base64-encoded password pepper containing at least 32 bytes.')
 @secure()
-param sessionSecret string = ''
+param passwordPepper string = ''
 
-@description('Deploy the Container App after the storage SAS and image are ready.')
+@description('Deploy the Container App after the image and secrets are ready.')
 param deployAuthority bool = false
 
 @description('Private Blob container name.')
@@ -33,8 +29,11 @@ param containerName string = 'thimbledb'
 @description('Application prefix inside the container.')
 param prefix string = 'demo'
 
-@description('Default encrypted scope used by the POC authority.')
-param scopeId string = 'demo-user'
+@description('Optional Microsoft Entra tenant ID.')
+param entraTenantId string = ''
+
+@description('Optional Microsoft Entra API audience.')
+param entraAudience string = ''
 
 var compactName = toLower(replace(appName, '-', ''))
 var storageName = take('${compactName}${uniqueString(resourceGroup().id)}', 24)
@@ -96,6 +95,14 @@ resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@20
   }
 }
 
+resource authContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: '${containerName}-auth'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 resource logs 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: '${appName}-logs'
   location: location
@@ -146,12 +153,8 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
           value: masterKey
         }
         {
-          name: 'session-secret'
-          value: sessionSecret
-        }
-        {
-          name: 'read-base-url'
-          value: readBaseUrl
+          name: 'password-pepper'
+          value: passwordPepper
         }
       ]
     }
@@ -178,20 +181,32 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
               value: prefix
             }
             {
-              name: 'THIMBLE_SCOPE_ID'
-              value: scopeId
-            }
-            {
               name: 'THIMBLE_MASTER_KEY'
               secretRef: 'master-key'
             }
             {
-              name: 'THIMBLE_SESSION_SECRET'
-              secretRef: 'session-secret'
+              name: 'THIMBLE_PASSWORD_PEPPER'
+              secretRef: 'password-pepper'
             }
             {
-              name: 'THIMBLE_READ_BASE_URL'
-              secretRef: 'read-base-url'
+              name: 'AZURE_AUTH_STORAGE_CONTAINER'
+              value: authContainer.name
+            }
+            {
+              name: 'THIMBLE_ALLOWED_ORIGIN'
+              value: allowedOrigin
+            }
+            {
+              name: 'THIMBLE_LOCAL_REGISTRATION'
+              value: 'false'
+            }
+            {
+              name: 'ENTRA_TENANT_ID'
+              value: entraTenantId
+            }
+            {
+              name: 'ENTRA_AUDIENCE'
+              value: entraAudience
             }
             {
               name: 'THIMBLE_SECURE_COOKIES'

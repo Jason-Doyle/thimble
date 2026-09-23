@@ -40,6 +40,7 @@ export class ThimbleClient {
   private notModified = 0;
   private missing = 0;
   private offlineFallbacks = 0;
+  private active = true;
   private readonly channel: BroadcastChannel | null;
 
   constructor(
@@ -48,8 +49,12 @@ export class ThimbleClient {
       cache: TieredObjectCache;
       headTtlMs: number;
       writeBaseUrl?: string;
+      csrfToken?: string;
+      scopeId?: string;
+      keyExpiresAt?: string;
       channelName?: string;
       fetchImplementation?: typeof fetch;
+      onLogout?: () => void;
     },
   ) {
     this.channel =
@@ -62,8 +67,22 @@ export class ThimbleClient {
       this.channel.onmessage = (event: MessageEvent<unknown>) => {
         if (isReadBundle(event.data)) {
           void this.applyBundle(event.data, false);
+        } else if (isLogoutMessage(event.data)) {
+          void this.handleLogout();
         }
       };
+    }
+    if (options.keyExpiresAt) {
+      const delay =
+        new Date(options.keyExpiresAt).getTime() - Date.now();
+      if (delay <= 0) {
+        void this.handleLogout();
+      } else {
+        setTimeout(
+          () => void this.handleLogout(),
+          Math.min(delay, 2_147_483_647),
+        );
+      }
     }
   }
 
@@ -75,6 +94,7 @@ export class ThimbleClient {
     collection: string,
     id: string,
   ): Promise<JsonDocument | null> {
+    this.requireActive();
     const head = await this.readHead(collection);
     if (head.rootHash === null) {
       return null;
@@ -108,6 +128,7 @@ export class ThimbleClient {
   }
 
   async scan(collection: string): Promise<JsonDocument[]> {
+    this.requireActive();
     const head = await this.readHead(collection);
     if (head.rootHash === null) {
       return [];
@@ -148,6 +169,7 @@ export class ThimbleClient {
     id: string,
     document: JsonDocument,
   ): Promise<TrieReadBundle> {
+    this.requireActive();
     const baseUrl = this.options.writeBaseUrl ?? "";
     const fetchImplementation =
       this.options.fetchImplementation ?? fetch;
@@ -157,7 +179,15 @@ export class ThimbleClient {
       {
         method: "POST",
         credentials: "same-origin",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(this.options.csrfToken
+            ? { "x-thimble-csrf": this.options.csrfToken }
+            : {}),
+          ...(this.options.scopeId
+            ? { "x-thimble-scope": this.options.scopeId }
+            : {}),
+        },
         body: JSON.stringify({ ...document, id }),
       },
     );
@@ -201,6 +231,14 @@ export class ThimbleClient {
     return this.options.cache.clearAll();
   }
 
+  async logout(): Promise<void> {
+    if (!this.active) {
+      return;
+    }
+    this.channel?.postMessage({ type: "logout" });
+    await this.handleLogout();
+  }
+
   resetMetrics(): void {
     this.remoteReads = 0;
     this.remoteBytes = 0;
@@ -222,10 +260,12 @@ export class ThimbleClient {
   }
 
   close(): void {
+    this.active = false;
     this.channel?.close();
   }
 
   private async readHead(collection: string): Promise<TrieHead> {
+    this.requireActive();
     const key = trieHeadKey(collection);
     return withBrowserLock(`thimbledb:${key}`, async () => {
       const cached = await this.options.cache.get(key);
@@ -241,7 +281,7 @@ export class ThimbleClient {
       try {
         remote = await this.readRemote(key, cached?.etag);
       } catch (error) {
-        if (cached) {
+        if (cached && this.active) {
           this.offlineFallbacks += 1;
           return asHead(cached.value);
         }
@@ -271,6 +311,7 @@ export class ThimbleClient {
     hash: string,
     expectedKind: T["kind"],
   ): Promise<T> {
+    this.requireActive();
     const key = trieNodeKey(collection, hash);
     const cached = await this.options.cache.get(key);
     if (cached) {
@@ -285,6 +326,31 @@ export class ThimbleClient {
       cacheEntryFromRemote(remote, true),
     );
     return asNode<T>(remote.value, expectedKind);
+  }
+
+  private async handleLogout(): Promise<void> {
+    if (!this.active) {
+      return;
+    }
+    this.active = false;
+    await withBrowserLock(
+      `thimbledb:logout:${this.options.scopeId ?? "default"}`,
+      () => this.options.cache.destroy(),
+    );
+    this.channel?.close();
+    this.options.onLogout?.();
+  }
+
+  private requireActive(): void {
+    if (
+      this.options.keyExpiresAt &&
+      new Date(this.options.keyExpiresAt).getTime() <= Date.now()
+    ) {
+      void this.handleLogout();
+    }
+    if (!this.active) {
+      throw new Error("ThimbleDB client is logged out");
+    }
   }
 
   private async readRemote(
@@ -370,6 +436,17 @@ function isReadBundle(value: unknown): value is TrieReadBundle {
     "collection" in value &&
     "objects" in value &&
     Array.isArray(value.objects)
+  );
+}
+
+function isLogoutMessage(
+  value: unknown,
+): value is { type: "logout" } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "logout"
   );
 }
 

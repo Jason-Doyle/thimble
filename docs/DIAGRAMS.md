@@ -19,19 +19,21 @@ flowchart LR
     Client --> ScopeKey
   end
 
-  subgraph PublicRead["Public object-read boundary"]
-    CDN["R2 custom domain / CloudFront / Blob endpoint"]
+  subgraph BrokeredRead["Brokered private-read boundary"]
+    CDN["Authenticated object endpoint"]
     Objects["TDB1 gzip + AES-GCM envelopes"]
     CDN --> Objects
   end
 
   subgraph Authority["Authenticated authority boundary"]
-    Auth["Application authentication"]
+    Auth["Local Argon2id or external OIDC authentication"]
     Authorise["Scope authorisation"]
     KeyGrant["Short-lived key grant"]
     Validate["Mutation validation"]
     Commit["Conditional HEAD commit"]
+    AuthStore["Private auth store<br/>users + hashes + sessions"]
 
+    Auth --> AuthStore
     Auth --> Authorise
     Authorise --> KeyGrant
     Authorise --> Validate
@@ -44,7 +46,8 @@ flowchart LR
     WriteCreds["Provider write credential or binding"]
   end
 
-  Client -- "Read ciphertext" --> CDN
+  Client -- "Read ciphertext with session" --> CDN
+  CDN --> Authorise
   Client -- "Mutation" --> Auth
   KeyGrant -- "Raw key once, imported immediately" --> ScopeKey
   Commit -- "Encrypted writes" --> Objects
@@ -54,9 +57,8 @@ flowchart LR
   WriteCreds --> Commit
 ```
 
-The public read path can expose ciphertext because private contents require a
-scope key. The authority remains responsible for authentication, key grants,
-validation, and all writes.
+Private reads require both a current session grant and the scope key. Public
+scopes can optionally use a direct provider URL.
 
 ## Read sequence
 
@@ -133,7 +135,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
   Master["Deployment master key<br/>platform secret"]
-  SessionSecret["Session signing secret<br/>platform secret"]
+  Pepper["Password pepper<br/>platform secret"]
   HKDF["HKDF-SHA-256"]
   ScopeData["Scope data key vN<br/>AES-256-GCM"]
   ScopeAddress["Scope address key vN<br/>HMAC-SHA-256"]
@@ -142,16 +144,20 @@ flowchart TD
   DeviceKey["Non-extractable device cache key<br/>IndexedDB CryptoKey"]
   Persistent["Encrypted IndexedDB values"]
   Objects["Encrypted object envelopes"]
+  AuthStore["Encrypted auth records<br/>password hashes + opaque sessions"]
 
   Master --> HKDF
   HKDF --> ScopeData
   HKDF --> ScopeAddress
   ScopeData --> Objects
   ScopeAddress --> Objects
+  Master --> AuthStore
+  Pepper --> AuthStore
   ScopeData --> Grant
   Grant --> BrowserKey
   DeviceKey --> Persistent
-  SessionSecret --> Grant
+  SessionRecord["Opaque revocable session<br/>private auth store"]
+  SessionRecord --> Grant
 ```
 
 The scope key and browser device key have different purposes. The scope key
@@ -185,23 +191,29 @@ flowchart LR
   Browser["Browser"]
   Access["Cloudflare Access"]
   Worker["Worker<br/>API + static assets"]
-  R2Binding["R2 binding<br/>writes and maintenance"]
-  R2Domain["R2 custom domain<br/>direct encrypted reads"]
+  R2Binding["R2 data binding<br/>writes and maintenance"]
+  AuthBinding["Private R2 auth binding<br/>users + sessions + rate records"]
+  ReadBroker["Worker object broker<br/>private encrypted reads"]
+  PublicDomain["Optional R2 custom domain<br/>public scopes"]
   R2["R2 bucket"]
+  AuthR2["Private auth R2 bucket"]
   Secrets["Worker secrets"]
 
   Browser --> Access
   Access --> Worker
-  Browser --> R2Domain
+  Browser --> ReadBroker
   Worker --> R2Binding
+  Worker --> AuthBinding
+  ReadBroker --> Worker
   R2Binding --> R2
-  R2Domain --> R2
+  AuthBinding --> AuthR2
+  PublicDomain -.-> R2
   Secrets --> Worker
 ```
 
 Cloudflare is the reference implementation because the Worker and R2 binding
-remove server management, while the custom domain preserves the direct browser
-read path.
+remove server management. Private reads use the Worker broker; public scopes
+can use an R2 custom domain.
 
 ## Provider boundary comparison
 
@@ -217,16 +229,16 @@ flowchart TB
   Contract --> AWS["AWS compatibility"]
 
   CF --> CFW["Worker authority"]
-  CF --> CFR2["R2 binding and custom domain"]
+  CF --> CFR2["R2 data and auth bindings"]
 
   Local --> Node["Node authority"]
   Local --> Files["Single-process filesystem store"]
 
   Azure --> ACA["Container Apps authority"]
-  Azure --> Blob["Blob Storage + read-only SAS"]
+  Azure --> Blob["Data and auth Blob containers"]
 
   AWS --> Lambda["Lambda container authority"]
-  AWS --> S3["S3 + CloudFront"]
+  AWS --> S3["Data and auth S3 buckets"]
 ```
 
 Only provider credentials, bindings, and read-authorisation mechanisms change.

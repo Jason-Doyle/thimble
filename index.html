@@ -24,7 +24,32 @@
         <div id="status" class="status">Starting...</div>
       </header>
 
-      <section class="panel controls">
+      <section id="auth-panel" class="panel auth-panel" hidden>
+        <h2>Sign in</h2>
+        <div class="auth-fields">
+          <label>
+            Login
+            <input id="auth-login" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <input
+              id="auth-password"
+              type="password"
+              autocomplete="current-password"
+            />
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="login">Sign in</button>
+          <button id="register" class="secondary">
+            Create local account
+          </button>
+        </div>
+        <p id="auth-message" class="auth-message"></p>
+      </section>
+
+      <section class="panel controls authenticated" hidden>
         <label>
           Cache policy
           <select id="cache-policy">
@@ -36,9 +61,10 @@
         <button id="seed">Seed tiny store</button>
         <button id="clear-memory" class="secondary">Clear memory</button>
         <button id="clear-all" class="secondary">Clear all cache</button>
+        <button id="logout" class="secondary">Sign out</button>
       </section>
 
-      <section class="grid">
+      <section class="grid authenticated" hidden>
         <article class="panel">
           <h2>Product read</h2>
           <label>
@@ -66,7 +92,7 @@
         </article>
       </section>
 
-      <section class="panel">
+      <section class="panel authenticated" hidden>
         <div class="section-heading">
           <h2>Client metrics</h2>
           <button id="reset-metrics" class="secondary">Reset metrics</button>

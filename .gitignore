@@ -2,6 +2,7 @@ node_modules/
 dist/
 .bench-data/
 .thimble-data/
+.thimble-auth/
 benchmark-results/
 coverage/
 *.log

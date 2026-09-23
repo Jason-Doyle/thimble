@@ -30,7 +30,7 @@ Generate secrets in the shell:
 
 ```powershell
 $env:THIMBLE_MASTER_KEY = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-$env:THIMBLE_SESSION_SECRET = node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+$env:THIMBLE_PASSWORD_PEPPER = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Deploy the template:
@@ -45,24 +45,26 @@ aws cloudformation deploy `
     ImageUri=<account>.dkr.ecr.<region>.amazonaws.com/thimbledb:<tag> `
     AllowedOrigin=https://<application-origin> `
     MasterKey=$env:THIMBLE_MASTER_KEY `
-    SessionSecret=$env:THIMBLE_SESSION_SECRET
+    PasswordPepper=$env:THIMBLE_PASSWORD_PEPPER
 ```
 
 Remove the shell values after deployment.
 
 ## Read path
 
-CloudFront can read the private bucket through Origin Access Control. Browser
-users receive encrypted object bytes from:
+Private local-auth reads use the Function URL broker and require a session and
+scope grant. The separate auth bucket is accessible only to the Lambda role.
+
+CloudFront remains available for public scopes through Origin Access Control:
 
 ```text
-https://<distribution>/<prefix>/scopes/<scope>/...
+https://<distribution>/content-trie/...
 ```
 
 The CloudFront distribution is publicly readable in this compatibility
-template. Confidentiality comes from the ThimbleDB envelope. Add AWS WAF,
-rate limits, signed cookies, or Cognito temporary credentials where object
-traffic itself must be authorised.
+template. Its origin path and bucket policy are restricted to
+`<prefix>/scopes/public/*`; it cannot read user, tenant, role, or auth-store
+objects.
 
 The template configures S3 CORS for `If-None-Match` and a separate zero-TTL
 CloudFront behaviour for `HEAD.json`. Immutable nodes use the normal cache
@@ -85,7 +87,8 @@ The browser has no S3 write credentials.
 - Function URL serves the application and `/api/config`.
 - CloudFront returns `ETag` and CORS headers.
 - S3 objects are private from the S3 endpoint.
-- CloudFront object bodies start with `TDB1`.
+- Brokered private object bodies start with `TDB1`.
+- The auth bucket is not a CloudFront origin.
 - Lambda role cannot access outside the configured prefix.
 - Browser writes go only to the Function URL.
 
@@ -95,9 +98,8 @@ The template uses a public Function URL because application authentication is
 outside the POC. Add Cognito, API Gateway authorisation, or the application's
 existing identity layer before production.
 
-CloudFront signed cookies or Cognito temporary credentials are stronger read
-controls than the public encrypted distribution. They require an additional
-browser credential adapter that is not yet included.
+CloudFront signed cookies or Cognito temporary credentials can protect direct
+public-scope reads when required.
 
 ## References
 

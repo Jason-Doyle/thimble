@@ -8,16 +8,17 @@
     "directory": "../../dist/browser",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": true
   },
   "vars": {
     "THIMBLE_PREFIX": "demo",
-    "THIMBLE_SCOPE_ID": "demo-user",
-    "THIMBLE_SCOPE_MODE": "encrypted",
     "THIMBLE_KEY_VERSION": "1",
     "THIMBLE_HEAD_TTL_MS": "1000",
-    "THIMBLE_DEMO_MODE": "true",
-    "THIMBLE_READ_BASE_URL": "https://data.example.com/demo"
+    "THIMBLE_LOCAL_REGISTRATION": "false",
+    "THIMBLE_ALLOWED_ORIGIN": "https://db.example.com",
+    // Optional Microsoft Entra configuration:
+    // "ENTRA_TENANT_ID": "00000000-0000-0000-0000-000000000000",
+    // "ENTRA_AUDIENCE": "api://your-application-id"
   },
 
   // Intentionally disabled. Copy this file to wrangler.jsonc, create the
@@ -26,7 +27,25 @@
   // "r2_buckets": [
   //   {
   //     "binding": "DB",
-  //     "bucket_name": "your-real-r2-bucket"
+  //     "bucket_name": "your-real-data-bucket"
+  //   },
+  //   {
+  //     "binding": "AUTH_DB",
+  //     "bucket_name": "your-private-auth-bucket"
+  //   }
+  // ],
+  //
+  // Production local authentication also requires a distributed rate-limit
+  // binding. Choose a real namespace_id that is unique in your account.
+  //
+  // "ratelimits": [
+  //   {
+  //     "name": "AUTH_RATE_LIMITER",
+  //     "namespace_id": "1001",
+  //     "simple": {
+  //       "limit": 5,
+  //       "period": 60
+  //     }
   //   }
   // ],
   //

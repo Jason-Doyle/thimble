@@ -11,7 +11,6 @@
   "include": [
     "src/server.ts",
     "src/server-config.ts",
-    "src/server-keys.ts",
-    "src/server-session.ts"
+    "src/server-keys.ts"
   ]
 }

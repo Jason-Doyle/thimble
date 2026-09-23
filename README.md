@@ -26,8 +26,8 @@ flowchart LR
     Client --> ScopeKey
   end
 
-  subgraph ReadPath["Public object-read boundary"]
-    Domain["R2 custom domain"]
+  subgraph ReadPath["Brokered private-read boundary"]
+    Domain["Authenticated object endpoint"]
     Objects["TDB1 gzip + AES-GCM envelopes"]
     Domain --> Objects
   end
@@ -40,7 +40,7 @@ flowchart LR
     Auth --> Write
   end
 
-  Client -- "Direct ciphertext reads" --> Domain
+  Client -- "Session-authorised ciphertext reads" --> Domain
   Client -- "Mutations" --> Auth
   Grant -- "Memory-only CryptoKey" --> ScopeKey
   Write -- "Encrypted objects" --> Objects
@@ -72,12 +72,15 @@ Only bindings, credentials, and browser read authorisation differ.
 - object-key-bound authenticated encryption
 - HMAC-derived private node addresses
 - server-only validated writes
+- local Argon2id accounts and revocable sessions
+- Microsoft Entra and generic OIDC token adapters
+- per-user and per-tenant scope grants
 - write responses that update all open browser tabs
 - Cloudflare Worker and native R2 binding
 - local, Azure Blob, and S3 Node adapters
 - Docker, Wrangler, Bicep, and CloudFormation deployment paths
 
-The browser bundle is about 19.5 KB uncompressed and 6.7 KB gzip. No database
+The browser bundle is about 22.9 KB uncompressed and 7.5 KB gzip. No database
 runtime or WASM module is shipped.
 
 ## Quick start
@@ -132,6 +135,8 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [System diagrams](docs/DIAGRAMS.md) | Trust boundaries, sequences, keys, and providers |
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |
 | [Security](docs/SECURITY.md) | Threat model, encryption, keys, and revocation |
+| [Authentication](docs/AUTHENTICATION.md) | Local accounts, sessions, scope grants, and Entra |
+| [Authentication security review](docs/AUTHENTICATION-SECURITY-REVIEW.md) | Findings, remediation, and verified controls |
 | [Protocol](docs/PROTOCOL.md) | Binary envelope and object layout |
 | [Proof of concept](docs/POC.md) | Browser harness, sample application, and benchmark usage |
 | [Benchmarks](docs/BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
@@ -146,8 +151,9 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 
 ThimbleDB is private research, not a production database. It still needs:
 
-- integration with a real application identity system
 - multi-version key rotation and migration
+- password reset, email verification, passkeys, and MFA
+- identity linking and administrative account controls
 - safe garbage collection with concurrent stale writers
 - adaptive snapshot versus trie selection
 - R2 browser benchmarks from multiple regions

@@ -36,10 +36,10 @@ multi-writer backend.
 
 | Provider | Position | Write integration | Browser read integration |
 | --- | --- | --- | --- |
-| Cloudflare R2 | Preferred reference provider | Native Worker R2 binding | R2 custom domain, temporary credentials, or presigned URLs |
-| Local filesystem | Development and single-process use | In-process file adapter | Same-origin `/objects` endpoint |
-| Azure Blob Storage | Supported secondary provider | Azure SDK and conditional blob writes | Read-only SAS |
-| Amazon S3 | Supported secondary provider | AWS SDK and IAM role | CloudFront, Cognito credentials, or a read broker |
+| Cloudflare R2 | Preferred reference provider | Native Worker R2 binding | Authenticated Worker broker for private scopes; custom domain for public scopes |
+| Local filesystem | Development and single-process use | In-process file adapter | Same-origin authenticated broker |
+| Azure Blob Storage | Supported secondary provider | Azure SDK and conditional blob writes | Authenticated authority broker; optional SAS for public scopes |
+| Amazon S3 | Supported secondary provider | AWS SDK and IAM role | Authenticated authority broker; optional public-scope CloudFront |
 | S3-compatible storage | Experimental compatibility | S3 endpoint adapter | Provider-specific |
 
 ## Cloudflare R2
@@ -74,8 +74,9 @@ transactional embedded store while preserving the ObjectStore interface.
 
 ## Azure Blob Storage
 
-Azure maps protocol conditions to `If-None-Match` and `If-Match`. A direct
-browser reader uses a read-only SAS URL and Blob-service CORS.
+Azure maps protocol conditions to `If-None-Match` and `If-Match`. Private
+authenticated reads use the authority broker. Public scopes can use a
+read-only SAS URL and Blob-service CORS.
 
 The Node authority currently uses a connection string. Managed identity is the
 preferred production improvement.

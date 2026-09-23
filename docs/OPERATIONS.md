@@ -5,7 +5,7 @@
 | Secret | Purpose | Rotation effect |
 | --- | --- | --- |
 | `THIMBLE_MASTER_KEY` | Derives scope encryption and address keys | Requires planned data re-encryption if changed |
-| `THIMBLE_SESSION_SECRET` | Signs or protects application sessions | Invalidates active sessions |
+| `THIMBLE_PASSWORD_PEPPER` | Defends local password hashes if the auth store leaks | Requires password reset to replace |
 | Provider write credential | Lets the authority mutate object storage | No stored-data rewrite |
 | Browser read credential | Lets a browser retrieve object bytes | No stored-data rewrite |
 
@@ -77,6 +77,14 @@ Leaked master key:
 3. Introduce a new master key.
 4. Re-encrypt all live scopes.
 5. Revoke all sessions and read credentials.
+
+Leaked password pepper:
+
+1. Preserve evidence and stop public login traffic.
+2. Replace the pepper.
+3. Require password resets because existing hashes cannot be re-peppered
+   without plaintext passwords.
+4. Revoke every active session.
 
 ## Cleanup
 

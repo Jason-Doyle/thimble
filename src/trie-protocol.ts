@@ -57,3 +57,7 @@ export function trieNodeKey(
 export function triePathFromHash(hash: string): [string, string] {
   return [hash[0] ?? "0", hash[1] ?? "0"];
 }
+
+export function scopeStoragePrefix(scopeId: string): string {
+  return `scopes/${encodeURIComponent(scopeId)}`;
+}

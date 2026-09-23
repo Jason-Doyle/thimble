@@ -155,6 +155,32 @@ describe("ThimbleDB browser client", () => {
     });
     await third.clearAll();
   });
+
+  it("destroys cached scope data and blocks reads after logout", async () => {
+    const fixture = trieFixture("products", "product-00005");
+    const reader = new FakeReader(fixture.objects);
+    const databaseName = uniqueName();
+    const cache = cacheFor("content", databaseName);
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 10_000,
+      scopeId: "user:test",
+      channelName: uniqueName(),
+    });
+
+    await client.get("products", fixture.id);
+    await client.logout();
+
+    await expect(
+      client.get("products", fixture.id),
+    ).rejects.toThrow("logged out");
+    const fresh = cacheFor("content", databaseName);
+    expect(
+      await fresh.get(trieHeadKey("products")),
+    ).toBeNull();
+    await fresh.clearAll();
+  });
 });
 
 class FakeReader implements JsonObjectReader {

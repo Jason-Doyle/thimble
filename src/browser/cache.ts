@@ -215,6 +215,30 @@ export class IndexedDbObjectCache {
     await transactionToPromise(transaction);
   }
 
+  async destroy(): Promise<void> {
+    const database = await this.database();
+    const transaction = database.transaction(
+      ["objects", "keys"],
+      "readwrite",
+    );
+    const store = transaction.objectStore("objects");
+    const index = store.index("namespace");
+    const request = index.openKeyCursor(
+      IDBKeyRange.only(this.namespace),
+    );
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        return;
+      }
+      store.delete(cursor.primaryKey);
+      cursor.continue();
+    };
+    transaction.objectStore("keys").delete(this.deviceKeyId());
+    await transactionToPromise(transaction);
+    this.deviceKeyPromise = undefined;
+  }
+
   close(): void {
     void this.databasePromise?.then((database) => database.close());
     this.databasePromise = undefined;
@@ -357,6 +381,11 @@ export class TieredObjectCache {
   async clearAll(): Promise<void> {
     this.memory.clear();
     await this.persistent.clear();
+  }
+
+  async destroy(): Promise<void> {
+    this.memory.clear();
+    await this.persistent.destroy();
   }
 
   resetMetrics(): void {

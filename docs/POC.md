@@ -19,6 +19,10 @@ npm run dev
 
 Open `http://127.0.0.1:5173`.
 
+Create a local account with a password of at least 12 UTF-8 bytes, then sign
+in. Local development enables registration by default. Cloud deployments
+disable it unless `THIMBLE_LOCAL_REGISTRATION=true`.
+
 The UI can:
 
 - seed a deterministic online-store dataset
@@ -34,6 +38,7 @@ For a compiled local run:
 
 ```powershell
 npm run build
+$env:THIMBLE_ALLOWED_ORIGIN = "http://127.0.0.1:8787"
 npm run start:prod
 ```
 
@@ -94,7 +99,7 @@ The deterministic store contains:
 The browser harness uses the same data generator as the storage-layout
 benchmark.
 
-## Azure direct-read experiment
+## Azure authentication experiment
 
 For a browser test against Azure:
 
@@ -102,22 +107,16 @@ For a browser test against Azure:
 $env:THIMBLE_PROVIDER = "azure"
 $env:AZURE_STORAGE_CONNECTION_STRING = "<server-only connection string>"
 $env:AZURE_STORAGE_CONTAINER = "thimbledb"
+$env:AZURE_AUTH_STORAGE_CONTAINER = "thimbledb-auth"
 $env:THIMBLE_PREFIX = "demo"
-$env:THIMBLE_READ_BASE_URL = "https://<account>.blob.core.windows.net/thimbledb/demo?<read-only-sas>"
 $env:THIMBLE_MASTER_KEY = "<base64-encoded 32-byte key>"
-$env:THIMBLE_SESSION_SECRET = "<high-entropy value>"
+$env:THIMBLE_PASSWORD_PEPPER = "<base64-encoded 32-byte value>"
+$env:THIMBLE_ALLOWED_ORIGIN = "http://127.0.0.1:5173"
 npm run dev
 ```
 
-The SAS must use HTTPS, end with the configured container and prefix, contain a
-signature, and grant read permission only (`sp=r`).
-
-Blob-service CORS must allow:
-
-- origin `http://127.0.0.1:5173`
-- methods `GET`, `HEAD`, and `OPTIONS`
-- request header `If-None-Match`
-- exposed headers `ETag` and `Content-Length`
+Private objects are read through the authenticated authority. The auth
+container is never exposed to the browser.
 
 See [Deploy to Azure](DEPLOYMENT-AZURE.md) for the complete path.
 

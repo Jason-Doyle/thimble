@@ -3,6 +3,7 @@ import {
   decodeEnvelope,
   type EnvelopeKeyResolver,
 } from "../envelope.js";
+import { scopeStoragePrefix } from "../trie-protocol.js";
 
 export type RemoteJsonObject =
   | {
@@ -154,7 +155,7 @@ export class ScopedJsonObjectReader implements JsonObjectReader {
     private readonly delegate: JsonObjectReader,
     scopeId: string,
   ) {
-    this.prefix = `scopes/${scopeId}`;
+    this.prefix = scopeStoragePrefix(scopeId);
   }
 
   async get(

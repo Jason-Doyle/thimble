@@ -45,8 +45,9 @@ authorising a session. The browser imports the 32-byte key as a
 non-extractable AES-GCM CryptoKey and clears the temporary byte buffer. The key
 is not written to cookies, localStorage, or IndexedDB.
 
-The session cookie contains only an opaque or signed session identifier and
-uses HttpOnly and SameSite. Production deployments must also use Secure.
+The session cookie contains only a user ID and a 256-bit random opaque token.
+Only its SHA-256 digest is stored in the private auth store. Cookies use
+HttpOnly and SameSite, plus Secure outside local development.
 
 ## Envelope encryption
 
@@ -95,25 +96,23 @@ other tabs may still be writing with it. Logout flows should coordinate across
 tabs, close active clients, clear cache entries, then rotate or delete the
 device key in one controlled operation.
 
-## Authorisation
+## Authentication and authorisation
 
 Encryption keys follow authorisation scopes. A user receives only keys for
 scopes the authority allows.
 
-The current local and Worker demo session grants one configured scope. This is
-test scaffolding. A real application must replace it with its existing
-identity system and make an explicit authorisation decision before returning
-each scope key.
+Local accounts use Argon2id and an authority-only encrypted auth store.
+External identities use a validated OIDC access token. Both create opaque,
+revocable sessions whose server-side records contain current scope grants.
 
-Cloudflare Access, an application session, Microsoft Entra ID, Cognito, or
-another identity provider can supply authentication. ThimbleDB does not define
-user identity.
+See [Authentication and identity](AUTHENTICATION.md).
 
 ## Revocation
 
 Revocation has a hard boundary:
 
 - the authority can stop issuing a key immediately
+- the authenticated read broker blocks future object retrieval after logout
 - new content can move to a rotated key version
 - cached encrypted content becomes inaccessible after the in-memory key is
   gone
@@ -124,11 +123,13 @@ High-risk scope removal should rotate the scope key and rewrite current live
 objects. Historical encrypted objects should be removed by lifecycle or
 garbage-collection policy.
 
-## Public encrypted storage
+## Public direct storage
 
-The Cloudflare reference deployment can expose encrypted R2 objects through a
-custom domain. Encryption protects confidentiality, and HMAC-derived node
-addresses prevent useful offline guessing without the scope material.
+Private local-auth scopes use the authenticated object broker. Public scopes
+can expose R2 objects through a custom domain because no private key is
+required. A deliberately non-revocable encrypted direct-read scope remains
+possible, but it must not be used where logout or account disablement must stop
+future reads.
 
 This does not prevent request abuse. Use Cloudflare rate limiting, cache rules,
 WAF controls, and object lifecycle policies to control cost and traffic.
@@ -138,7 +139,7 @@ WAF controls, and object lifecycle policies to control cost and traffic.
 Never commit:
 
 - `THIMBLE_MASTER_KEY`
-- `THIMBLE_SESSION_SECRET`
+- `THIMBLE_PASSWORD_PEPPER`
 - Azure connection strings or SAS tokens
 - AWS credentials
 - R2 access keys

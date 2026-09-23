@@ -3,8 +3,9 @@
 Azure is a secondary deployment path using:
 
 - Azure Container Apps for the Node authority and browser assets
-- Azure Blob Storage for encrypted object envelopes
-- a read-only container SAS for direct browser reads
+- one Azure Blob container for encrypted application objects
+- one separate private Blob container for auth records
+- brokered private reads through the authority
 
 The Bicep template is `deploy/azure/main.bicep`.
 
@@ -25,8 +26,8 @@ Push the image to ACR or another registry that Container Apps can access.
 
 ## Stage 1: create storage and environment
 
-The template disables the authority by default so the storage account can be
-created before its read-only SAS URL exists.
+The template disables the authority by default so storage can be created before
+the application image and secrets are ready.
 
 ```powershell
 az deployment group create `
@@ -39,35 +40,13 @@ az deployment group create `
 Read `storageAccountName` and `deployedContainerName` from the deployment
 outputs.
 
-## Create a read-only SAS
-
-Create a short-lived user-delegation SAS where possible. A container service
-SAS with read permission only is acceptable for a dedicated private test
-container.
-
-The final browser base URL must end in the configured container and prefix:
-
-```text
-https://<account>.blob.core.windows.net/thimbledb/demo?<sas>
-```
-
-Required permission:
-
-```text
-sp=r
-```
-
-Do not grant write, create, delete, list, tag, or ownership permissions to the
-browser SAS.
-
 ## Stage 2: deploy the authority
 
 Set secrets in the current shell:
 
 ```powershell
 $env:THIMBLE_MASTER_KEY = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-$env:THIMBLE_SESSION_SECRET = node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
-$env:THIMBLE_READ_BASE_URL = "https://<account>.blob.core.windows.net/thimbledb/demo?<read-only-sas>"
+$env:THIMBLE_PASSWORD_PEPPER = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Deploy:
@@ -81,24 +60,22 @@ az deployment group create `
                deployAuthority=true `
                containerImage=<registry/image:tag> `
                masterKey=$env:THIMBLE_MASTER_KEY `
-               sessionSecret=$env:THIMBLE_SESSION_SECRET `
-               readBaseUrl=$env:THIMBLE_READ_BASE_URL
+               passwordPepper=$env:THIMBLE_PASSWORD_PEPPER
 ```
 
 Remove shell values afterwards:
 
 ```powershell
 Remove-Item Env:THIMBLE_MASTER_KEY
-Remove-Item Env:THIMBLE_SESSION_SECRET
-Remove-Item Env:THIMBLE_READ_BASE_URL
+Remove-Item Env:THIMBLE_PASSWORD_PEPPER
 ```
 
 ## Verify
 
 - Container App uses HTTPS.
 - Blob CORS allows only the application origin.
-- Browser object requests include the container and prefix.
-- The browser SAS contains `sp=r`.
+- The auth container is not exposed through any SAS or public endpoint.
+- Browser object requests use the authenticated `/api/objects` broker.
 - Object bodies begin with `TDB1`.
 - The Container App can seed and mutate data.
 - Direct browser reads cannot write or delete blobs.
@@ -113,8 +90,8 @@ Store master and session secrets in Key Vault and reference them from
 Container Apps. The current Bicep accepts secure parameters to keep the example
 complete but does not provision Key Vault.
 
-Use user-delegation SAS tokens with short expiry and refresh them through the
-authenticated authority.
+User-delegation SAS tokens remain an option for public or direct-read scopes,
+but are not required for private local-auth data.
 
 ## References
 

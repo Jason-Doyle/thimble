@@ -1,0 +1,78 @@
+export type Identity =
+  | {
+      provider: "local";
+      subject: string;
+    }
+  | {
+      provider: "entra";
+      issuer: string;
+      subject: string;
+      tenantId: string;
+    }
+  | {
+      provider: "oidc";
+      issuer: string;
+      subject: string;
+    };
+
+export type AuthUser = {
+  id: string;
+  status: "active" | "disabled";
+  authVersion: number;
+  identities: Identity[];
+  roles: string[];
+  tenants: string[];
+  password?: {
+    encoded: string;
+    changedAt: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Principal = {
+  userId: string;
+  authVersion: number;
+  provider: Identity["provider"];
+  subject: string;
+  tenantIds: string[];
+  roles: string[];
+};
+
+export type ScopeGrant = {
+  scopeId: string;
+  permissions: Array<"read" | "write" | "admin">;
+};
+
+export type AuthSession = {
+  id: string;
+  userId: string;
+  authVersion: number;
+  provider: Identity["provider"];
+  csrfToken: string;
+  grants: ScopeGrant[];
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+};
+
+export interface IdentityAdapter {
+  readonly id: string;
+  authenticate(token: string): Promise<ExternalIdentity | null>;
+}
+
+export type ExternalIdentity = {
+  provider: "entra" | "oidc";
+  issuer: string;
+  subject: string;
+  tenantId?: string;
+  roles: string[];
+  displayName?: string;
+};
+
+export interface ScopeAuthorizer {
+  grants(
+    principal: Principal,
+    action?: "read" | "write" | "admin",
+  ): Promise<ScopeGrant[]>;
+}

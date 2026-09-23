@@ -33,6 +33,20 @@ export function validateAzureReadBaseUrl(
   if (!url.searchParams.get("sig")) {
     throw new Error("THIMBLE_READ_BASE_URL is missing a SAS signature");
   }
+  if (
+    url.searchParams.has("ss") ||
+    url.searchParams.has("srt")
+  ) {
+    throw new Error(
+      "Account SAS tokens are not allowed for browser reads",
+    );
+  }
+  const signedResource = url.searchParams.get("sr");
+  if (signedResource !== "c" && signedResource !== "d") {
+    throw new Error(
+      "Browser SAS must be scoped to a container or directory",
+    );
+  }
 
   return url.toString();
 }

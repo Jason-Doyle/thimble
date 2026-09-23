@@ -88,31 +88,45 @@ export function scopeKeyResponse(material: ScopeMaterial): {
 }
 
 async function loadMasterKey(local: boolean): Promise<Uint8Array> {
-  const configured = process.env.THIMBLE_MASTER_KEY;
+  return loadOrCreateSecret(
+    "THIMBLE_MASTER_KEY",
+    "master.key",
+    local,
+    32,
+  );
+}
+
+export async function loadOrCreateSecret(
+  environmentName: string,
+  fileName: string,
+  local: boolean,
+  minBytes: number,
+): Promise<Uint8Array> {
+  const configured = process.env[environmentName];
   if (configured) {
-    const bytes = base64ToBytes(configured);
-    if (bytes.byteLength !== 32) {
+    const decoded = base64ToBytes(configured);
+    if (decoded.byteLength < minBytes) {
       throw new Error(
-        "THIMBLE_MASTER_KEY must be a base64-encoded 32-byte key",
+        `${environmentName} must be a base64-encoded secret of at least ${minBytes} bytes`,
       );
     }
-    return bytes;
+    return decoded;
   }
 
   if (!local) {
     throw new Error(
-      "THIMBLE_MASTER_KEY is required for encrypted cloud scopes",
+      `${environmentName} is required for cloud providers`,
     );
   }
 
-  const keyPath = path.resolve(".thimble-data", "master.key");
+  const keyPath = path.resolve(".thimble-data", fileName);
   try {
     const existing = (await readFile(keyPath, "utf8")).trim();
-    const bytes = base64ToBytes(existing);
-    if (bytes.byteLength !== 32) {
-      throw new Error("Local ThimbleDB master key is invalid");
+    const decoded = base64ToBytes(existing);
+    if (decoded.byteLength < minBytes) {
+      throw new Error(`Local ${environmentName} is invalid`);
     }
-    return bytes;
+    return decoded;
   } catch (error) {
     if (!isMissingFile(error)) {
       throw error;
@@ -120,7 +134,7 @@ async function loadMasterKey(local: boolean): Promise<Uint8Array> {
   }
 
   await mkdir(path.dirname(keyPath), { recursive: true });
-  const created = new Uint8Array(randomBytes(32));
+  const created = new Uint8Array(randomBytes(minBytes));
   try {
     await writeFile(keyPath, `${bytesToBase64(created)}\n`, {
       encoding: "utf8",
