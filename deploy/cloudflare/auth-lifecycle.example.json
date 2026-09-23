@@ -1,0 +1,30 @@
+{
+  "rules": [
+    {
+      "id": "expire-auth-sessions",
+      "enabled": true,
+      "conditions": {
+        "prefix": "auth-v1/sessions/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 604800
+        }
+      }
+    },
+    {
+      "id": "expire-auth-rate-limits",
+      "enabled": true,
+      "conditions": {
+        "prefix": "auth-v1/rate-limits/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 604800
+        }
+      }
+    }
+  ]
+}

@@ -14,6 +14,19 @@ export interface AuthRateLimiter {
   consume(key: string): Promise<RateLimitResult>;
 }
 
+export class RoutedAuthRateLimiter implements AuthRateLimiter {
+  constructor(
+    private readonly durable: AuthRateLimiter,
+    private readonly edgeIp: AuthRateLimiter,
+  ) {}
+
+  consume(key: string): Promise<RateLimitResult> {
+    return /^(register|login|external)-ip:/.test(key)
+      ? this.edgeIp.consume(key)
+      : this.durable.consume(key);
+  }
+}
+
 export class InMemoryAuthRateLimiter implements AuthRateLimiter {
   private readonly entries = new Map<
     string,
@@ -47,6 +60,7 @@ export class InMemoryAuthRateLimiter implements AuthRateLimiter {
       ),
     };
   }
+
 }
 
 type RateLimitRecord = {
@@ -108,4 +122,5 @@ export class ObjectStoreAuthRateLimiter implements AuthRateLimiter {
     }
     return { allowed: false, retryAfterSeconds: 60 };
   }
+
 }

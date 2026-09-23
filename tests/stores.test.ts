@@ -3,10 +3,16 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { PreconditionFailedError } from "../src/core.js";
+import type {
+  ObjectStore,
+  PutConditions,
+  StoredObject,
+} from "../src/core.js";
 import {
   CachedObjectStore,
   LocalObjectStore,
   MeteredObjectStore,
+  PrefixObjectStore,
 } from "../src/stores.js";
 
 describe("local object store", () => {
@@ -104,4 +110,48 @@ describe("local object store", () => {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
   });
+
+  it("keeps empty-prefix listings inside their configured namespace", async () => {
+    const delegate = new PrefixMatchingStore([
+      "app/one.json",
+      "app/nested/two.json",
+      "app-other/private.json",
+    ]);
+    const store = new PrefixObjectStore(delegate, "app");
+
+    await expect(store.list("")).resolves.toEqual([
+      "nested/two.json",
+      "one.json",
+    ]);
+    expect(delegate.lastPrefix).toBe("app/");
+  });
 });
+
+class PrefixMatchingStore implements ObjectStore {
+  lastPrefix = "";
+
+  constructor(private readonly keys: string[]) {}
+
+  get(_key: string): Promise<StoredObject | null> {
+    return Promise.resolve(null);
+  }
+
+  put(
+    _key: string,
+    _bytes: Uint8Array,
+    _conditions?: PutConditions,
+  ): Promise<{ etag: string }> {
+    return Promise.resolve({ etag: "unused" });
+  }
+
+  delete(_key: string): Promise<void> {
+    return Promise.resolve();
+  }
+
+  list(prefix: string): Promise<string[]> {
+    this.lastPrefix = prefix;
+    return Promise.resolve(
+      this.keys.filter((key) => key.startsWith(prefix)).sort(),
+    );
+  }
+}

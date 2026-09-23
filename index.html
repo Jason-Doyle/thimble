@@ -17,8 +17,8 @@
           <p class="eyebrow">Browser read replica POC</p>
           <h1>ThimbleDB</h1>
           <p class="lede">
-            Reads come directly from object storage through memory and
-            IndexedDB caches. Writes go through the local authority.
+            Reads use brokered encrypted objects plus memory and IndexedDB
+            caches. Writes go through the authenticated authority.
           </p>
         </div>
         <div id="status" class="status">Starting...</div>
@@ -26,25 +26,27 @@
 
       <section id="auth-panel" class="panel auth-panel" hidden>
         <h2>Sign in</h2>
-        <div class="auth-fields">
-          <label>
-            Login
-            <input id="auth-login" autocomplete="username" />
-          </label>
-          <label>
-            Password
-            <input
-              id="auth-password"
-              type="password"
-              autocomplete="current-password"
-            />
-          </label>
-        </div>
-        <div class="button-row">
-          <button id="login">Sign in</button>
-          <button id="register" class="secondary">
-            Create local account
-          </button>
+        <div id="local-auth-controls">
+          <div class="auth-fields">
+            <label>
+              Login
+              <input id="auth-login" autocomplete="username" />
+            </label>
+            <label>
+              Password
+              <input
+                id="auth-password"
+                type="password"
+                autocomplete="current-password"
+              />
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="login">Sign in</button>
+            <button id="register" class="secondary">
+              Create local account
+            </button>
+          </div>
         </div>
         <p id="auth-message" class="auth-message"></p>
       </section>

@@ -119,14 +119,14 @@ export async function loadOrCreateSecret(
     );
   }
 
-  const keyPath = path.resolve(".thimble-data", fileName);
+  const keyPath = path.resolve(
+    process.env.THIMBLE_LOCAL_SECRET_ROOT ??
+      ".thimble-data",
+    fileName,
+  );
   try {
     const existing = (await readFile(keyPath, "utf8")).trim();
-    const decoded = base64ToBytes(existing);
-    if (decoded.byteLength < minBytes) {
-      throw new Error(`Local ${environmentName} is invalid`);
-    }
-    return decoded;
+    return validatedSecret(existing, minBytes, `Local ${environmentName}`);
   } catch (error) {
     if (!isMissingFile(error)) {
       throw error;
@@ -146,8 +146,20 @@ export async function loadOrCreateSecret(
       throw error;
     }
     const existing = (await readFile(keyPath, "utf8")).trim();
-    return base64ToBytes(existing);
+    return validatedSecret(existing, minBytes, `Local ${environmentName}`);
   }
+}
+
+function validatedSecret(
+  encoded: string,
+  minBytes: number,
+  label: string,
+): Uint8Array {
+  const decoded = base64ToBytes(encoded);
+  if (decoded.byteLength < minBytes) {
+    throw new Error(`${label} is invalid`);
+  }
+  return decoded;
 }
 
 function deriveKey(

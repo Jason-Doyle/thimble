@@ -50,6 +50,8 @@ type BrowserConfig = {
 
 const status = element<HTMLDivElement>("status");
 const authPanel = element<HTMLElement>("auth-panel");
+const localAuthControls =
+  element<HTMLElement>("local-auth-controls");
 const authLogin = element<HTMLInputElement>("auth-login");
 const authPassword = element<HTMLInputElement>("auth-password");
 const authMessage = element<HTMLParagraphElement>("auth-message");
@@ -62,8 +64,15 @@ const metricsOutput = element<HTMLDivElement>("metrics");
 
 let client: ThimbleClient | null = null;
 let config: BrowserConfig | null = null;
+let authConfig: AuthConfig | null = null;
 
-await bootstrap();
+try {
+  await bootstrap();
+} catch (error) {
+  authPanel.hidden = false;
+  authMessage.textContent = errorMessage(error);
+  setStatus("Startup failed", "error");
+}
 
 element<HTMLButtonElement>("login").addEventListener(
   "click",
@@ -75,26 +84,33 @@ element<HTMLButtonElement>("login").addEventListener(
 element<HTMLButtonElement>("register").addEventListener(
   "click",
   async () => {
-    setStatus("Creating account...", "working");
-    const response = await fetch("/api/auth/register", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        login: authLogin.value,
-        password: authPassword.value,
-      }),
-    });
-    const result = await response.json().catch(() => ({})) as {
-      message?: string;
-    };
-    authMessage.textContent =
-      result.message ??
-      "If registration is available, the account can now sign in.";
-    setStatus(
-      response.ok ? "Registration request complete" : "Registration failed",
-      response.ok ? "ready" : "error",
-    );
+    try {
+      setStatus("Creating account...", "working");
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          login: authLogin.value,
+          password: authPassword.value,
+        }),
+      });
+      const result = await response.json().catch(() => ({})) as {
+        message?: string;
+      };
+      authMessage.textContent =
+        result.message ??
+        "If registration is available, the account can now sign in.";
+      setStatus(
+        response.ok
+          ? "Registration request complete"
+          : "Registration failed",
+        response.ok ? "ready" : "error",
+      );
+    } catch {
+      authMessage.textContent = "Registration request failed";
+      setStatus("Registration failed", "error");
+    }
   },
 );
 
@@ -148,18 +164,36 @@ element<HTMLButtonElement>("clear-all").addEventListener(
 element<HTMLButtonElement>("logout").addEventListener(
   "click",
   async () => {
-    const current = requireConfig();
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: mutationHeaders(current),
-      body: "{}",
-    });
-    if (!response.ok) {
-      setStatus("Sign out failed", "error");
-      return;
+    const database = requireClient();
+    let serverFailure = false;
+    try {
+      const current = requireConfig();
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: mutationHeaders(current),
+        body: "{}",
+      });
+      if (!response.ok) {
+        serverFailure = true;
+      }
+    } catch {
+      serverFailure = true;
     }
-    await requireClient().logout();
+    try {
+      await database.logout();
+      if (serverFailure) {
+        setStatus(
+          "Server sign out failed; local data was cleared",
+          "error",
+        );
+      }
+    } catch {
+      setStatus(
+        "Signed out, but local cache purge failed",
+        "error",
+      );
+    }
   },
 );
 
@@ -287,13 +321,20 @@ element<HTMLButtonElement>("reset-metrics").addEventListener(
 
 async function bootstrap(): Promise<void> {
   const auth = await fetchJson<AuthConfig>("/api/auth/config");
+  authConfig = auth;
   const response = await fetch("/api/config", {
     credentials: "same-origin",
   });
   if (response.status === 401) {
     authPanel.hidden = false;
+    localAuthControls.hidden = !auth.local.enabled;
     element<HTMLButtonElement>("register").hidden =
       !auth.local.registrationEnabled;
+    if (!auth.local.enabled) {
+      authMessage.textContent = auth.oidcProviders.length
+        ? "Use the host application's OIDC flow to create a ThimbleDB session."
+        : "No interactive authentication provider is enabled.";
+    }
     setStatus("Sign in required", "ready");
     return;
   }
@@ -303,12 +344,11 @@ async function bootstrap(): Promise<void> {
 
   config = (await response.json()) as BrowserConfig;
   const namespace = cacheNamespace(config);
-  const scopeKey = await loadScopeKey(config);
+  const scopeKeys = await loadScopeKeys(config);
   const envelopeReader = new EnvelopeJsonObjectReader(
     new HttpByteObjectReader(config.readBaseUrl),
-    scopeKey
-      ? (keyId) =>
-          keyId === scopeKey.keyId ? scopeKey.key : null
+    scopeKeys
+      ? (keyId) => scopeKeys.keys.get(keyId) ?? null
       : undefined,
   );
   const cache = new TieredObjectCache(
@@ -325,14 +365,13 @@ async function bootstrap(): Promise<void> {
     headTtlMs: config.headTtlMs,
     csrfToken: config.csrfToken,
     scopeId: config.scope.id,
-    ...(scopeKey
-      ? { keyExpiresAt: scopeKey.expiresAt }
+    ...(scopeKeys
+      ? { keyExpiresAt: scopeKeys.expiresAt }
       : {}),
     channelName: `thimbledb:${namespace}`,
-    onLogout: () => window.location.reload(),
+    onLogout: (error) => showSignedOut(error),
   });
-  const persistentStorage =
-    await navigator.storage?.persist?.().catch(() => false);
+  const persistentStorage = await requestPersistentStorage();
   cachePolicy.value = config.cachePolicy;
   for (const section of document.querySelectorAll<HTMLElement>(
     ".authenticated",
@@ -350,22 +389,27 @@ async function authenticate(
   endpoint: string,
   statusMessage: string,
 ): Promise<void> {
-  setStatus(statusMessage, "working");
-  const response = await fetch(endpoint, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      login: authLogin.value,
-      password: authPassword.value,
-    }),
-  });
-  if (!response.ok) {
+  try {
+    setStatus(statusMessage, "working");
+    const response = await fetch(endpoint, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        login: authLogin.value,
+        password: authPassword.value,
+      }),
+    });
+    if (!response.ok) {
+      authMessage.textContent = "Invalid login or password";
+      setStatus("Sign in failed", "error");
+      return;
+    }
+    window.location.reload();
+  } catch {
     authMessage.textContent = "Invalid login or password";
     setStatus("Sign in failed", "error");
-    return;
   }
-  window.location.reload();
 }
 
 async function runUiAction(
@@ -400,6 +444,7 @@ function renderMetrics(): void {
     ["Memory entries", metrics.cache.memoryEntries],
     ["Memory size", formatBytes(metrics.cache.memoryBytes)],
     ["Evictions", metrics.cache.evictions],
+    ["Persistent cache errors", metrics.cache.persistentErrors],
   ];
   metricsOutput.replaceChildren(
     ...values.map(([label, value]) => {
@@ -415,11 +460,11 @@ function renderMetrics(): void {
   );
 }
 
-async function loadScopeKey(
+async function loadScopeKeys(
   current: BrowserConfig,
 ): Promise<{
-  keyId: string;
-  key: CryptoKey;
+  writeKeyId: string;
+  keys: Map<string, CryptoKey>;
   expiresAt: string;
 } | null> {
   if (!current.scope.encrypted) {
@@ -439,29 +484,37 @@ async function loadScopeKey(
   }
   const grant = (await response.json()) as {
     scopeId: string;
-    keyId: string;
-    key: string;
+    writeKeyId: string;
+    keys: Array<{
+      keyId: string;
+      key: string;
+    }>;
     algorithm: string;
     expiresAt: string;
   };
   if (
     grant.scopeId !== current.scope.id ||
-    grant.keyId !== current.scope.keyId ||
+    grant.writeKeyId !== current.scope.keyId ||
     grant.algorithm !== "A256GCM"
   ) {
     throw new Error("Scope key grant does not match browser config");
   }
-  const rawKey = base64ToBytes(grant.key);
-  grant.key = "";
-  const key = await importAesGcmKey(
-    rawKey,
-    ["decrypt"],
-    false,
-  );
-  rawKey.fill(0);
+  const keys = new Map<string, CryptoKey>();
+  for (const granted of grant.keys) {
+    const rawKey = base64ToBytes(granted.key);
+    granted.key = "";
+    keys.set(
+      granted.keyId,
+      await importAesGcmKey(rawKey, ["decrypt"], false),
+    );
+    rawKey.fill(0);
+  }
+  if (!keys.has(grant.writeKeyId)) {
+    throw new Error("Scope key grant omitted the write key");
+  }
   return {
-    keyId: grant.keyId,
-    key,
+    writeKeyId: grant.writeKeyId,
+    keys,
     expiresAt: grant.expiresAt,
   };
 }
@@ -481,7 +534,28 @@ function cacheNamespace(current: BrowserConfig): string {
     current.readBaseUrl,
     window.location.href,
   );
-  return `${current.provider}:${url.origin}${url.pathname}:${current.scope.id}:${current.scope.keyId ?? "public"}`;
+  return `${current.provider}:${url.origin}${url.pathname}:${current.scope.id}`;
+}
+
+function showSignedOut(error?: unknown): void {
+  client = null;
+  config = null;
+  for (const section of document.querySelectorAll<HTMLElement>(
+    ".authenticated",
+  )) {
+    section.hidden = true;
+  }
+  authPanel.hidden = false;
+  localAuthControls.hidden = !(authConfig?.local.enabled ?? true);
+  element<HTMLButtonElement>("register").hidden =
+    !(authConfig?.local.registrationEnabled ?? false);
+  authMessage.textContent = error
+    ? "The session ended, but persistent cache removal failed."
+    : "";
+  setStatus(
+    error ? "Local cache purge failed" : "Sign in required",
+    error ? "error" : "ready",
+  );
 }
 
 function requireClient(): ThimbleClient {
@@ -546,4 +620,17 @@ function formatBytes(bytes: number): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function requestPersistentStorage(): Promise<boolean> {
+  const request = navigator.storage?.persist?.();
+  if (!request) {
+    return false;
+  }
+  return Promise.race([
+    request.catch(() => false),
+    new Promise<boolean>((resolve) =>
+      setTimeout(() => resolve(false), 500),
+    ),
+  ]);
 }

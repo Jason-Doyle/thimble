@@ -109,10 +109,10 @@ prefix listing.
 
 | Provider | Write authority | Durable storage | Browser read pattern |
 | --- | --- | --- | --- |
-| Cloudflare | Worker | R2 | Authenticated broker for private scopes; custom domain for public scopes |
+| Cloudflare | Worker | R2 | Authenticated Worker broker |
 | Local | Node process | Local filesystem | Same-origin authenticated broker |
-| Azure | Container App or Node service | Blob Storage | Authenticated broker; optional SAS for public scopes |
-| AWS | Lambda or another Node host | S3 | Authenticated broker; optional CloudFront for public scopes |
+| Azure | Container App or Node service | Blob Storage | Authenticated authority broker |
+| AWS | Lambda or another Node host | S3 | Authenticated authority broker |
 
 The stored envelope and trie protocol do not change between providers.
 Cloudflare is preferred, not required.
@@ -120,9 +120,10 @@ Cloudflare is preferred, not required.
 ## Current boundaries
 
 - One HEAD serialises writes within a collection and scope.
-- Garbage collection must run without concurrent stale writers in this POC.
-- Local password auth requires a paid Worker or isolated hashing service at
-  the documented Argon2id parameters.
+- Production engines retain old generations. Destructive garbage collection is
+  available only in an explicitly enabled, quiescent benchmark mode.
+- The Cloudflare Worker build uses external OIDC identities. Local password
+  auth is available through the Node authority.
 - Revoking a user cannot erase plaintext they already downloaded.
 - Full-text search, joins, analytics, and cross-scope queries require derived
   indexes or another system.

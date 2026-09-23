@@ -2,7 +2,7 @@
 
 ## Proven by the current POC
 
-- Browsers can read immutable object pages directly.
+- Browsers can read immutable object pages through the authority broker.
 - Memory and IndexedDB materially reduce repeated network reads.
 - ETag revalidation avoids downloading unchanged HEAD objects.
 - A server write can return enough changed pages to update browser caches.
@@ -11,8 +11,6 @@
 - Persistent browser cache entries can be encrypted with a non-extractable
   device key.
 - The same envelope and trie code bundles for Node and Cloudflare Workers.
-- R2 conditional operations map to the object-store compare-and-swap
-  interface.
 
 ## Expected benefits that are not yet proven
 
@@ -20,6 +18,7 @@
 - Better end-user latency than D1, Durable Objects, Turso, or Firestore.
 - Sufficient operational simplicity for non-specialist developers.
 - Safe key rotation at useful scale.
+- Correct R2 compare-and-swap behaviour in a real deployed conformance run.
 - Better performance from trie pages than adaptive immutable snapshots.
 - Reliable production behaviour under multi-region write contention.
 - A meaningful reduction in coding-agent database mistakes.
@@ -32,7 +31,8 @@
 - Strong local password hashing adds material CPU and memory cost.
 - Garbage collection and lifecycle policy are required.
 - Browser storage quotas and eviction differ by browser.
-- Direct encrypted reads expose ciphertext sizes and traffic patterns.
+- Encrypted object access still exposes ciphertext sizes and traffic patterns
+  to the authority and storage provider.
 - Search, joins, and aggregate views require derived systems.
 
 ## When to use ThimbleDB
@@ -43,7 +43,7 @@ Good candidates:
 - per-user or per-tenant datasets
 - catalogues and configuration
 - internal tools
-- offline-tolerant CRUD applications
+- offline-tolerant, read-heavy applications with keyed updates
 - applications whose hot working set fits in browser storage
 
 Poor candidates:

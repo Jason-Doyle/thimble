@@ -4,15 +4,18 @@ import {
   type AuthenticatedSession,
 } from "./auth/service.js";
 import { createEntraAdapter } from "./auth/oidc.js";
-import { PasswordHasher } from "./auth/password.js";
 import { DefaultScopeAuthorizer } from "./auth/policy.js";
 import type {
   AuthRateLimiter,
   RateLimitResult,
 } from "./auth/rate-limit.js";
-import { ObjectStoreAuthRateLimiter } from "./auth/rate-limit.js";
+import {
+  ObjectStoreAuthRateLimiter,
+  RoutedAuthRateLimiter,
+} from "./auth/rate-limit.js";
 import { AuthRepository } from "./auth/repository.js";
 import type { ScopeGrant } from "./auth/types.js";
+import { AsyncLruCache } from "./async-lru-cache.js";
 import {
   R2ObjectStore,
   type R2BucketBinding,
@@ -42,18 +45,21 @@ type Env = {
   AUTH_RATE_LIMITER?: RateLimitBinding;
   ASSETS?: { fetch(request: Request): Promise<Response> };
   THIMBLE_MASTER_KEY: string;
-  THIMBLE_PASSWORD_PEPPER: string;
   THIMBLE_ALLOWED_ORIGIN: string;
   THIMBLE_PREFIX?: string;
   THIMBLE_KEY_VERSION?: string;
+  THIMBLE_READ_KEY_VERSIONS?: string;
   THIMBLE_HEAD_TTL_MS?: string;
-  THIMBLE_LOCAL_REGISTRATION?: string;
   ENTRA_TENANT_ID?: string;
   ENTRA_AUDIENCE?: string;
+  ENTRA_REQUIRED_SCOPE?: string;
+  ENTRA_REQUIRED_ROLE?: string;
+  ENTRA_AUTO_PROVISION?: string;
 };
 
 type ScopeRuntime = {
   material: WorkerScopeMaterial;
+  materials: WorkerScopeMaterial[];
   engine: ContentAddressedTrieEngine;
 };
 
@@ -70,6 +76,7 @@ type Runtime = {
   auth: AuthService;
   dataRootStore: ObjectStore;
   headTtlMs: number;
+  localAuthEnabled: boolean;
   registrationEnabled: boolean;
   oidcProviders: string[];
   allowedOrigin: string;
@@ -122,7 +129,7 @@ async function route(
   ) {
     return json({
       local: {
-        enabled: true,
+        enabled: runtime.localAuthEnabled,
         registrationEnabled: runtime.registrationEnabled,
         minimumPasswordBytes: 12,
       },
@@ -134,8 +141,11 @@ async function route(
     request.method === "POST" &&
     url.pathname === "/api/auth/register"
   ) {
+    requireLocalAuth(runtime);
     requireMutationRequest(runtime, request);
-    const credentials = localCredentials(await request.json());
+    const credentials = localCredentials(
+      await readJsonRequest(request),
+    );
     await runtime.auth.register(
       credentials.login,
       credentials.password,
@@ -155,8 +165,11 @@ async function route(
     request.method === "POST" &&
     url.pathname === "/api/auth/login"
   ) {
+    requireLocalAuth(runtime);
     requireMutationRequest(runtime, request);
-    const credentials = localCredentials(await request.json());
+    const credentials = localCredentials(
+      await readJsonRequest(request),
+    );
     await runtime.auth.logout(
       cookieValue(
         request.headers.get("cookie"),
@@ -191,7 +204,7 @@ async function route(
       ),
     );
     const authenticated = await runtime.auth.loginExternal(
-      decodeURIComponent(oidcRoute[1]),
+      decodePathSegment(oidcRoute[1]),
       bearerToken(request),
       clientRateKey(request),
     );
@@ -217,15 +230,56 @@ async function route(
     request.method === "POST" &&
     url.pathname === "/api/auth/logout"
   ) {
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated?.session.csrfToken,
+    );
+    await runtime.auth.logout(
+      cookieValue(
+        request.headers.get("cookie"),
+        runtime.auth.cookieName(),
+      ),
+    );
+    return json(
+      { loggedOut: true },
+      200,
+      new Headers({
+        "set-cookie": runtime.auth.clearSessionCookie(),
+      }),
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/password"
+  ) {
+    requireLocalAuth(runtime);
     requireAuthenticated(authenticated);
     requireMutationRequest(
       runtime,
       request,
       authenticated.session.csrfToken,
     );
-    await runtime.auth.logout(authenticated.cookieValue);
+    const body = await readJsonRequest(request);
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      Array.isArray(body) ||
+      typeof (body as { currentPassword?: unknown })
+        .currentPassword !== "string" ||
+      typeof (body as { newPassword?: unknown }).newPassword !==
+        "string"
+    ) {
+      throw new AuthError(400, "invalid_request", "Invalid request");
+    }
+    await runtime.auth.changePassword(
+      authenticated,
+      (body as { currentPassword: string }).currentPassword,
+      (body as { newPassword: string }).newPassword,
+    );
     return json(
-      { loggedOut: true },
+      { passwordChanged: true },
       200,
       new Headers({
         "set-cookie": runtime.auth.clearSessionCookie(),
@@ -259,7 +313,7 @@ async function route(
   const keyRoute = /^\/api\/keys\/([^/]+)$/.exec(url.pathname);
   if (request.method === "GET" && keyRoute?.[1]) {
     requireAuthenticated(authenticated);
-    const scopeId = decodeURIComponent(keyRoute[1]);
+    const scopeId = decodePathSegment(keyRoute[1]);
     requireGrant(authenticated.session.grants, scopeId, "read");
     const scope = await runtime.scope(scopeId);
     if (
@@ -275,8 +329,20 @@ async function route(
     }
     return json({
       scopeId,
-      keyId: scope.material.keyId,
-      key: bytesToBase64(scope.material.rawKey),
+      writeKeyId: scope.material.keyId,
+      keys: scope.materials
+        .filter(
+          (
+            material,
+          ): material is WorkerScopeMaterial & {
+            keyId: string;
+            rawKey: Uint8Array;
+          } => Boolean(material.keyId && material.rawKey),
+        )
+        .map((material) => ({
+          keyId: material.keyId,
+          key: bytesToBase64(material.rawKey),
+        })),
       algorithm: "A256GCM",
       expiresAt: authenticated.session.expiresAt,
     });
@@ -340,9 +406,12 @@ async function route(
       request,
     );
     const scope = await runtime.scope(grant.scopeId);
-    const collection = decodeURIComponent(writeRoute[1]);
-    const id = decodeURIComponent(writeRoute[2]);
-    const document = asDocument(await request.json(), id);
+    const collection = decodePathSegment(writeRoute[1]);
+    const id = decodePathSegment(writeRoute[2]);
+    const document = asDocument(
+      await readJsonRequest(request),
+      id,
+    );
     await scope.engine.put(collection, id, document);
     return json(await scope.engine.readBundle(collection, id));
   }
@@ -355,10 +424,9 @@ async function route(
 
 async function createRuntime(env: Env): Promise<Runtime> {
   const masterKey = base64ToBytes(env.THIMBLE_MASTER_KEY);
-  const pepper = base64ToBytes(env.THIMBLE_PASSWORD_PEPPER);
-  if (masterKey.byteLength !== 32 || pepper.byteLength < 32) {
+  if (masterKey.byteLength < 32) {
     throw new Error(
-      "THIMBLE_MASTER_KEY and THIMBLE_PASSWORD_PEPPER must contain at least 32 bytes",
+      "THIMBLE_MASTER_KEY must contain at least 32 bytes",
     );
   }
   if (!env.THIMBLE_ALLOWED_ORIGIN) {
@@ -393,7 +461,6 @@ async function createRuntime(env: Env): Promise<Runtime> {
     authIndex,
     hashText,
   );
-  await repository.ensureDummyUser();
   const adapters = new Map();
   if (env.ENTRA_TENANT_ID && env.ENTRA_AUDIENCE) {
     adapters.set(
@@ -401,6 +468,12 @@ async function createRuntime(env: Env): Promise<Runtime> {
       createEntraAdapter({
         tenantId: env.ENTRA_TENANT_ID,
         audience: env.ENTRA_AUDIENCE,
+        ...(env.ENTRA_REQUIRED_SCOPE
+          ? { requiredScope: env.ENTRA_REQUIRED_SCOPE }
+          : {}),
+        ...(env.ENTRA_REQUIRED_ROLE
+          ? { requiredRole: env.ENTRA_REQUIRED_ROLE }
+          : {}),
       }),
     );
   }
@@ -411,36 +484,42 @@ async function createRuntime(env: Env): Promise<Runtime> {
   );
   const auth = new AuthService({
     repository,
-    passwords: new PasswordHasher(pepper),
+    passwords: unavailableWorkerPasswords,
     authorizer: new DefaultScopeAuthorizer(),
     rateLimiter,
+    passwordWorkRateLimiter: rateLimiter,
     identityAdapters: adapters,
-    registrationEnabled:
-      env.THIMBLE_LOCAL_REGISTRATION === "true",
+    externalAutoProvision:
+      env.ENTRA_AUTO_PROVISION === "true",
+    registrationEnabled: false,
     sessionTtlSeconds: 3_600,
     secureCookies: true,
   });
-  const cache = new Map<string, Promise<ScopeRuntime>>();
+  const cache = new AsyncLruCache<string, ScopeRuntime>({
+    maxEntries: 100,
+    ttlMs: 15 * 60_000,
+    dispose: (runtime) =>
+      runtime.materials.forEach((material) =>
+        material.rawKey?.fill(0),
+      ),
+  });
   const scope = (scopeId: string): Promise<ScopeRuntime> => {
-    let runtime = cache.get(scopeId);
-    if (!runtime) {
-      runtime = createScopeRuntime(
+    return cache.get(scopeId, () =>
+      createScopeRuntime(
         dataRootStore,
         masterKey,
         scopeId,
-        parseInteger(env.THIMBLE_KEY_VERSION, 1),
-      );
-      cache.set(scopeId, runtime);
-    }
-    return runtime;
+        configuredKeyVersions(env),
+      ),
+    );
   };
 
   return {
     auth,
     dataRootStore,
     headTtlMs: parseInteger(env.THIMBLE_HEAD_TTL_MS, 1_000),
-    registrationEnabled:
-      env.THIMBLE_LOCAL_REGISTRATION === "true",
+    localAuthEnabled: false,
+    registrationEnabled: false,
     oidcProviders: [...adapters.keys()],
     allowedOrigin: env.THIMBLE_ALLOWED_ORIGIN,
     scope,
@@ -451,12 +530,20 @@ async function createScopeRuntime(
   dataRootStore: ObjectStore,
   masterKey: Uint8Array,
   scopeId: string,
-  version: number,
+  versions: number[],
 ): Promise<ScopeRuntime> {
-  const material = await scopeMaterial(
-    masterKey,
-    scopeId,
-    version,
+  const materials = await Promise.all(
+    versions.map((version) =>
+      scopeMaterial(masterKey, scopeId, version),
+    ),
+  );
+  const material = materials[0]!;
+  const decryptionKeys = new Map(
+    materials.flatMap((candidate) =>
+      candidate.keyId && candidate.key
+        ? [[candidate.keyId, candidate.key] as const]
+        : [],
+    ),
   );
   const store = new EnvelopeObjectStore(
     new PrefixObjectStore(
@@ -468,10 +555,12 @@ async function createScopeRuntime(
       keyId: material.keyId!,
       compression: "gzip",
       objectKeyPrefix: scopeStoragePrefix(scopeId),
+      decryptionKeys,
     },
   );
   return {
     material,
+    materials,
     engine: new ContentAddressedTrieEngine(
       store,
       40,
@@ -511,25 +600,30 @@ function workerRateLimiter(
   authStore: ObjectStore,
   authIndex: (value: string) => Promise<string>,
 ): AuthRateLimiter {
-  if (env.AUTH_RATE_LIMITER) {
-    return {
-      async consume(key: string): Promise<RateLimitResult> {
-        const result = await env.AUTH_RATE_LIMITER!.limit({ key });
-        return {
-          allowed: result.success,
-          retryAfterSeconds: result.success ? 0 : 60,
-        };
-      },
-    };
-  }
-  return new ObjectStoreAuthRateLimiter(
+  const durable = new ObjectStoreAuthRateLimiter(
     authStore,
     authIndex,
   );
+  if (!env.AUTH_RATE_LIMITER) {
+    return durable;
+  }
+  const edge: AuthRateLimiter = {
+    async consume(key: string): Promise<RateLimitResult> {
+      const result = await env.AUTH_RATE_LIMITER!.limit({ key });
+      return {
+        allowed: result.success,
+        retryAfterSeconds: result.success ? 0 : 60,
+      };
+    },
+  };
+  return new RoutedAuthRateLimiter(durable, edge);
 }
 
 async function runtimeFor(env: Env): Promise<Runtime> {
-  runtimePromise ??= createRuntime(env);
+  runtimePromise ??= createRuntime(env).catch((error) => {
+    runtimePromise = undefined;
+    throw error;
+  });
   return runtimePromise;
 }
 
@@ -542,7 +636,7 @@ function requireMutationRequest(
     throw new AuthError(403, "origin_rejected", "Request was rejected");
   }
   const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
+  if (!isJsonContentType(contentType)) {
     throw new AuthError(
       415,
       "content_type_required",
@@ -565,6 +659,16 @@ function requireAuthenticated(
       401,
       "authentication_required",
       "Authentication is required",
+    );
+  }
+}
+
+function requireLocalAuth(runtime: Runtime): void {
+  if (!runtime.localAuthEnabled) {
+    throw new AuthError(
+      404,
+      "local_auth_unavailable",
+      "Local password authentication is unavailable",
     );
   }
 }
@@ -739,12 +843,8 @@ function bearerToken(request: Request): string {
   return authorization.slice("Bearer ".length);
 }
 
-function clientRateKey(request: Request): string {
-  return (
-    request.headers.get("cf-connecting-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
+function clientRateKey(request: Request): string | null {
+  return request.headers.get("cf-connecting-ip");
 }
 
 function scopeFromObjectKey(key: string): string {
@@ -752,7 +852,7 @@ function scopeFromObjectKey(key: string): string {
   if (!match?.[1]) {
     throw new AuthError(404, "object_not_found", "Object not found");
   }
-  return decodeURIComponent(match[1]);
+  return decodePathSegment(match[1]);
 }
 
 async function deriveBytes(
@@ -822,14 +922,27 @@ function parseInteger(
   value: string | undefined,
   fallback: number,
 ): number {
-  if (!value) {
+  if (value === undefined) {
     return fallback;
   }
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
     throw new Error(`Invalid non-negative integer: ${value}`);
   }
   return parsed;
+}
+
+function configuredKeyVersions(env: Env): number[] {
+  const writeVersion = parseInteger(env.THIMBLE_KEY_VERSION, 1);
+  const historical = (env.THIMBLE_READ_KEY_VERSIONS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => parseInteger(value, writeVersion));
+  return [
+    writeVersion,
+    ...historical.filter((value) => value !== writeVersion),
+  ];
 }
 
 function cookieValue(
@@ -851,8 +964,80 @@ function cookieValue(
 function decodeObjectPath(pathname: string): string {
   return pathname
     .split("/")
-    .map((segment) => decodeURIComponent(segment))
+    .map((segment) => decodePathSegment(segment))
     .join("/");
+}
+
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new AuthError(400, "invalid_path", "Invalid request path");
+  }
+}
+
+function isJsonContentType(value: string): boolean {
+  const mediaType = value.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    mediaType === "application/json" ||
+    Boolean(mediaType?.endsWith("+json"))
+  );
+}
+
+export async function readJsonRequest(
+  request: Request,
+): Promise<unknown> {
+  const maximumBytes = 1_048_576;
+  const declaredLength = Number(
+    request.headers.get("content-length"),
+  );
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > maximumBytes
+  ) {
+    throw new AuthError(
+      413,
+      "request_too_large",
+      "Request body is too large",
+    );
+  }
+
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return {};
+  }
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  for (;;) {
+    const result = await reader.read();
+    if (result.done) {
+      break;
+    }
+    totalBytes += result.value.byteLength;
+    if (totalBytes > maximumBytes) {
+      await reader.cancel();
+      throw new AuthError(
+        413,
+        "request_too_large",
+        "Request body is too large",
+      );
+    }
+    chunks.push(result.value);
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(
+      new TextDecoder().decode(bytes) || "{}",
+    ) as unknown;
+  } catch {
+    throw new AuthError(400, "invalid_json", "Invalid JSON");
+  }
 }
 
 function quoteEtag(etag: string): string {
@@ -871,3 +1056,20 @@ function bufferView(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   copy.set(bytes);
   return copy;
 }
+
+const unavailableWorkerPasswords = {
+  hash(_password: string): Promise<string> {
+    return Promise.reject(
+      new Error("Local password authentication is unavailable"),
+    );
+  },
+  verify(
+    _password: string,
+    _encoded: string,
+  ): Promise<boolean> {
+    return Promise.resolve(false);
+  },
+  runDummyVerification(_password: string): Promise<void> {
+    return Promise.resolve();
+  },
+};

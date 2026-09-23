@@ -20,6 +20,7 @@ describe("OidcIdentityAdapter", () => {
       tid: "tenant-1",
       email: "mutable@example.test",
       roles: ["reader"],
+      scp: "thimble.read",
     })
       .setProtectedHeader({ alg: "RS256", kid: "test-key" })
       .setIssuer(issuer)
@@ -35,6 +36,7 @@ describe("OidcIdentityAdapter", () => {
       jwksUri: "https://unused.example.test/keys",
       allowedTenants: ["tenant-1"],
       provider: "entra",
+      requiredScopes: ["thimble.read"],
       keySet: createLocalJWKSet({ keys: [publicJwk] }),
     });
 
@@ -44,6 +46,7 @@ describe("OidcIdentityAdapter", () => {
       subject: "object-1",
       tenantId: "tenant-1",
       roles: ["reader"],
+      scopes: ["thimble.read"],
     });
   });
 
@@ -70,9 +73,63 @@ describe("OidcIdentityAdapter", () => {
       jwksUri: "https://unused.example.test/keys",
       allowedTenants: ["tenant-1"],
       provider: "entra",
+      requiredRoles: ["reader"],
       keySet: createLocalJWKSet({ keys: [jwk] }),
     });
 
     await expect(adapter.authenticate(token)).resolves.toBeNull();
+  });
+
+  it("rejects a valid audience token without the required scope or role", async () => {
+    const { privateKey, publicKey } = await generateKeyPair("RS256");
+    const jwk = await exportJWK(publicKey);
+    jwk.kid = "claim-key";
+    jwk.alg = "RS256";
+    const issuer =
+      "https://login.microsoftonline.com/tenant-1/v2.0";
+    const token = await new SignJWT({
+      oid: "object-3",
+      tid: "tenant-1",
+      scp: "other.scope",
+      roles: ["Other.Role"],
+    })
+      .setProtectedHeader({ alg: "RS256", kid: "claim-key" })
+      .setIssuer(issuer)
+      .setAudience("api-client")
+      .setExpirationTime("5m")
+      .sign(privateKey);
+    const adapter = new OidcIdentityAdapter({
+      id: "entra",
+      issuer,
+      audience: "api-client",
+      jwksUri: "https://unused.example.test/keys",
+      allowedTenants: ["tenant-1"],
+      provider: "entra",
+      requiredScopes: ["thimble.read"],
+      keySet: createLocalJWKSet({ keys: [jwk] }),
+    });
+
+    await expect(adapter.authenticate(token)).resolves.toBeNull();
+  });
+
+  it("surfaces identity-provider key retrieval failures", async () => {
+    const adapter = new OidcIdentityAdapter({
+      id: "entra",
+      issuer:
+        "https://login.microsoftonline.com/tenant-1/v2.0",
+      audience: "api-client",
+      jwksUri: "https://unused.example.test/keys",
+      provider: "entra",
+      requiredScopes: ["thimble.read"],
+      keySet: async () => {
+        throw new Error("identity provider unavailable");
+      },
+    });
+
+    await expect(
+      adapter.authenticate(
+        "eyJhbGciOiJSUzI1NiIsImtpZCI6ImtleSJ9.eyJleHAiOjQxMDI0NDQ4MDB9.signature",
+      ),
+    ).rejects.toThrow("identity provider unavailable");
   });
 });

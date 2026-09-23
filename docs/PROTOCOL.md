@@ -15,6 +15,10 @@ scopes/<scope-id>/
 The `.json` suffix is retained for recognisable object names. The object body
 is a binary ThimbleDB envelope, not plaintext JSON.
 
+Collection names contain 1 to 128 ASCII letters, numbers, `.`, `_`, or `-`.
+The path segments `.` and `..` are rejected so provider adapters produce the
+same object layout.
+
 `HEAD.json` decodes to:
 
 ```json
@@ -98,7 +102,7 @@ A successful write response contains:
 This removes a read-after-write round trip and lets other tabs update through
 BroadcastChannel.
 
-## Compatibility policy
+## Compatibility fixtures
 
 The envelope magic and version are durable protocol fields. Before a public
 1.0 release, compatibility fixtures must cover:
@@ -108,3 +112,7 @@ The envelope magic and version are durable protocol fields. Before a public
 - each supported key version
 - corrupt header and authentication failures
 - objects produced in browsers, Node, and Workers
+
+Committed v1 fixtures live under `protocol-fixtures/v1`. Unit tests decode
+them in Node, and Playwright decodes the same artifacts in Chromium, Firefox,
+and WebKit. The Cloudflare Worker build consumes the same codec implementation.

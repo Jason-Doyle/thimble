@@ -9,7 +9,7 @@ param appName string
 @description('OCI image containing the built ThimbleDB Node authority.')
 param containerImage string = ''
 
-@description('Exact browser origin allowed to read Blob Storage.')
+@description('Exact browser origin accepted by the authority for mutations.')
 param allowedOrigin string
 
 @description('Base64-encoded 32-byte deployment master key.')
@@ -29,11 +29,27 @@ param containerName string = 'thimbledb'
 @description('Application prefix inside the container.')
 param prefix string = 'demo'
 
+@description('Comma-separated historical key versions that remain readable.')
+param readKeyVersions string = ''
+
+@description('Current scope key version used for new writes.')
+@minValue(1)
+param keyVersion int = 1
+
 @description('Optional Microsoft Entra tenant ID.')
 param entraTenantId string = ''
 
 @description('Optional Microsoft Entra API audience.')
 param entraAudience string = ''
+
+@description('Required delegated Entra scope.')
+param entraRequiredScope string = ''
+
+@description('Required Entra application role.')
+param entraRequiredRole string = ''
+
+@description('Allow first successful Entra login to create an internal user.')
+param entraAutoProvision bool = false
 
 var compactName = toLower(replace(appName, '-', ''))
 var storageName = take('${compactName}${uniqueString(resourceGroup().id)}', 24)
@@ -58,28 +74,6 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
   parent: storage
   name: 'default'
   properties: {
-    cors: {
-      corsRules: [
-        {
-          allowedOrigins: [
-            allowedOrigin
-          ]
-          allowedMethods: [
-            'GET'
-            'HEAD'
-            'OPTIONS'
-          ]
-          allowedHeaders: [
-            'If-None-Match'
-          ]
-          exposedHeaders: [
-            'ETag'
-            'Content-Length'
-          ]
-          maxAgeInSeconds: 3600
-        }
-      ]
-    }
     deleteRetentionPolicy: {
       enabled: true
       days: 7
@@ -100,6 +94,40 @@ resource authContainer 'Microsoft.Storage/storageAccounts/blobServices/container
   name: '${containerName}-auth'
   properties: {
     publicAccess: 'None'
+  }
+}
+
+resource lifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05-01' = {
+  parent: storage
+  name: 'default'
+  properties: {
+    policy: {
+      rules: [
+        {
+          name: 'expire-auth-ephemera'
+          enabled: true
+          type: 'Lifecycle'
+          definition: {
+            filters: {
+              blobTypes: [
+                'blockBlob'
+              ]
+              prefixMatch: [
+                '${authContainer.name}/auth-v1/sessions/'
+                '${authContainer.name}/auth-v1/rate-limits/'
+              ]
+            }
+            actions: {
+              baseBlob: {
+                delete: {
+                  daysAfterModificationGreaterThan: 7
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }
 
@@ -201,6 +229,14 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
               value: 'false'
             }
             {
+              name: 'THIMBLE_KEY_VERSION'
+              value: string(keyVersion)
+            }
+            {
+              name: 'THIMBLE_READ_KEY_VERSIONS'
+              value: readKeyVersions
+            }
+            {
               name: 'ENTRA_TENANT_ID'
               value: entraTenantId
             }
@@ -209,7 +245,23 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
               value: entraAudience
             }
             {
+              name: 'ENTRA_REQUIRED_SCOPE'
+              value: entraRequiredScope
+            }
+            {
+              name: 'ENTRA_REQUIRED_ROLE'
+              value: entraRequiredRole
+            }
+            {
+              name: 'ENTRA_AUTO_PROVISION'
+              value: string(entraAutoProvision)
+            }
+            {
               name: 'THIMBLE_SECURE_COOKIES'
+              value: 'true'
+            }
+            {
+              name: 'THIMBLE_DISABLE_IP_RATE_LIMIT'
               value: 'true'
             }
           ]

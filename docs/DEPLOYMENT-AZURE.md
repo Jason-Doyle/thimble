@@ -70,10 +70,13 @@ Remove-Item Env:THIMBLE_MASTER_KEY
 Remove-Item Env:THIMBLE_PASSWORD_PEPPER
 ```
 
+For key rotation, set `keyVersion` to the current write version and
+`readKeyVersions` to the comma-separated historical versions that remain
+readable.
+
 ## Verify
 
 - Container App uses HTTPS.
-- Blob CORS allows only the application origin.
 - The auth container is not exposed through any SAS or public endpoint.
 - Browser object requests use the authenticated `/api/objects` broker.
 - Object bodies begin with `TDB1`.
@@ -90,12 +93,12 @@ Store master and session secrets in Key Vault and reference them from
 Container Apps. The current Bicep accepts secure parameters to keep the example
 complete but does not provision Key Vault.
 
-User-delegation SAS tokens remain an option for public or direct-read scopes,
-but are not required for private local-auth data.
+The example disables source-IP rate limiting because Container Apps ingress
+does not provide a peer address that this implementation independently
+verifies. Per-account and per-subject limits remain active. Enable source-IP
+limits only after configuring and testing a trusted proxy boundary.
 
 ## References
 
 - [Azure Container Apps Bicep resources](https://learn.microsoft.com/en-us/azure/templates/microsoft.app/containerapps)
 - [Azure Blob Storage account types](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview)
-- [Azure Storage CORS](https://learn.microsoft.com/en-us/rest/api/storageservices/cross-origin-resource-sharing--cors--support-for-the-azure-storage-services)
-- [Azure user-delegation SAS](https://learn.microsoft.com/en-us/rest/api/storageservices/create-user-delegation-sas)

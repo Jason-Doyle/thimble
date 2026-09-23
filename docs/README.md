@@ -8,10 +8,11 @@
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
 | [Authentication](AUTHENTICATION.md) | Local accounts, sessions, scope grants, and Entra |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |
+| [Versioning](VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
 | [Proof of concept](POC.md) | Browser harness, sample store, and benchmark usage |
 | [Benchmarks](BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
 | [Tradeoffs](TRADEOFFS.md) | Proven, expected, and unsuitable use cases |
 | [Cloudflare deployment](DEPLOYMENT-CLOUDFLARE.md) | Reference Worker and R2 deployment |
 | [Azure deployment](DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
-| [AWS deployment](DEPLOYMENT-AWS.md) | Lambda container, S3, and CloudFront |
+| [AWS deployment](DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
 | [Operations](OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |

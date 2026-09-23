@@ -62,25 +62,27 @@ export class AuthRepository {
     };
 
     try {
-      await this.putJson<IdentityIndex>(
-        indexKey,
-        { userId: user.id },
-        { ifNoneMatch: true },
-      );
+      await this.putJson(this.userKey(user.id), user, {
+        ifNoneMatch: true,
+      });
+      try {
+        await this.putJson<IdentityIndex>(
+          indexKey,
+          { userId: user.id },
+          { ifNoneMatch: true },
+        );
+        return user;
+      } catch (error) {
+        await this.store.delete(this.userKey(user.id));
+        if (isPreconditionFailure(error)) {
+          return null;
+        }
+        throw error;
+      }
     } catch (error) {
       if (isPreconditionFailure(error)) {
         return null;
       }
-      throw error;
-    }
-
-    try {
-      await this.putJson(this.userKey(user.id), user, {
-        ifNoneMatch: true,
-      });
-      return user;
-    } catch (error) {
-      await this.store.delete(indexKey);
       throw error;
     }
   }
@@ -94,63 +96,44 @@ export class AuthRepository {
     identity: ExternalIdentity,
   ): Promise<AuthUser> {
     const identityValue = `${identity.provider}|${identity.issuer}|${identity.subject}`;
-    const existing = await this.findByIdentity(identityValue);
-    if (existing) {
-      return this.refreshExternalUser(existing.id, identity);
-    }
-
     const indexKey = await this.identityIndexKey(identityValue);
-    const now = new Date().toISOString();
-    const storedIdentity: Identity =
-      identity.provider === "entra"
-        ? {
-            provider: "entra",
-            issuer: identity.issuer,
-            subject: identity.subject,
-            tenantId: identity.tenantId ?? "",
-          }
-        : {
-            provider: "oidc",
-            issuer: identity.issuer,
-            subject: identity.subject,
-          };
-    const user: AuthUser = {
-      id: crypto.randomUUID(),
-      status: "active",
-      authVersion: 1,
-      identities: [storedIdentity],
-      roles: [...identity.roles].sort(),
-      tenants: identity.tenantId ? [identity.tenantId] : [],
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    try {
-      await this.putJson<IdentityIndex>(
-        indexKey,
-        { userId: user.id },
-        { ifNoneMatch: true },
-      );
-    } catch (error) {
-      if (!isPreconditionFailure(error)) {
-        throw error;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const existing = await this.findByIdentity(identityValue);
+      if (existing) {
+        return this.refreshExternalUser(existing.id, identity);
       }
-      const raced = await this.findByIdentity(identityValue);
-      if (raced) {
-        return raced;
-      }
-      throw new Error("External identity creation raced without an index");
-    }
 
-    try {
+      const user = externalUser(identity);
       await this.putJson(this.userKey(user.id), user, {
         ifNoneMatch: true,
       });
-      return user;
-    } catch (error) {
-      await this.store.delete(indexKey);
-      throw error;
+      try {
+        await this.putJson<IdentityIndex>(
+          indexKey,
+          { userId: user.id },
+          { ifNoneMatch: true },
+        );
+        return user;
+      } catch (error) {
+        await this.store.delete(this.userKey(user.id));
+        if (!isPreconditionFailure(error)) {
+          throw error;
+        }
+        const raced = await this.waitForIdentityUser(identityValue);
+        if (raced) {
+          return this.refreshExternalUser(raced.id, identity);
+        }
+      }
     }
+    throw new Error("External identity could not be provisioned");
+  }
+
+  async findExternalUser(
+    identity: ExternalIdentity,
+  ): Promise<AuthUser | null> {
+    return this.findByIdentity(
+      `${identity.provider}|${identity.issuer}|${identity.subject}`,
+    );
   }
 
   getUser(userId: string): Promise<AuthUser | null> {
@@ -272,6 +255,47 @@ export class AuthRepository {
     await Promise.all(keys.map((key) => this.store.delete(key)));
   }
 
+  async updatePassword(
+    userId: string,
+    encoded: string,
+    expectedAuthVersion: number,
+    expectedPasswordHash: string,
+  ): Promise<AuthUser | null> {
+    const key = this.userKey(userId);
+    const object = await this.store.get(key);
+    if (!object) {
+      throw new Error(`User ${userId} is missing`);
+    }
+    const current = decodeJson<AuthUser>(object.bytes);
+    if (
+      current.authVersion !== expectedAuthVersion ||
+      current.password?.encoded !== expectedPasswordHash
+    ) {
+      return null;
+    }
+    const now = new Date().toISOString();
+    const updated: AuthUser = {
+      ...current,
+      authVersion: current.authVersion + 1,
+      password: {
+        encoded,
+        changedAt: now,
+      },
+      updatedAt: now,
+    };
+    try {
+      await this.putJson(key, updated, {
+        ifMatch: object.etag,
+      });
+      return updated;
+    } catch (error) {
+      if (isPreconditionFailure(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   private async findByIdentity(
     identityValue: string,
   ): Promise<AuthUser | null> {
@@ -281,7 +305,20 @@ export class AuthRepository {
     return index ? this.getUser(index.userId) : null;
   }
 
-  private async refreshExternalUser(
+  private async waitForIdentityUser(
+    identityValue: string,
+  ): Promise<AuthUser | null> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const user = await this.findByIdentity(identityValue);
+      if (user) {
+        return user;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return null;
+  }
+
+  async refreshExternalUser(
     userId: string,
     identity: ExternalIdentity,
   ): Promise<AuthUser> {
@@ -397,6 +434,33 @@ function randomToken(bytes: number): string {
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replace(/=+$/, "");
+}
+
+function externalUser(identity: ExternalIdentity): AuthUser {
+  const now = new Date().toISOString();
+  const storedIdentity: Identity =
+    identity.provider === "entra"
+      ? {
+          provider: "entra",
+          issuer: identity.issuer,
+          subject: identity.subject,
+          tenantId: identity.tenantId ?? "",
+        }
+      : {
+          provider: "oidc",
+          issuer: identity.issuer,
+          subject: identity.subject,
+        };
+  return {
+    id: crypto.randomUUID(),
+    status: "active",
+    authVersion: 1,
+    identities: [storedIdentity],
+    roles: [...identity.roles].sort(),
+    tenants: identity.tenantId ? [identity.tenantId] : [],
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 function sameStrings(left: string[], right: string[]): boolean {

@@ -109,6 +109,7 @@ describe("AuthRepository", () => {
         subject: "object-1",
         tenantId: "tenant-1",
         roles: ["reader"],
+        scopes: ["thimble.read"],
       });
       const second = await repository.findOrCreateExternalUser({
         provider: "entra",
@@ -116,11 +117,61 @@ describe("AuthRepository", () => {
         subject: "object-1",
         tenantId: "tenant-1",
         roles: ["admin"],
+        scopes: ["thimble.read"],
       });
 
       expect(second.id).toBe(first.id);
       expect(second.roles).toEqual(["admin"]);
       expect(second.tenants).toEqual(["tenant-1"]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers when the same external identity is provisioned concurrently", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimbledb-auth-race-"),
+    );
+    try {
+      const key = await importAesGcmKey(
+        crypto.getRandomValues(new Uint8Array(32)),
+        ["encrypt", "decrypt"],
+      );
+      const indexKey = crypto.getRandomValues(new Uint8Array(32));
+      const repository = new AuthRepository(
+        new EnvelopeObjectStore(
+          new LocalObjectStore(directory),
+          {
+            key,
+            keyId: "system-auth:v1",
+            objectKeyPrefix: "auth-v1",
+          },
+        ),
+        (value) =>
+          createHmac("sha256", indexKey)
+            .update(value)
+            .digest("hex"),
+        (value) =>
+          createHash("sha256").update(value).digest("hex"),
+      );
+      const identity = {
+        provider: "entra" as const,
+        issuer: "https://issuer.example",
+        subject: "object-race",
+        tenantId: "tenant-1",
+        roles: ["reader"],
+        scopes: ["thimble.read"],
+      };
+
+      const [first, second] = await Promise.all([
+        repository.findOrCreateExternalUser(identity),
+        repository.findOrCreateExternalUser(identity),
+      ]);
+
+      expect(second.id).toBe(first.id);
+      await expect(
+        repository.findExternalUser(identity),
+      ).resolves.toMatchObject({ id: first.id });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

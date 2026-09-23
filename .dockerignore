@@ -3,6 +3,7 @@ dist
 .bench-data
 .thimble-data
 .thimble-auth
+.thimble-e2e
 benchmark-results
 .git
 .env

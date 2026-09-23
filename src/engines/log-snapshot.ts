@@ -53,6 +53,7 @@ export class LogSnapshotEngine implements DatabaseEngine {
   constructor(
     private readonly store: ObjectStore,
     private readonly maxRetries = 80,
+    private readonly allowQuiescentGarbageCollection = false,
   ) {}
 
   async get(
@@ -167,11 +168,13 @@ export class LogSnapshotEngine implements DatabaseEngine {
           { ifMatch: current.object.etag },
         );
         this.compactions += 1;
-        await this.garbageCollect(
-          normalized,
-          snapshotKey,
-          materialized.sequence,
-        );
+        if (this.allowQuiescentGarbageCollection) {
+          await this.garbageCollect(
+            normalized,
+            snapshotKey,
+            materialized.sequence,
+          );
+        }
         return;
       } catch (error) {
         if (!isPreconditionFailure(error)) {

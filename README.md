@@ -1,9 +1,9 @@
 # ThimbleDB
 
 ThimbleDB is an experimental Cloudflare-first database for small web
-applications. Browsers read encrypted immutable objects directly from storage
-through memory and IndexedDB caches. Authenticated writes and key grants go
-through a small authority.
+applications. Browsers read encrypted immutable objects through an
+authenticated storage broker and retain them in memory and IndexedDB caches.
+Writes and key grants use the same small authority.
 
 Cloudflare Workers and R2 are the reference deployment. Azure Blob Storage,
 Amazon S3, and a local filesystem adapter implement the same provider-neutral
@@ -65,23 +65,27 @@ Only bindings, credentials, and browser read authorisation differ.
 
 - framework-free browser client
 - memory and encrypted IndexedDB caches
-- direct immutable object reads
+- brokered immutable object reads
 - ETag HEAD revalidation and offline fallback
 - access-scope-separated collection trees
 - adaptive gzip before AES-256-GCM
 - object-key-bound authenticated encryption
 - HMAC-derived private node addresses
-- server-only validated writes
+- authority-only conditional writes with route and document ID validation
 - local Argon2id accounts and revocable sessions
 - Microsoft Entra and generic OIDC token adapters
 - per-user and per-tenant scope grants
 - write responses that update all open browser tabs
 - Cloudflare Worker and native R2 binding
 - local, Azure Blob, and S3 Node adapters
+- historical key reads and an idempotent key-migration command
+- Chromium, Firefox, and WebKit recovery tests
+- typed package exports for the browser/core and auth APIs
 - Docker, Wrangler, Bicep, and CloudFormation deployment paths
 
-The browser bundle is about 22.9 KB uncompressed and 7.5 KB gzip. No database
-runtime or WASM module is shipped.
+The browser bundle is about 26.4 KB uncompressed and 8.4 KB gzip. No database
+runtime or WASM module is shipped to the browser. Local password hashing uses
+Argon2id WASM in the authority.
 
 ## Quick start
 
@@ -104,8 +108,8 @@ The reference deployment uses:
 
 - one Worker for API routes, static assets, scope authorisation, and key grants
 - one R2 binding for writes and maintenance
-- one R2 custom domain for direct encrypted browser reads
-- Cloudflare Access or the application's identity layer in front of the Worker
+- one authenticated Worker broker for encrypted browser reads
+- the application's Entra or OIDC identity layer
 
 Start with [Deploy to Cloudflare](docs/DEPLOYMENT-CLOUDFLARE.md).
 
@@ -137,25 +141,28 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [Security](docs/SECURITY.md) | Threat model, encryption, keys, and revocation |
 | [Authentication](docs/AUTHENTICATION.md) | Local accounts, sessions, scope grants, and Entra |
 | [Protocol](docs/PROTOCOL.md) | Binary envelope and object layout |
+| [Versioning](docs/VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
 | [Proof of concept](docs/POC.md) | Browser harness, sample application, and benchmark usage |
 | [Benchmarks](docs/BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
 | [Tradeoffs](docs/TRADEOFFS.md) | Proven, expected, and unsuitable use cases |
 | [Cloudflare deployment](docs/DEPLOYMENT-CLOUDFLARE.md) | Worker and R2 reference deployment |
 | [Azure deployment](docs/DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
-| [AWS deployment](docs/DEPLOYMENT-AWS.md) | Lambda container, S3, and CloudFront |
+| [AWS deployment](docs/DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
 | [Operations](docs/OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
 
 ## Project status
 
-ThimbleDB is private research, not a production database. It still needs:
+The current candidate passes the repository's unit, cross-browser, package,
+container, and deployment-template checks. That does not make it a true v1.
+ThimbleDB remains private research and still needs:
 
-- multi-version key rotation and migration
 - password reset, email verification, passkeys, and MFA
 - identity linking and administrative account controls
-- safe garbage collection with concurrent stale writers
+- document deletion semantics and a safe retention or garbage-collection design
 - adaptive snapshot versus trie selection
 - R2 browser benchmarks from multiple regions
-- browser compatibility and recovery testing
+- a real Cloudflare deployment conformance run
+- a licence decision and public API freeze
 
 The current goal is to prove a measurable benefit for small Cloudflare-hosted
 applications before defining a public release.

@@ -52,6 +52,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     private readonly addressNode: (
       bytes: Uint8Array,
     ) => Promise<string> | string = hashBytes,
+    private readonly allowQuiescentGarbageCollection = false,
   ) {}
 
   async get(
@@ -146,6 +147,26 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     collection: string,
     documents: JsonDocument[],
   ): Promise<void> {
+    await this.putManyInternal(collection, documents);
+  }
+
+  rewriteIfHeadUnchanged(
+    collection: string,
+    documents: JsonDocument[],
+    expectedHeadEtag: string | null,
+  ): Promise<boolean> {
+    return this.putManyInternal(
+      collection,
+      documents,
+      expectedHeadEtag,
+    );
+  }
+
+  private async putManyInternal(
+    collection: string,
+    documents: JsonDocument[],
+    expectedHeadEtag?: string | null,
+  ): Promise<boolean> {
     const normalized = validateName(collection, "Collection");
     const updates = await Promise.all(
       documents.map(async (document) => {
@@ -159,8 +180,16 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       }),
     );
 
-    for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
+    const attempts =
+      expectedHeadEtag === undefined ? this.maxRetries : 1;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       const head = await this.loadHead(normalized);
+      if (
+        expectedHeadEtag !== undefined &&
+        (head.object?.etag ?? null) !== expectedHeadEtag
+      ) {
+        return false;
+      }
       const root =
         head.state.rootHash === null
           ? this.emptyRoot()
@@ -243,21 +272,30 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
             ? { ifNoneMatch: true }
             : { ifMatch: head.object.etag },
         );
-        return;
+        return true;
       } catch (error) {
         if (!isPreconditionFailure(error)) {
           throw error;
+        }
+        if (expectedHeadEtag !== undefined) {
+          return false;
         }
         this.casRetries += 1;
       }
     }
 
+    if (expectedHeadEtag !== undefined) {
+      return false;
+    }
     throw new Error(
       `Content-addressed trie write exceeded ${this.maxRetries} retries`,
     );
   }
 
   async compact(collection: string): Promise<void> {
+    if (!this.allowQuiescentGarbageCollection) {
+      return;
+    }
     const normalized = validateName(collection, "Collection");
     const head = await this.loadHead(normalized);
     const reachable = new Set<string>();

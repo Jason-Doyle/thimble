@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { AsyncLruCache } from "./async-lru-cache.js";
+import { nodeClientIp } from "./client-ip.js";
 import {
   createServer,
   type IncomingMessage,
@@ -44,6 +46,7 @@ type Provider = "local" | "azure" | "s3" | "r2";
 
 type ScopeRuntime = {
   material: ScopeMaterial;
+  materials: ScopeMaterial[];
   engine: ContentAddressedTrieEngine;
 };
 
@@ -143,6 +146,15 @@ async function createContext(): Promise<ServerContext> {
       createEntraAdapter({
         tenantId: process.env.ENTRA_TENANT_ID,
         audience: process.env.ENTRA_AUDIENCE,
+        ...(process.env.ENTRA_REQUIRED_SCOPE
+          ? {
+              requiredScope:
+                process.env.ENTRA_REQUIRED_SCOPE,
+            }
+          : {}),
+        ...(process.env.ENTRA_REQUIRED_ROLE
+          ? { requiredRole: process.env.ENTRA_REQUIRED_ROLE }
+          : {}),
       }),
     );
   }
@@ -159,7 +171,21 @@ async function createContext(): Promise<ServerContext> {
       parseInteger(process.env.THIMBLE_AUTH_RATE_LIMIT, 5),
       parseInteger(process.env.THIMBLE_AUTH_RATE_WINDOW_MS, 60_000),
     ),
+    passwordWorkRateLimiter: new ObjectStoreAuthRateLimiter(
+      authStore,
+      authIndex,
+      parseInteger(
+        process.env.THIMBLE_PASSWORD_WORK_RATE_LIMIT,
+        30,
+      ),
+      parseInteger(
+        process.env.THIMBLE_PASSWORD_WORK_RATE_WINDOW_MS,
+        60_000,
+      ),
+    ),
     identityAdapters,
+    externalAutoProvision:
+      process.env.ENTRA_AUTO_PROVISION === "true",
     registrationEnabled:
       process.env.THIMBLE_LOCAL_REGISTRATION === "true" ||
       provider === "local",
@@ -169,19 +195,28 @@ async function createContext(): Promise<ServerContext> {
     ),
     secureCookies,
   });
-
-  const scopeCache = new Map<string, Promise<ScopeRuntime>>();
+  const scopeCache = new AsyncLruCache<string, ScopeRuntime>({
+    maxEntries: parseInteger(
+      process.env.THIMBLE_SCOPE_CACHE_MAX,
+      100,
+    ),
+    ttlMs: parseInteger(
+      process.env.THIMBLE_SCOPE_CACHE_TTL_MS,
+      15 * 60_000,
+    ),
+    dispose: (runtime) =>
+      runtime.materials.forEach((material) =>
+        material.rawKey?.fill(0),
+      ),
+  });
   const scope = (scopeId: string): Promise<ScopeRuntime> => {
-    let runtime = scopeCache.get(scopeId);
-    if (!runtime) {
-      runtime = createScopeRuntime(
+    return scopeCache.get(scopeId, () =>
+      createScopeRuntime(
         dataRootStore,
         scopeId,
         provider === "local",
-      );
-      scopeCache.set(scopeId, runtime);
-    }
-    return runtime;
+      ),
+    );
   };
 
   return {
@@ -210,12 +245,26 @@ async function createScopeRuntime(
   scopeId: string,
   local: boolean,
 ): Promise<ScopeRuntime> {
-  const material = await loadScopeMaterial({
-    scopeId,
-    encrypted: scopeId !== "public",
-    keyVersion: parseInteger(process.env.THIMBLE_KEY_VERSION, 1),
-    local,
-  });
+  const encrypted = scopeId !== "public";
+  const versions = encrypted ? configuredKeyVersions() : [1];
+  const materials = await Promise.all(
+    versions.map((keyVersion) =>
+      loadScopeMaterial({
+        scopeId,
+        encrypted,
+        keyVersion,
+        local,
+      }),
+    ),
+  );
+  const material = materials[0]!;
+  const decryptionKeys = new Map(
+    materials.flatMap((candidate) =>
+      candidate.keyId && candidate.key
+        ? [[candidate.keyId, candidate.key] as const]
+        : [],
+    ),
+  );
   const rawStore = new PrefixObjectStore(
     dataRootStore,
     scopeStoragePrefix(scopeId),
@@ -228,6 +277,7 @@ async function createScopeRuntime(
           keyId: material.keyId!,
           compression: "gzip",
           objectKeyPrefix: scopeStoragePrefix(scopeId),
+          decryptionKeys,
         }
       : {
           compression: "gzip",
@@ -236,6 +286,7 @@ async function createScopeRuntime(
   );
   return {
     material,
+    materials,
     engine: new ContentAddressedTrieEngine(
       store,
       40,
@@ -324,7 +375,7 @@ async function handleRequest(
       sessionCookie(request, context.auth.cookieName()),
     );
     const authenticated = await context.auth.loginExternal(
-      decodeURIComponent(oidcRoute[1]),
+      decodePathSegment(oidcRoute[1]),
       bearer,
       clientRateKey(request),
     );
@@ -346,18 +397,54 @@ async function handleRequest(
     request.method === "POST" &&
     url.pathname === "/api/auth/logout"
   ) {
+    requireMutationRequest(
+      context,
+      request,
+      authenticated?.session.csrfToken,
+    );
+    await context.auth.logout(
+      sessionCookie(request, context.auth.cookieName()),
+    );
+    response.setHeader(
+      "set-cookie",
+      context.auth.clearSessionCookie(),
+    );
+    sendJson(response, 200, { loggedOut: true });
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/password"
+  ) {
     requireAuthenticated(authenticated);
     requireMutationRequest(
       context,
       request,
       authenticated.session.csrfToken,
     );
-    await context.auth.logout(authenticated.cookieValue);
+    const body = await readJsonBody(request);
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      Array.isArray(body) ||
+      typeof (body as { currentPassword?: unknown })
+        .currentPassword !== "string" ||
+      typeof (body as { newPassword?: unknown }).newPassword !==
+        "string"
+    ) {
+      throw new AuthError(400, "invalid_request", "Invalid request");
+    }
+    await context.auth.changePassword(
+      authenticated,
+      (body as { currentPassword: string }).currentPassword,
+      (body as { newPassword: string }).newPassword,
+    );
     response.setHeader(
       "set-cookie",
       context.auth.clearSessionCookie(),
     );
-    sendJson(response, 200, { loggedOut: true });
+    sendJson(response, 200, { passwordChanged: true });
     return;
   }
 
@@ -388,7 +475,7 @@ async function handleRequest(
   const keyRoute = /^\/api\/keys\/([^/]+)$/.exec(url.pathname);
   if (request.method === "GET" && keyRoute?.[1]) {
     requireAuthenticated(authenticated);
-    const scopeId = decodeURIComponent(keyRoute[1]);
+    const scopeId = decodePathSegment(keyRoute[1]);
     requireGrant(authenticated.session.grants, scopeId, "read");
     const runtime = await context.scope(scopeId);
     if (!runtime.material.encrypted) {
@@ -399,7 +486,22 @@ async function handleRequest(
       );
     }
     sendJson(response, 200, {
-      ...scopeKeyResponse(runtime.material),
+      scopeId,
+      writeKeyId: runtime.material.keyId,
+      keys: runtime.materials
+        .filter(
+          (
+            material,
+          ): material is ScopeMaterial & {
+            keyId: string;
+            rawKey: Uint8Array;
+          } => Boolean(material.keyId && material.rawKey),
+        )
+        .map((material) => ({
+          keyId: material.keyId,
+          key: scopeKeyResponse(material).key,
+        })),
+      algorithm: "A256GCM",
       expiresAt: authenticated.session.expiresAt,
     });
     return;
@@ -465,8 +567,8 @@ async function handleRequest(
       request,
     );
     const runtime = await context.scope(grant.scopeId);
-    const collection = decodeURIComponent(writeRoute[1]);
-    const id = decodeURIComponent(writeRoute[2]);
+    const collection = decodePathSegment(writeRoute[1]);
+    const id = decodePathSegment(writeRoute[2]);
     const document = asDocument(await readJsonBody(request), id);
     await runtime.engine.put(collection, id, document);
     sendJson(
@@ -498,8 +600,18 @@ function createProviderStores(provider: Provider): {
 } {
   if (provider === "local") {
     return {
-      data: new LocalObjectStore(path.resolve(".thimble-data")),
-      auth: new LocalObjectStore(path.resolve(".thimble-auth")),
+      data: new LocalObjectStore(
+        path.resolve(
+          process.env.THIMBLE_LOCAL_DATA_ROOT ??
+            ".thimble-data",
+        ),
+      ),
+      auth: new LocalObjectStore(
+        path.resolve(
+          process.env.THIMBLE_LOCAL_AUTH_ROOT ??
+            ".thimble-auth",
+        ),
+      ),
     };
   }
   if (provider === "azure") {
@@ -607,7 +719,7 @@ function requireMutationRequest(
     throw new AuthError(403, "origin_rejected", "Request was rejected");
   }
   const contentType = request.headers["content-type"] ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
+  if (!isJsonContentType(contentType)) {
     throw new AuthError(
       415,
       "content_type_required",
@@ -682,7 +794,7 @@ function scopeFromObjectKey(key: string): string {
   if (!match?.[1]) {
     throw new AuthError(404, "object_not_found", "Object not found");
   }
-  return decodeURIComponent(match[1]);
+  return decodePathSegment(match[1]);
 }
 
 function localCredentials(
@@ -795,13 +907,8 @@ function sessionCookie(
   return null;
 }
 
-function clientRateKey(request: IncomingMessage): string {
-  const forwarded = headerValue(request.headers["x-forwarded-for"]);
-  return (
-    forwarded?.split(",")[0]?.trim() ||
-    request.socket.remoteAddress ||
-    "unknown"
-  );
+function clientRateKey(request: IncomingMessage): string | null {
+  return nodeClientIp(request);
 }
 
 function providerName(): Provider {
@@ -905,8 +1012,24 @@ function mimeType(filePath: string): string {
 function decodeObjectPath(pathname: string): string {
   return pathname
     .split("/")
-    .map((segment) => decodeURIComponent(segment))
+    .map((segment) => decodePathSegment(segment))
     .join("/");
+}
+
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new AuthError(400, "invalid_path", "Invalid request path");
+  }
+}
+
+function isJsonContentType(value: string): boolean {
+  const mediaType = value.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    mediaType === "application/json" ||
+    Boolean(mediaType?.endsWith("+json"))
+  );
 }
 
 function httpEtag(etag: string): string {
@@ -941,11 +1064,29 @@ function parseInteger(
   if (value === undefined) {
     return fallback;
   }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
     throw new Error(`Invalid non-negative integer: ${value}`);
   }
   return parsed;
+}
+
+function configuredKeyVersions(): number[] {
+  const writeVersion = parseInteger(
+    process.env.THIMBLE_KEY_VERSION,
+    1,
+  );
+  const historical = (
+    process.env.THIMBLE_READ_KEY_VERSIONS ?? ""
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => parseInteger(value, writeVersion));
+  return [
+    writeVersion,
+    ...historical.filter((value) => value !== writeVersion),
+  ];
 }
 
 function requiredEnvironment(name: string): string {

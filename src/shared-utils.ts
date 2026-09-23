@@ -37,9 +37,14 @@ export function decodeJson<T>(bytes: Uint8Array): T {
 }
 
 export function validateName(value: string, label: string): string {
-  if (!/^[A-Za-z0-9._-]+$/.test(value)) {
+  if (
+    value === "." ||
+    value === ".." ||
+    value.length > 128 ||
+    !/^[A-Za-z0-9._-]+$/.test(value)
+  ) {
     throw new Error(
-      `${label} must contain only letters, numbers, ".", "_" or "-"`,
+      `${label} must be 1-128 letters, numbers, ".", "_" or "-", and cannot be "." or ".."`,
     );
   }
   return value;

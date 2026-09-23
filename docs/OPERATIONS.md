@@ -7,7 +7,6 @@
 | `THIMBLE_MASTER_KEY` | Derives scope encryption and address keys | Requires planned data re-encryption if changed |
 | `THIMBLE_PASSWORD_PEPPER` | Defends local password hashes if the auth store leaks | Requires password reset to replace |
 | Provider write credential | Lets the authority mutate object storage | No stored-data rewrite |
-| Browser read credential | Lets a browser retrieve object bytes | No stored-data rewrite |
 
 Back up the deployment master key through the cloud secret manager's supported
 process. Losing it makes encrypted scopes unrecoverable.
@@ -16,16 +15,32 @@ process. Losing it makes encrypted scopes unrecoverable.
 
 Normal scope rotation:
 
-1. Increment `THIMBLE_KEY_VERSION`.
-2. Keep the previous key version available for reads.
-3. Write new objects with the new version.
-4. Rewrite live HEAD trees in the background.
-5. Verify no live object references the previous version.
-6. Remove old objects according to retention policy.
-7. Stop granting the previous key.
+1. Set `THIMBLE_KEY_VERSION` to the new write version.
+2. Add the previous version to `THIMBLE_READ_KEY_VERSIONS`.
+3. Restart authorities so browsers receive both readable keys.
+4. Rewrite each live collection:
 
-The POC currently derives one configured version and does not automate
-multi-version migration.
+```powershell
+$env:THIMBLE_SCOPE_ID = "user:<id>"
+$env:THIMBLE_KEY_VERSION = "2"
+$env:THIMBLE_READ_KEY_VERSIONS = "1"
+$env:THIMBLE_COLLECTIONS = "products,orders,settings"
+npm run migrate:keys
+```
+
+The migration compares the collection HEAD it scanned with the HEAD it commits.
+It aborts without replacing HEAD if a concurrent write wins. Re-run the
+collection after writes are quiescent. Verification reads the rewritten
+collection using only the current key and compares full content.
+
+5. Verify application reads and collection content.
+6. Retain the old version for the required rollback window.
+7. Remove the old version from `THIMBLE_READ_KEY_VERSIONS`.
+8. Remove unreachable old objects only through a safe offline maintenance
+   process.
+
+The migration is idempotent per collection and rewrites the live trie under the
+current write key. It does not delete historical objects.
 
 ## Backup
 
@@ -54,14 +69,29 @@ Record:
 Never log scope keys, raw session cookies, SAS tokens, connection strings, or
 decrypted document bodies.
 
+## Source-IP rate limiting
+
+The Node authority uses the direct socket peer by default and ignores
+caller-controlled forwarding headers.
+
+- AWS Lambda Web Adapter deployments use the trusted
+  `x-amzn-request-context` source address.
+- A self-hosted reverse proxy can be listed in
+  `THIMBLE_TRUSTED_PROXY_IPS`. Forwarding chains are evaluated from right to
+  left, skipping only configured trusted peers.
+- Set `THIMBLE_DISABLE_IP_RATE_LIMIT=true` when the deployment cannot verify
+  its immediate proxy. Account and external-subject limits still apply.
+
+Do not enable forwarding-header trust merely to obtain a more specific address.
+An incorrect proxy boundary lets callers rotate spoofed addresses.
+
 ## Incident response
 
-Leaked browser read credential:
+Leaked session cookie:
 
-1. Revoke or expire it.
-2. Issue a new credential.
-3. Review object request logs.
-4. Rotate scope keys only if plaintext keys were also exposed.
+1. Revoke the server-side session.
+2. Review object and key-grant request logs.
+3. Rotate affected scope keys if key grants may also have been exposed.
 
 Leaked scope key:
 
@@ -76,7 +106,7 @@ Leaked master key:
 2. Freeze writes.
 3. Introduce a new master key.
 4. Re-encrypt all live scopes.
-5. Revoke all sessions and read credentials.
+5. Revoke all sessions.
 
 Leaked password pepper:
 
@@ -89,5 +119,7 @@ Leaked password pepper:
 ## Cleanup
 
 Garbage collection must not delete nodes reachable by a stale writer or reader.
-The current POC runs cleanup only when writes are quiescent. Production needs
-generation retention, grace periods, or reader leases before deletion.
+Destructive garbage collection is disabled in production engines. The
+benchmark can enable a quiescent-only mode explicitly. A future online
+collector needs generation retention, grace periods, or reader leases before
+deletion.

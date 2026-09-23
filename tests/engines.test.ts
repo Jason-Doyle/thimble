@@ -114,6 +114,15 @@ describe.each(factories)("$name engine", ({ name, create }) => {
       inheritedName,
     );
   });
+
+  it("rejects path-like collection names consistently", async () => {
+    await expect(
+      engine.put("..", "item", { id: "item" }),
+    ).rejects.toThrow("cannot be");
+    await expect(
+      engine.scan("a/b"),
+    ).rejects.toThrow("must be");
+  });
 });
 
 describe("content-addressed trie maintenance", () => {
@@ -127,6 +136,12 @@ describe("content-addressed trie maintenance", () => {
         "trie",
       );
       const engine = new ContentAddressedTrieEngine(store);
+      const gcEngine = new ContentAddressedTrieEngine(
+        store,
+        40,
+        undefined,
+        true,
+      );
       const documents = Array.from({ length: 32 }, (_, index) =>
         product(index),
       );
@@ -141,7 +156,7 @@ describe("content-addressed trie maintenance", () => {
       const beforeCompaction = (await store.list("")).length;
       expect(beforeCompaction).toBeGreaterThan(initialCount);
 
-      await engine.compact("products");
+      await gcEngine.compact("products");
       const afterCompaction = (await store.list("")).length;
       expect(afterCompaction).toBeLessThan(beforeCompaction);
       expect(await engine.get("products", documents[0]!.id)).toMatchObject({

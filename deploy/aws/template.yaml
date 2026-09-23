@@ -10,7 +10,7 @@ Parameters:
     Description: ECR image URI built with the AWS Lambda Web Adapter.
   AllowedOrigin:
     Type: String
-    Description: Exact browser application origin allowed by CloudFront.
+    Description: Exact browser application origin accepted by the authority.
   Prefix:
     Type: String
     Default: demo
@@ -20,6 +20,25 @@ Parameters:
   EntraAudience:
     Type: String
     Default: ""
+  EntraRequiredScope:
+    Type: String
+    Default: ""
+  EntraRequiredRole:
+    Type: String
+    Default: ""
+  EntraAutoProvision:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+  ReadKeyVersions:
+    Type: String
+    Default: ""
+  KeyVersion:
+    Type: Number
+    Default: 1
+    MinValue: 1
   MasterKey:
     Type: String
     NoEcho: true
@@ -37,19 +56,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      CorsConfiguration:
-        CorsRules:
-          - AllowedOrigins:
-              - !Ref AllowedOrigin
-            AllowedMethods:
-              - GET
-              - HEAD
-            AllowedHeaders:
-              - If-None-Match
-            ExposedHeaders:
-              - ETag
-              - Content-Length
-            MaxAge: 3600
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -72,156 +78,24 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-
-  ReadOriginAccessControl:
-    Type: AWS::CloudFront::OriginAccessControl
-    Properties:
-      OriginAccessControlConfig:
-        Name: !Sub ${ApplicationName}-oac
-        OriginAccessControlOriginType: s3
-        SigningBehavior: always
-        SigningProtocol: sigv4
-
-  ReadCachePolicy:
-    Type: AWS::CloudFront::CachePolicy
-    Properties:
-      CachePolicyConfig:
-        Name: !Sub ${ApplicationName}-objects
-        DefaultTTL: 60
-        MaxTTL: 31536000
-        MinTTL: 0
-        ParametersInCacheKeyAndForwardedToOrigin:
-          CookiesConfig:
-            CookieBehavior: none
-          EnableAcceptEncodingBrotli: true
-          EnableAcceptEncodingGzip: true
-          HeadersConfig:
-            HeaderBehavior: whitelist
-            Headers:
-              - Origin
-          QueryStringsConfig:
-            QueryStringBehavior: none
-
-  ReadOriginRequestPolicy:
-    Type: AWS::CloudFront::OriginRequestPolicy
-    Properties:
-      OriginRequestPolicyConfig:
-        Name: !Sub ${ApplicationName}-cors
-        CookiesConfig:
-          CookieBehavior: none
-        HeadersConfig:
-          HeaderBehavior: whitelist
-          Headers:
-            - Origin
-            - Access-Control-Request-Headers
-            - Access-Control-Request-Method
-            - If-None-Match
-        QueryStringsConfig:
-          QueryStringBehavior: none
-
-  ReadResponseHeadersPolicy:
-    Type: AWS::CloudFront::ResponseHeadersPolicy
-    Properties:
-      ResponseHeadersPolicyConfig:
-        Name: !Sub ${ApplicationName}-cors
-        CorsConfig:
-          AccessControlAllowCredentials: false
-          AccessControlAllowHeaders:
-            Items:
-              - If-None-Match
-          AccessControlAllowMethods:
-            Items:
-              - GET
-              - HEAD
-              - OPTIONS
-          AccessControlAllowOrigins:
-            Items:
-              - !Ref AllowedOrigin
-          AccessControlExposeHeaders:
-            Items:
-              - ETag
-              - Content-Length
-          AccessControlMaxAgeSec: 3600
-          OriginOverride: true
-
-  HeadCachePolicy:
-    Type: AWS::CloudFront::CachePolicy
-    Properties:
-      CachePolicyConfig:
-        Name: !Sub ${ApplicationName}-head
-        DefaultTTL: 0
-        MaxTTL: 0
-        MinTTL: 0
-        ParametersInCacheKeyAndForwardedToOrigin:
-          CookiesConfig:
-            CookieBehavior: none
-          EnableAcceptEncodingBrotli: true
-          EnableAcceptEncodingGzip: true
-          HeadersConfig:
-            HeaderBehavior: whitelist
-            Headers:
-              - Origin
-          QueryStringsConfig:
-            QueryStringBehavior: none
-
-  ReadDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        HttpVersion: http2and3
-        Origins:
-          - Id: data
-            DomainName: !GetAtt DataBucket.RegionalDomainName
-            OriginAccessControlId: !GetAtt ReadOriginAccessControl.Id
-            OriginPath: !Sub /${Prefix}/scopes/public
-            S3OriginConfig: {}
-        DefaultCacheBehavior:
-          TargetOriginId: data
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods:
-            - GET
-            - HEAD
-            - OPTIONS
-          CachedMethods:
-            - GET
-            - HEAD
-          Compress: false
-          CachePolicyId: !Ref ReadCachePolicy
-          OriginRequestPolicyId: !Ref ReadOriginRequestPolicy
-          ResponseHeadersPolicyId: !Ref ReadResponseHeadersPolicy
-        CacheBehaviors:
-          - PathPattern: "*/HEAD.json"
-            TargetOriginId: data
-            ViewerProtocolPolicy: redirect-to-https
-            AllowedMethods:
-              - GET
-              - HEAD
-              - OPTIONS
-            CachedMethods:
-              - GET
-              - HEAD
-            Compress: false
-            CachePolicyId: !Ref HeadCachePolicy
-            OriginRequestPolicyId: !Ref ReadOriginRequestPolicy
-            ResponseHeadersPolicyId: !Ref ReadResponseHeadersPolicy
-
-  DataBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref DataBucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowCloudFrontRead
-            Effect: Allow
-            Principal:
-              Service: cloudfront.amazonaws.com
-            Action: s3:GetObject
-            Resource: !Sub ${DataBucket.Arn}/${Prefix}/scopes/public/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${ReadDistribution}
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireSessions
+            Status: Enabled
+            Prefix: auth-v1/sessions/
+            ExpirationInDays: 7
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+          - Id: ExpireRateLimits
+            Status: Enabled
+            Prefix: auth-v1/rate-limits/
+            ExpirationInDays: 7
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+          - Id: RemoveExpiredAuthDeleteMarkers
+            Status: Enabled
+            Prefix: auth-v1/
+            ExpiredObjectDeleteMarker: true
 
   AuthorityRole:
     Type: AWS::IAM::Role
@@ -288,8 +162,13 @@ Resources:
           THIMBLE_SECURE_COOKIES: "true"
           THIMBLE_ALLOWED_ORIGIN: !Ref AllowedOrigin
           THIMBLE_LOCAL_REGISTRATION: "false"
+          THIMBLE_KEY_VERSION: !Ref KeyVersion
+          THIMBLE_READ_KEY_VERSIONS: !Ref ReadKeyVersions
           ENTRA_TENANT_ID: !Ref EntraTenantId
           ENTRA_AUDIENCE: !Ref EntraAudience
+          ENTRA_REQUIRED_SCOPE: !Ref EntraRequiredScope
+          ENTRA_REQUIRED_ROLE: !Ref EntraRequiredRole
+          ENTRA_AUTO_PROVISION: !Ref EntraAutoProvision
 
   AuthorityUrl:
     Type: AWS::Lambda::Url
@@ -308,8 +187,6 @@ Resources:
 Outputs:
   AuthorityUrl:
     Value: !GetAtt AuthorityUrl.FunctionUrl
-  ReadBaseUrl:
-    Value: !Sub https://${ReadDistribution.DomainName}
   BucketName:
     Value: !Ref DataBucket
   AuthBucketName:

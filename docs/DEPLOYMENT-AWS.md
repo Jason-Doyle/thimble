@@ -4,23 +4,18 @@ AWS is a secondary deployment path. The example uses:
 
 - Lambda container image plus AWS Lambda Web Adapter
 - Lambda Function URL for the authority and browser assets
-- S3 for encrypted objects
-- CloudFront Origin Access Control for direct ciphertext reads
+- separate private S3 buckets for data and authentication records
 
 The CloudFormation template is `deploy/aws/template.yaml`.
 
 ## Build the Lambda image
 
-The standard Dockerfile runs an HTTP server on port 8787. For Lambda, add the
-AWS Lambda Web Adapter extension to the final image:
+Build the Lambda-compatible image, which includes the pinned AWS Lambda Web
+Adapter:
 
-```dockerfile
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:<pinned-version> \
-  /lambda-adapter /opt/extensions/lambda-adapter
+```powershell
+docker build -f Dockerfile.aws -t thimbledb-aws .
 ```
-
-Pin a reviewed adapter release. Do not use an unpinned `latest` tag in a
-release image.
 
 Build, tag, and push the image to ECR.
 
@@ -50,26 +45,15 @@ aws cloudformation deploy `
 
 Remove the shell values after deployment.
 
+For key rotation, deploy `KeyVersion` as the current write version and
+`ReadKeyVersions` as the comma-separated historical versions that remain
+readable.
+
 ## Read path
 
-Private local-auth reads use the Function URL broker and require a session and
-scope grant. The separate auth bucket is accessible only to the Lambda role.
-
-CloudFront remains available for public scopes through Origin Access Control:
-
-```text
-https://<distribution>/content-trie/...
-```
-
-The CloudFront distribution is publicly readable in this compatibility
-template. Its origin path and bucket policy are restricted to
-`<prefix>/scopes/public/*`; it cannot read user, tenant, role, or auth-store
-objects.
-
-The template configures S3 CORS for `If-None-Match` and a separate zero-TTL
-CloudFront behaviour for `HEAD.json`. Immutable nodes use the normal cache
-behaviour, while HEAD revalidation reaches the origin rather than remaining
-stale at the edge.
+All browser reads use the authenticated Function URL broker and require a
+session and scope grant. Both S3 buckets remain private and are accessible only
+to the Lambda role.
 
 ## Authority permissions
 
@@ -77,33 +61,40 @@ The Lambda instance role is limited to the configured S3 prefix. It can:
 
 - read objects
 - create and conditionally replace objects
-- delete unreachable objects
+- delete revoked auth records and operator-approved maintenance targets
 - list only the application prefix
 
 The browser has no S3 write credentials.
 
+The Node authority reads the trusted client source address from the Lambda Web
+Adapter's `x-amzn-request-context` header when running inside Lambda. It does
+not trust caller-controlled `X-Forwarded-For` values. If the request context is
+unavailable, account-based limits still apply and source-IP limiting is
+skipped rather than collapsing all users onto the adapter loopback address.
+
 ## Verify
 
 - Function URL serves the application and `/api/config`.
-- CloudFront returns `ETag` and CORS headers.
 - S3 objects are private from the S3 endpoint.
 - Brokered private object bodies start with `TDB1`.
-- The auth bucket is not a CloudFront origin.
+- The auth bucket is never browser-readable.
 - Lambda role cannot access outside the configured prefix.
 - Browser writes go only to the Function URL.
 
-## Known gap
+## Public transport endpoint
 
-The template uses a public Function URL because application authentication is
-outside the POC. Add Cognito, API Gateway authorisation, or the application's
-existing identity layer before production.
+The Function URL is publicly reachable, but application data routes require a
+ThimbleDB session and scope grant. Local registration remains disabled by
+default. Configure Entra or provision local accounts deliberately. AWS WAF,
+API Gateway, or another edge control can add cost and abuse protection without
+replacing application authorisation.
 
-CloudFront signed cookies or Cognito temporary credentials can protect direct
-public-scope reads when required.
+The auth bucket expires current and noncurrent session and rate-limit objects
+after seven days, then removes expired delete markers. Adjust that period if a
+deployment uses a longer operational retention window.
 
 ## References
 
 - [AWS Lambda Web Adapter](https://github.com/aws/aws-lambda-web-adapter)
 - [Lambda container images](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)
-- [CloudFront Origin Access Control](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html)
 - [Cognito users with per-user S3 prefixes](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_cognito-bucket.html)

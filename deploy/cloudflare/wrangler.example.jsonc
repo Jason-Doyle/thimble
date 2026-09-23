@@ -13,12 +13,15 @@
   "vars": {
     "THIMBLE_PREFIX": "demo",
     "THIMBLE_KEY_VERSION": "1",
+    "THIMBLE_READ_KEY_VERSIONS": "",
     "THIMBLE_HEAD_TTL_MS": "1000",
-    "THIMBLE_LOCAL_REGISTRATION": "false",
     "THIMBLE_ALLOWED_ORIGIN": "https://db.example.com",
     // Optional Microsoft Entra configuration:
     // "ENTRA_TENANT_ID": "00000000-0000-0000-0000-000000000000",
-    // "ENTRA_AUDIENCE": "api://your-application-id"
+    // "ENTRA_AUDIENCE": "api://your-application-id",
+    // "ENTRA_REQUIRED_SCOPE": "thimble.access",
+    // "ENTRA_REQUIRED_ROLE": "Thimble.User",
+    // "ENTRA_AUTO_PROVISION": "false"
   },
 
   // Intentionally disabled. Copy this file to wrangler.jsonc, create the
@@ -35,8 +38,9 @@
   //   }
   // ],
   //
-  // Production local authentication also requires a distributed rate-limit
-  // binding. Choose a real namespace_id that is unique in your account.
+  // Optional low-latency source-IP limiting. Account and OIDC-subject limits
+  // remain in the encrypted R2 auth store. Choose a namespace_id unique to
+  // this account.
   //
   // "ratelimits": [
   //   {
@@ -49,8 +53,8 @@
   //   }
   // ],
   //
-  // Intentionally disabled. Add a real route only after Cloudflare Access is
-  // protecting the application hostname.
+  // Intentionally disabled. Add a real route only after application
+  // authentication, secrets, and the exact allowed origin are configured.
   //
   // "routes": [
   //   {

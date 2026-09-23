@@ -119,7 +119,7 @@ export class LocalObjectStore implements ObjectStore {
 
   async list(prefix: string): Promise<string[]> {
     const normalizedPrefix = prefix
-      ? normalizeObjectKey(prefix).replace(/\/+$/, "")
+      ? normalizeObjectKey(prefix)
       : "";
     const startPath = normalizedPrefix
       ? this.resolveKey(normalizedPrefix)
@@ -254,7 +254,7 @@ export class AzureBlobObjectStore implements ObjectStore {
     await this.ensureContainer();
     const keys: string[] = [];
     const normalizedPrefix = prefix
-      ? normalizeObjectKey(prefix).replace(/\/+$/, "")
+      ? normalizeObjectKey(prefix)
       : "";
     for await (const blob of this.container.listBlobsFlat({
       prefix: normalizedPrefix,
@@ -355,7 +355,7 @@ export class S3ObjectStore implements ObjectStore {
     const keys: string[] = [];
     let continuationToken: string | undefined;
     const normalizedPrefix = prefix
-      ? normalizeObjectKey(prefix).replace(/\/+$/, "")
+      ? normalizeObjectKey(prefix)
       : "";
 
     do {

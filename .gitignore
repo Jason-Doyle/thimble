@@ -3,8 +3,11 @@ dist/
 .bench-data/
 .thimble-data/
 .thimble-auth/
+.thimble-e2e/
 benchmark-results/
 coverage/
+playwright-report/
+test-results/
 *.log
 .env
 .env.*

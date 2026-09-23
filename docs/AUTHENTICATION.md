@@ -42,8 +42,8 @@ deployment master key. No auth-store key is granted to browsers.
 
 ## Local accounts
 
-Local registration is disabled by default in cloud deployments and enabled in
-local development.
+The Node authority supports local accounts. Registration is disabled by
+default in cloud deployments and enabled in local development.
 
 Passwords use:
 
@@ -61,14 +61,15 @@ Unknown accounts perform a dummy Argon2id verification. Login responses use
 the same error code for missing accounts, wrong passwords, disabled accounts,
 and unavailable external identities.
 
-The Worker requires a distributed `AUTH_RATE_LIMITER` binding when local auth
-is enabled. In-memory limiting is available only as an explicit local
-development override.
+Password work has a separate provider-backed global limit in addition to
+source-IP and account limits. This protects the Argon2 path when a deployment
+cannot verify a proxy source address.
 
-Strong Argon2id does not fit the Cloudflare Workers free-plan CPU allowance.
-Local password authentication should therefore use Workers Paid or an isolated
-private password-hashing service. Do not reduce Argon2 parameters to fit the
-free plan.
+The Cloudflare Worker build deliberately disables local password endpoints.
+The current Argon2 dependency requires runtime WebAssembly compilation, which
+Workers does not permit. Cloudflare deployments use Entra or another OIDC
+identity. Deploy the Node authority when local accounts are required. Do not
+reduce Argon2 parameters or substitute a weak browser-compatible hash.
 
 ## Sessions
 
@@ -85,7 +86,7 @@ records contain:
 - account `authVersion`
 - expiry
 - CSRF token
-- current scope grants
+- scope grants captured when the session is issued
 
 Cookies use HttpOnly, SameSite=Strict, and Secure outside local development.
 Logout deletes the server session. Password reset and account disabling can
@@ -118,8 +119,8 @@ Brokered reads mean a saved scope key is not enough to discover or download
 future objects after session revocation. Already downloaded plaintext and
 ciphertext cannot be revoked.
 
-Public scopes can use direct R2, S3, or Blob URLs because no private key is
-required.
+The supported path brokers all scopes. Direct provider URLs are not part of
+the supported authentication boundary.
 
 ## Microsoft Entra
 
@@ -139,6 +140,7 @@ The current API exchanges an access token already obtained by the application:
 
 ```text
 POST /api/auth/oidc/entra/session
+Content-Type: application/json
 Authorization: Bearer <token-for-the-ThimbleDB-API>
 ```
 
@@ -147,7 +149,15 @@ reviewed OIDC client for authorisation code flow with PKCE, state, and nonce.
 ThimbleDB validates the resulting API token and creates its own revocable
 session.
 
+An Entra adapter must configure at least one required delegated scope or
+application role. Automatic internal-user provisioning is disabled by default.
+Set `ENTRA_AUTO_PROVISION=true` only when every principal satisfying the tenant
+and claim rules should receive a ThimbleDB account.
+
 ## Current API
+
+The Node authority exposes the local-account routes. The Cloudflare Worker
+advertises `local.enabled: false` and returns 404 for those routes.
 
 | Route | Authentication | Purpose |
 | --- | --- | --- |
@@ -156,12 +166,13 @@ session.
 | `POST /api/auth/login` | Public, rate limited, exact Origin | Local login |
 | `POST /api/auth/oidc/:provider/session` | Bearer token, rate limited, exact Origin | External identity exchange |
 | `POST /api/auth/logout` | Session + CSRF | Revoke current session |
+| `POST /api/auth/password` | Session + CSRF | Change password and revoke every session |
 | `GET /api/config` | Session | User, scope, CSRF, cache config |
 | `GET /api/keys/:scope` | Session + read grant | Scope key grant |
 
 ## Not implemented yet
 
-- password reset and email delivery
+- forgotten-password reset and email delivery
 - email verification
 - passkeys and MFA
 - identity linking UI

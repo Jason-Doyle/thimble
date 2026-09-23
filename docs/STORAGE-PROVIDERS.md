@@ -36,10 +36,10 @@ multi-writer backend.
 
 | Provider | Position | Write integration | Browser read integration |
 | --- | --- | --- | --- |
-| Cloudflare R2 | Preferred reference provider | Native Worker R2 binding | Authenticated Worker broker for private scopes; custom domain for public scopes |
+| Cloudflare R2 | Preferred reference provider | Native Worker R2 binding | Authenticated Worker broker |
 | Local filesystem | Development and single-process use | In-process file adapter | Same-origin authenticated broker |
-| Azure Blob Storage | Supported secondary provider | Azure SDK and conditional blob writes | Authenticated authority broker; optional SAS for public scopes |
-| Amazon S3 | Supported secondary provider | AWS SDK and IAM role | Authenticated authority broker; optional public-scope CloudFront |
+| Azure Blob Storage | Supported secondary provider | Azure SDK and conditional blob writes | Authenticated authority broker |
+| Amazon S3 | Supported secondary provider | AWS SDK and IAM role | Authenticated authority broker |
 | S3-compatible storage | Experimental compatibility | S3 endpoint adapter | Provider-specific |
 
 ## Cloudflare R2
@@ -49,7 +49,7 @@ R2 is the preferred provider because:
 - Workers receive a native bucket binding without long-lived API credentials
 - reads and writes are strongly consistent
 - conditional R2 operations map directly to the protocol
-- encrypted object reads can use a custom domain
+- private buckets remain behind the Worker broker
 - egress is free
 - the free tier covers many small evaluation applications
 
@@ -74,9 +74,8 @@ transactional embedded store while preserving the ObjectStore interface.
 
 ## Azure Blob Storage
 
-Azure maps protocol conditions to `If-None-Match` and `If-Match`. Private
-authenticated reads use the authority broker. Public scopes can use a
-read-only SAS URL and Blob-service CORS.
+Azure maps protocol conditions to `If-None-Match` and `If-Match`. Browser reads
+use the authority broker.
 
 The Node authority currently uses a connection string. Managed identity is the
 preferred production improvement.
@@ -86,9 +85,8 @@ preferred production improvement.
 S3 maps protocol conditions to conditional `PutObject`. The authority can use
 an IAM role through the normal AWS credential chain.
 
-CloudFront can expose encrypted objects while keeping the bucket private.
-Cognito temporary credentials or signed CloudFront access can add a transport
-authorisation layer.
+The Lambda authority brokers browser reads while its IAM role accesses private
+S3 buckets.
 
 ## Adding a provider
 
@@ -98,10 +96,11 @@ Before describing a provider as supported:
 2. Prove atomic create-if-absent.
 3. Prove stale ETag replacement is rejected.
 4. Verify strong read-after-write behaviour.
-5. Verify ETag formatting on direct HTTP reads.
+5. Verify ETag formatting through the authenticated object broker.
 6. Run the engine contract tests.
 7. Run concurrent-writer and maintenance benchmarks.
-8. Document browser CORS and credential delivery.
+8. Document authority authentication, trusted proxy handling, and secret
+   delivery.
 
 API compatibility with S3 is not enough. Conditional and consistency semantics
 must be tested.

@@ -6,8 +6,7 @@ The design uses:
 
 - one Worker for static assets, writes, sessions, and scope-key grants
 - one R2 data bucket for encrypted application objects
-- one private R2 auth bucket for users, password hashes, sessions, and rate
-  records
+- one private R2 auth bucket for users, sessions, and rate records
 - an optional native rate-limit binding
 - an authenticated Worker read broker for private scopes
 
@@ -22,8 +21,8 @@ npm run build:client
 npm run build:worker
 ```
 
-The dry-run Worker bundle should remain small enough for the Workers free
-plan. Record its compressed size during release checks.
+The current dry-run Worker bundle is about 28.4 KB gzip. Record the compressed
+size during release checks.
 
 ## 2. Authenticate Wrangler
 
@@ -51,12 +50,8 @@ Use one Worker hostname:
 db.example.com
 ```
 
-Private object reads pass through the Worker and require a valid session and
-scope grant. No R2 custom domain or browser CORS rule is required for private
-local-auth data.
-
-An R2 custom domain remains optional for public scopes. Apply the example CORS
-policy only when direct public reads are enabled.
+Object reads pass through the Worker and require a valid session and scope
+grant. No R2 custom domain or browser CORS rule is required.
 
 ## 5. Create Wrangler configuration
 
@@ -71,8 +66,8 @@ Edit `deploy\cloudflare\wrangler.local.jsonc`:
 
 1. Uncomment the `r2_buckets` block.
 2. Set the real data and auth bucket names.
-3. Configure the `AUTH_RATE_LIMITER` binding or accept the encrypted R2-backed
-   fallback limiter.
+3. Optionally configure `AUTH_RATE_LIMITER` for low-latency source-IP limits.
+   Account and OIDC-subject limits always use the encrypted R2-backed limiter.
 4. Uncomment the Worker custom-domain route.
 5. Set the exact `THIMBLE_ALLOWED_ORIGIN`.
 
@@ -81,16 +76,17 @@ cannot deploy infrastructure accidentally.
 
 ## 6. Configure authentication
 
-Local registration is disabled by default. Set
-`THIMBLE_LOCAL_REGISTRATION=true` only when self-service registration is
-intended.
-
-Strong Argon2id password hashing requires Workers Paid or an isolated private
-hashing service. Do not reduce the documented parameters to fit the free plan.
+The Worker build uses Entra or another OIDC identity provider. Local password
+authentication is disabled because the current Argon2 dependency requires
+runtime WebAssembly compilation, which Workers does not permit. Use the Node
+authority deployment when local accounts are required.
 
 For Entra, set `ENTRA_TENANT_ID` and `ENTRA_AUDIENCE`. The application obtains
 an API access token through a reviewed OIDC client and exchanges it at
 `/api/auth/oidc/entra/session`.
+
+Also set `ENTRA_REQUIRED_SCOPE` or `ENTRA_REQUIRED_ROLE`. Automatic user
+provisioning remains disabled unless `ENTRA_AUTO_PROVISION=true`.
 
 Cloudflare Access can remain an additional outer boundary around the
 application hostname.
@@ -101,16 +97,13 @@ Generate independent values:
 
 ```powershell
 $masterKey = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-$passwordPepper = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Store them through Wrangler without writing them to a file:
 
 ```powershell
 $masterKey | npx wrangler secret put THIMBLE_MASTER_KEY
-$passwordPepper | npx wrangler secret put THIMBLE_PASSWORD_PEPPER
 $masterKey = $null
-$passwordPepper = $null
 ```
 
 ## 8. Deploy
@@ -145,18 +138,17 @@ Monitor:
 - garbage-collection object counts
 
 Add R2 lifecycle rules for abandoned key versions and benchmark prefixes only
-after retention requirements are defined.
+after retention requirements are defined. Configure the private auth bucket to
+expire objects below `auth-v1/sessions/` and `auth-v1/rate-limits/` after the
+maximum operational retention period:
 
-## Public-scope direct reads
-
-R2 custom domains, temporary credentials, and presigned URLs remain available
-for public or explicitly non-revocable direct-read scopes. Keep envelope
-encryption for private data even when the transport path is authenticated.
+```powershell
+npx wrangler r2 bucket lifecycle set <auth-bucket-name> `
+  --file deploy\cloudflare\auth-lifecycle.example.json
+```
 
 ## References
 
 - [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
 - [Use R2 from Workers](https://developers.cloudflare.com/r2/api/workers/workers-api-usage/)
-- [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/)
-- [R2 presigned URLs and temporary credentials](https://developers.cloudflare.com/r2/api/s3/presigned-urls/)
 - [Workers static asset bindings](https://developers.cloudflare.com/workers/static-assets/binding/)

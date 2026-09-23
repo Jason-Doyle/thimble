@@ -33,7 +33,16 @@ export type BrowserCacheMetrics = {
   memoryEntries: number;
   memoryBytes: number;
   evictions: number;
+  persistentErrors: number;
 };
+
+export interface PersistentObjectCache {
+  get(key: string): Promise<CachedJsonObject | null>;
+  set(entry: CachedJsonObject): Promise<void>;
+  delete(key: string): Promise<void>;
+  clear(): Promise<void>;
+  destroy(): Promise<void>;
+}
 
 export class MemoryObjectCache {
   private readonly entries = new Map<
@@ -112,7 +121,7 @@ export class MemoryObjectCache {
   }
 }
 
-export class IndexedDbObjectCache {
+export class IndexedDbObjectCache implements PersistentObjectCache {
   private databasePromise: Promise<IDBDatabase> | undefined;
   private deviceKeyPromise: Promise<CryptoKey> | undefined;
 
@@ -276,7 +285,10 @@ export class IndexedDbObjectCache {
     this.deviceKeyPromise ??= withCacheKeyLock(
       `${this.databaseName}:${this.deviceKeyId()}`,
       () => this.loadOrCreateDeviceKey(database),
-    );
+    ).catch((error) => {
+      this.deviceKeyPromise = undefined;
+      throw error;
+    });
     return this.deviceKeyPromise;
   }
 
@@ -301,12 +313,33 @@ export class IndexedDbObjectCache {
       ["encrypt", "decrypt"],
     );
     const transaction = database.transaction("keys", "readwrite");
-    transaction.objectStore("keys").put({
+    const request = transaction.objectStore("keys").add({
       keyId: this.deviceKeyId(),
       key,
     } satisfies PersistedDeviceKey);
-    await transactionToPromise(transaction);
-    return key;
+    try {
+      await requestToPromise(request);
+      await transactionToPromise(transaction);
+      return key;
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        error.name === "ConstraintError"
+      ) {
+        const winner = await requestToPromise<
+          PersistedDeviceKey | undefined
+        >(
+          database
+            .transaction("keys", "readonly")
+            .objectStore("keys")
+            .get(this.deviceKeyId()),
+        );
+        if (winner) {
+          return winner.key;
+        }
+      }
+      throw error;
+    }
   }
 
   private deviceKeyId(): string {
@@ -320,10 +353,12 @@ export class TieredObjectCache {
   private indexedDbHits = 0;
   private misses = 0;
   private writes = 0;
+  private persistentErrors = 0;
+  private persistentAvailable = true;
 
   constructor(
     private readonly memory: MemoryObjectCache,
-    private readonly persistent: IndexedDbObjectCache,
+    private readonly persistent: PersistentObjectCache,
     policy: CachePolicy = "content",
   ) {
     this.policy = policy;
@@ -349,7 +384,14 @@ export class TieredObjectCache {
       return memoryEntry;
     }
 
-    const persisted = await this.persistent.get(key);
+    let persisted: CachedJsonObject | null = null;
+    if (this.persistentAvailable) {
+      try {
+        persisted = await this.persistent.get(key);
+      } catch {
+        this.disablePersistent();
+      }
+    }
     if (persisted && this.isCacheable(persisted)) {
       this.indexedDbHits += 1;
       this.memory.set(persisted);
@@ -366,12 +408,24 @@ export class TieredObjectCache {
     }
     this.writes += 1;
     this.memory.set(entry);
-    await this.persistent.set(entry);
+    if (this.persistentAvailable) {
+      try {
+        await this.persistent.set(entry);
+      } catch {
+        this.disablePersistent();
+      }
+    }
   }
 
   async delete(key: string): Promise<void> {
     this.memory.delete(key);
-    await this.persistent.delete(key);
+    if (this.persistentAvailable) {
+      try {
+        await this.persistent.delete(key);
+      } catch {
+        this.disablePersistent();
+      }
+    }
   }
 
   clearMemory(): void {
@@ -380,12 +434,23 @@ export class TieredObjectCache {
 
   async clearAll(): Promise<void> {
     this.memory.clear();
-    await this.persistent.clear();
+    if (this.persistentAvailable) {
+      try {
+        await this.persistent.clear();
+      } catch {
+        this.disablePersistent();
+      }
+    }
   }
 
   async destroy(): Promise<void> {
     this.memory.clear();
-    await this.persistent.destroy();
+    try {
+      await this.persistent.destroy();
+    } catch (error) {
+      this.disablePersistent();
+      throw error;
+    }
   }
 
   resetMetrics(): void {
@@ -393,6 +458,7 @@ export class TieredObjectCache {
     this.indexedDbHits = 0;
     this.misses = 0;
     this.writes = 0;
+    this.persistentErrors = 0;
   }
 
   metrics(): BrowserCacheMetrics {
@@ -406,6 +472,7 @@ export class TieredObjectCache {
       memoryEntries: memory.entries,
       memoryBytes: memory.bytes,
       evictions: memory.evictions,
+      persistentErrors: this.persistentErrors,
     };
   }
 
@@ -417,6 +484,11 @@ export class TieredObjectCache {
       return true;
     }
     return isLocationEntry(entry);
+  }
+
+  private disablePersistent(): void {
+    this.persistentErrors += 1;
+    this.persistentAvailable = false;
   }
 }
 

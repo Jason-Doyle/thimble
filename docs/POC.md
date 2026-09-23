@@ -196,10 +196,11 @@ unproven claims, and stop/go thresholds.
 
 The harness does not prove:
 
-- production authentication
+- production authentication behaviour under real traffic
 - automated key rotation
 - crash-safe concurrent garbage collection
 - cross-collection transactions
+- document deletion and retention semantics
 - search or analytics
 - cost or latency superiority over managed databases
 

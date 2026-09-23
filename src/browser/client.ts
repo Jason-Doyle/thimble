@@ -41,6 +41,7 @@ export class ThimbleClient {
   private missing = 0;
   private offlineFallbacks = 0;
   private active = true;
+  private lifecycleGeneration = 0;
   private readonly channel: BroadcastChannel | null;
 
   constructor(
@@ -54,7 +55,7 @@ export class ThimbleClient {
       keyExpiresAt?: string;
       channelName?: string;
       fetchImplementation?: typeof fetch;
-      onLogout?: () => void;
+      onLogout?: (error?: unknown) => void;
     },
   ) {
     this.channel =
@@ -66,9 +67,13 @@ export class ThimbleClient {
     if (this.channel) {
       this.channel.onmessage = (event: MessageEvent<unknown>) => {
         if (isReadBundle(event.data)) {
-          void this.applyBundle(event.data, false);
+          void this.applyBundle(
+            event.data,
+            false,
+            this.lifecycleGeneration,
+          );
         } else if (isLogoutMessage(event.data)) {
-          void this.handleLogout();
+          void this.handleLogout().catch(() => undefined);
         }
       };
     }
@@ -76,10 +81,10 @@ export class ThimbleClient {
       const delay =
         new Date(options.keyExpiresAt).getTime() - Date.now();
       if (delay <= 0) {
-        void this.handleLogout();
+        void this.handleLogout().catch(() => undefined);
       } else {
         setTimeout(
-          () => void this.handleLogout(),
+          () => void this.handleLogout().catch(() => undefined),
           Math.min(delay, 2_147_483_647),
         );
       }
@@ -94,17 +99,19 @@ export class ThimbleClient {
     collection: string,
     id: string,
   ): Promise<JsonDocument | null> {
-    this.requireActive();
-    const head = await this.readHead(collection);
+    const generation = this.currentGeneration();
+    const head = await this.readHead(collection, generation);
     if (head.rootHash === null) {
       return null;
     }
 
     const [first, second] = triePathFromHash(await hashId(id));
+    this.assertGeneration(generation);
     const root = await this.readNode<TrieRootNode>(
       collection,
       head.rootHash,
       "root",
+      generation,
     );
     const branchHash = root.children[first];
     if (!branchHash) {
@@ -114,6 +121,7 @@ export class ThimbleClient {
       collection,
       branchHash,
       "branch",
+      generation,
     );
     const leafHash = branch.children[second];
     if (!leafHash) {
@@ -123,13 +131,15 @@ export class ThimbleClient {
       collection,
       leafHash,
       "leaf",
+      generation,
     );
+    this.assertGeneration(generation);
     return ownValue(leaf.documents, id) ?? null;
   }
 
   async scan(collection: string): Promise<JsonDocument[]> {
-    this.requireActive();
-    const head = await this.readHead(collection);
+    const generation = this.currentGeneration();
+    const head = await this.readHead(collection, generation);
     if (head.rootHash === null) {
       return [];
     }
@@ -137,6 +147,7 @@ export class ThimbleClient {
       collection,
       head.rootHash,
       "root",
+      generation,
     );
     const branches = await Promise.all(
       Object.values(root.children).map((hash) =>
@@ -144,6 +155,7 @@ export class ThimbleClient {
           collection,
           hash,
           "branch",
+          generation,
         ),
       ),
     );
@@ -156,9 +168,15 @@ export class ThimbleClient {
     ];
     const leaves = await Promise.all(
       leafHashes.map((hash) =>
-        this.readNode<TrieLeafNode>(collection, hash, "leaf"),
+        this.readNode<TrieLeafNode>(
+          collection,
+          hash,
+          "leaf",
+          generation,
+        ),
       ),
     );
+    this.assertGeneration(generation);
     return leaves
       .flatMap((leaf) => Object.values(leaf.documents))
       .sort((left, right) => left.id.localeCompare(right.id));
@@ -170,6 +188,7 @@ export class ThimbleClient {
     document: JsonDocument,
   ): Promise<TrieReadBundle> {
     this.requireActive();
+    const generation = this.lifecycleGeneration;
     const baseUrl = this.options.writeBaseUrl ?? "";
     const fetchImplementation =
       this.options.fetchImplementation ?? fetch;
@@ -197,27 +216,56 @@ export class ThimbleClient {
       );
     }
     const bundle = (await response.json()) as TrieReadBundle;
-    await this.applyBundle(bundle, true);
+    if (!this.active || generation !== this.lifecycleGeneration) {
+      throw new Error("ThimbleDB client is logged out");
+    }
+    await this.applyBundle(bundle, true, generation);
     return bundle;
   }
 
   async applyBundle(
     bundle: TrieReadBundle,
     broadcast = false,
+    generation = this.lifecycleGeneration,
   ): Promise<void> {
-    const now = Date.now();
-    await Promise.all(
-      bundle.objects.map((object) =>
-        this.options.cache.set({
-          key: object.key,
-          etag: object.etag,
-          value: object.value,
-          cachedAt: now,
-          checkedAt: now,
-          immutable: !object.key.endsWith("/HEAD.json"),
-        }),
-      ),
+    this.requireActive();
+    if (generation !== this.lifecycleGeneration) {
+      return;
+    }
+    const head = bundle.objects.find((object) =>
+      object.key.endsWith("/HEAD.json"),
     );
+    await withBrowserLock(this.lifecycleLockName(), async () => {
+      if (!this.active || generation !== this.lifecycleGeneration) {
+        return;
+      }
+      if (head) {
+        const cached = await this.options.cache.get(head.key);
+        const cachedRevision = cached
+          ? revisionFromValue(cached.value)
+          : -1;
+        const incomingRevision = revisionFromValue(head.value);
+        if (cachedRevision >= incomingRevision) {
+          return;
+        }
+      }
+      const now = Date.now();
+      await Promise.all(
+        bundle.objects.map((object) =>
+          this.options.cache.set({
+            key: object.key,
+            etag: object.etag,
+            value: object.value,
+            cachedAt: now,
+            checkedAt: now,
+            immutable: !object.key.endsWith("/HEAD.json"),
+          }),
+        ),
+      );
+    });
+    if (!this.active || generation !== this.lifecycleGeneration) {
+      return;
+    }
     if (broadcast) {
       this.channel?.postMessage(bundle);
     }
@@ -264,11 +312,15 @@ export class ThimbleClient {
     this.channel?.close();
   }
 
-  private async readHead(collection: string): Promise<TrieHead> {
-    this.requireActive();
+  private async readHead(
+    collection: string,
+    generation: number,
+  ): Promise<TrieHead> {
+    this.assertGeneration(generation);
     const key = trieHeadKey(collection);
     return withBrowserLock(`thimbledb:${key}`, async () => {
       const cached = await this.options.cache.get(key);
+      this.assertGeneration(generation);
       const now = Date.now();
       if (
         cached &&
@@ -283,25 +335,30 @@ export class ThimbleClient {
       } catch (error) {
         if (cached && this.active) {
           this.offlineFallbacks += 1;
+          this.assertGeneration(generation);
           return asHead(cached.value);
         }
         throw error;
       }
       if (remote.status === "not-modified" && cached) {
         const refreshed = { ...cached, checkedAt: now };
-        await this.options.cache.set(refreshed);
+        await this.cacheSetIfActive(refreshed, generation);
+        this.assertGeneration(generation);
         return asHead(refreshed.value);
       }
       if (remote.status === "missing") {
+        this.assertGeneration(generation);
         return { revision: 0, rootHash: null };
       }
       if (remote.status !== "found") {
         throw new Error(`Cannot resolve HEAD for ${collection}`);
       }
 
-      await this.options.cache.set(
+      await this.cacheSetIfActive(
         cacheEntryFromRemote(remote, false),
+        generation,
       );
+      this.assertGeneration(generation);
       return asHead(remote.value);
     });
   }
@@ -310,21 +367,26 @@ export class ThimbleClient {
     collection: string,
     hash: string,
     expectedKind: T["kind"],
+    generation: number,
   ): Promise<T> {
-    this.requireActive();
+    this.assertGeneration(generation);
     const key = trieNodeKey(collection, hash);
     const cached = await this.options.cache.get(key);
+    this.assertGeneration(generation);
     if (cached) {
       return asNode<T>(cached.value, expectedKind);
     }
 
     const remote = await this.readRemote(key);
+    this.assertGeneration(generation);
     if (remote.status !== "found") {
       throw new Error(`Immutable node ${key} is unavailable`);
     }
-    await this.options.cache.set(
+    await this.cacheSetIfActive(
       cacheEntryFromRemote(remote, true),
+      generation,
     );
+    this.assertGeneration(generation);
     return asNode<T>(remote.value, expectedKind);
   }
 
@@ -333,12 +395,21 @@ export class ThimbleClient {
       return;
     }
     this.active = false;
-    await withBrowserLock(
-      `thimbledb:logout:${this.options.scopeId ?? "default"}`,
-      () => this.options.cache.destroy(),
-    );
+    this.lifecycleGeneration += 1;
+    let failure: unknown;
+    try {
+      await withBrowserLock(
+        this.lifecycleLockName(),
+        () => this.options.cache.destroy(),
+      );
+    } catch (error) {
+      failure = error;
+    }
     this.channel?.close();
-    this.options.onLogout?.();
+    this.options.onLogout?.(failure);
+    if (failure) {
+      throw failure;
+    }
   }
 
   private requireActive(): void {
@@ -346,11 +417,38 @@ export class ThimbleClient {
       this.options.keyExpiresAt &&
       new Date(this.options.keyExpiresAt).getTime() <= Date.now()
     ) {
-      void this.handleLogout();
+      void this.handleLogout().catch(() => undefined);
     }
     if (!this.active) {
       throw new Error("ThimbleDB client is logged out");
     }
+  }
+
+  private currentGeneration(): number {
+    this.requireActive();
+    return this.lifecycleGeneration;
+  }
+
+  private assertGeneration(generation: number): void {
+    this.requireActive();
+    if (generation !== this.lifecycleGeneration) {
+      throw new Error("ThimbleDB client is logged out");
+    }
+  }
+
+  private lifecycleLockName(): string {
+    return `thimbledb:lifecycle:${this.options.scopeId ?? "default"}`;
+  }
+
+  private cacheSetIfActive(
+    entry: CachedJsonObject,
+    generation: number,
+  ): Promise<void> {
+    return withBrowserLock(this.lifecycleLockName(), async () => {
+      this.assertGeneration(generation);
+      await this.options.cache.set(entry);
+      this.assertGeneration(generation);
+    });
   }
 
   private async readRemote(
@@ -368,6 +466,15 @@ export class ThimbleClient {
     }
     return result;
   }
+}
+
+function revisionFromValue(value: JsonValue): number {
+  return typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof value.revision === "number"
+    ? value.revision
+    : -1;
 }
 
 function cacheEntryFromRemote(

@@ -33,8 +33,22 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Install browser test runtimes
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Test browsers
+        run: npm run test:e2e
+
       - name: Build browser, Node, and Worker
         run: npm run build
 
+      - name: Verify package exports
+        run: |
+          npm pack --dry-run
+          node -e "Promise.all([import('./dist/package/index.js'), import('./dist/package/auth/index.js')]).then(([core, auth]) => { if (!core.ThimbleClient || !core.encodeEnvelope || !auth.PasswordHasher || !auth.OidcIdentityAdapter) process.exit(1) })"
+
       - name: Build container
         run: docker build --tag thimbledb:ci .
+
+      - name: Build AWS Lambda container
+        run: docker build --file Dockerfile.aws --tag thimbledb-aws:ci .

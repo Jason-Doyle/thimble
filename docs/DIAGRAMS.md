@@ -57,8 +57,7 @@ flowchart LR
   WriteCreds --> Commit
 ```
 
-Private reads require both a current session grant and the scope key. Public
-scopes can optionally use a direct provider URL.
+Reads require both a current session grant and the relevant scope key.
 
 ## Read sequence
 
@@ -194,7 +193,6 @@ flowchart LR
   R2Binding["R2 data binding<br/>writes and maintenance"]
   AuthBinding["Private R2 auth binding<br/>users + sessions + rate records"]
   ReadBroker["Worker object broker<br/>private encrypted reads"]
-  PublicDomain["Optional R2 custom domain<br/>public scopes"]
   R2["R2 bucket"]
   AuthR2["Private auth R2 bucket"]
   Secrets["Worker secrets"]
@@ -207,13 +205,11 @@ flowchart LR
   ReadBroker --> Worker
   R2Binding --> R2
   AuthBinding --> AuthR2
-  PublicDomain -.-> R2
   Secrets --> Worker
 ```
 
-Cloudflare is the reference implementation because the Worker and R2 binding
-remove server management. Private reads use the Worker broker; public scopes
-can use an R2 custom domain.
+Cloudflare is the reference implementation because the Worker and R2 bindings
+remove server management while keeping all reads behind scope authorisation.
 
 ## Provider boundary comparison
 
@@ -238,7 +234,7 @@ flowchart TB
   Azure --> Blob["Data and auth Blob containers"]
 
   AWS --> Lambda["Lambda container authority"]
-  AWS --> S3["Data and auth S3 buckets"]
+  AWS --> S3["Private data and auth S3 buckets"]
 ```
 
 Only provider credentials, bindings, and read-authorisation mechanisms change.

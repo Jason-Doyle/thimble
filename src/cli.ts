@@ -41,11 +41,17 @@ const factories: EngineFactory[] = [
   },
   {
     name: "append-log-snapshot",
-    create: (store) => new LogSnapshotEngine(store),
+    create: (store) => new LogSnapshotEngine(store, 80, true),
   },
   {
     name: "content-addressed-trie",
-    create: (store) => new ContentAddressedTrieEngine(store),
+    create: (store) =>
+      new ContentAddressedTrieEngine(
+        store,
+        40,
+        undefined,
+        true,
+      ),
   },
 ];
 

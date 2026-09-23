@@ -67,6 +67,7 @@ export type ExternalIdentity = {
   subject: string;
   tenantId?: string;
   roles: string[];
+  scopes: string[];
   displayName?: string;
 };
 

@@ -14,6 +14,7 @@ export class EnvelopeObjectStore implements ObjectStore {
     private readonly delegate: ObjectStore,
     private readonly envelope: EnvelopeEncodeOptions & {
       objectKeyPrefix?: string;
+      decryptionKeys?: ReadonlyMap<string, CryptoKey>;
     },
   ) {}
 
@@ -27,10 +28,14 @@ export class EnvelopeObjectStore implements ObjectStore {
       bytes: await decodeEnvelope(
         object.bytes,
         this.envelope.key && this.envelope.keyId
-          ? (keyId) =>
-              keyId === this.envelope.keyId
-                ? this.envelope.key!
-                : null
+          ? (keyId) => {
+              if (keyId === this.envelope.keyId) {
+                return this.envelope.key!;
+              }
+              return (
+                this.envelope.decryptionKeys?.get(keyId) ?? null
+              );
+            }
           : undefined,
         this.additionalData(key),
       ),

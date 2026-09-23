@@ -3,8 +3,8 @@
 This document states what ThimbleDB protects, what it does not protect, and
 which parts remain demonstration code.
 
-See [System diagrams](DIAGRAMS.md#trust-boundaries) for the browser, public
-read, authority, and platform-secret boundaries.
+See [System diagrams](DIAGRAMS.md#trust-boundaries) for the browser, read
+broker, authority, and platform-secret boundaries.
 
 ## Assets
 
@@ -21,7 +21,7 @@ It does not hide:
 - approximate object sizes
 - request timing and frequency
 - predictable scope names unless the deployment makes them opaque
-- ciphertext availability where a public encrypted read path is used
+- ciphertext and metadata from the storage provider or an authorised broker
 
 ## Key hierarchy
 
@@ -103,7 +103,8 @@ scopes the authority allows.
 
 Local accounts use Argon2id and an authority-only encrypted auth store.
 External identities use a validated OIDC access token. Both create opaque,
-revocable sessions whose server-side records contain current scope grants.
+revocable sessions. The authority reloads current user claims and recalculates
+scope grants when it authenticates a request.
 
 See [Authentication and identity](AUTHENTICATION.md).
 
@@ -123,16 +124,12 @@ High-risk scope removal should rotate the scope key and rewrite current live
 objects. Historical encrypted objects should be removed by lifecycle or
 garbage-collection policy.
 
-## Public direct storage
+## Brokered storage
 
-Private local-auth scopes use the authenticated object broker. Public scopes
-can expose R2 objects through a custom domain because no private key is
-required. A deliberately non-revocable encrypted direct-read scope remains
-possible, but it must not be used where logout or account disablement must stop
-future reads.
-
-This does not prevent request abuse. Use Cloudflare rate limiting, cache rules,
-WAF controls, and object lifecycle policies to control cost and traffic.
+All shipped browser reads use the authenticated object broker. Data and auth
+buckets remain private. This keeps session revocation effective for future
+object retrieval and avoids treating ciphertext exposure as an access-control
+boundary.
 
 ## Secret handling
 
