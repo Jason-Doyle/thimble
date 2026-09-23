@@ -136,7 +136,6 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |
 | [Security](docs/SECURITY.md) | Threat model, encryption, keys, and revocation |
 | [Authentication](docs/AUTHENTICATION.md) | Local accounts, sessions, scope grants, and Entra |
-| [Authentication security review](docs/AUTHENTICATION-SECURITY-REVIEW.md) | Findings, remediation, and verified controls |
 | [Protocol](docs/PROTOCOL.md) | Binary envelope and object layout |
 | [Proof of concept](docs/POC.md) | Browser harness, sample application, and benchmark usage |
 | [Benchmarks](docs/BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
@@ -145,7 +144,6 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [Azure deployment](docs/DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
 | [AWS deployment](docs/DEPLOYMENT-AWS.md) | Lambda container, S3, and CloudFront |
 | [Operations](docs/OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
-| [Release strategy](docs/RELEASE-STRATEGY.md) | npm packages and other distribution vectors |
 
 ## Project status
 

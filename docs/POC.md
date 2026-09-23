@@ -4,12 +4,6 @@ This document covers the browser harness, sample store, local provider, and
 storage-layout benchmark. It is evaluation material rather than the product
 overview.
 
-## Name
-
-`VibeDB` was rejected because that name is already used on npm, PyPI, GitHub,
-and Devpost. `ThimbleDB` had no identified package, database, or product
-collision when this POC was named.
-
 ## Run the browser harness
 
 ```powershell
