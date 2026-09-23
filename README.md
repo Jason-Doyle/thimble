@@ -6,7 +6,8 @@ through memory and encrypted IndexedDB caches. Authenticated writes and
 decryption-key grants go through a small Worker authority.
 
 The same protocol also runs against Azure Blob Storage and Amazon S3 as
-secondary deployment options.
+secondary deployment options. A local filesystem provider supports development
+and single-process use through the same ObjectStore abstraction.
 
 `VibeDB` was rejected because that name is already used on npm, PyPI, GitHub,
 and Devpost. `ThimbleDB` had no identified package, database, or product
@@ -39,6 +40,8 @@ WASM module is shipped.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [System diagrams](docs/DIAGRAMS.md)
+- [Storage providers](docs/STORAGE-PROVIDERS.md)
 - [Security model](docs/SECURITY.md)
 - [Object protocol](docs/PROTOCOL.md)
 - [Benchmarks and raw evidence](docs/BENCHMARKS.md)

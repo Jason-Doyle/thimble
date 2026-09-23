@@ -80,6 +80,10 @@ Provider mappings:
 | Create if absent | `If-None-Match: *` | `IfNoneMatch: *` | `etagDoesNotMatch: *` |
 | Compare and swap | `If-Match: <etag>` | `IfMatch: <etag>` | `etagMatches: <etag>` |
 
+The local adapter implements the same contract with an in-process per-key
+lock. It is a development provider, not a cross-process coordination
+mechanism.
+
 ## Cache update bundle
 
 A successful write response contains:

@@ -3,6 +3,8 @@
 | Document | Purpose |
 | --- | --- |
 | [Architecture](ARCHITECTURE.md) | Components, data flow, scopes, and provider model |
+| [System diagrams](DIAGRAMS.md) | Trust boundaries, sequences, keys, scopes, and providers |
+| [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |
 | [Benchmarks](BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |

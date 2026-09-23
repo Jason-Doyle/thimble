@@ -62,9 +62,11 @@ describe("DemoSessionAuthorizer", () => {
       { headers: {} } as IncomingMessage,
       { setHeader } as unknown as ServerResponse,
     );
-    const cookie = String(setHeader.mock.calls[0]?.[1])
-      .split(";")[0]
-      ?.replace(/.$/, "x");
+    const original = String(setHeader.mock.calls[0]?.[1])
+      .split(";")[0]!;
+    const [nameAndPayload, signature] = original.split(".");
+    const replacement = signature?.startsWith("a") ? "b" : "a";
+    const cookie = `${nameAndPayload}.${replacement}${signature?.slice(1) ?? ""}`;
     const request = {
       headers: { cookie },
     } as IncomingMessage;

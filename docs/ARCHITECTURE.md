@@ -2,7 +2,13 @@
 
 ThimbleDB is a client-read, server-write database for small web
 applications. Cloudflare Workers and R2 are the reference deployment. Azure
-Blob Storage and Amazon S3 are compatibility targets.
+Blob Storage, Amazon S3, and a local filesystem adapter implement the same
+storage abstraction.
+
+See [System diagrams](DIAGRAMS.md) for trust boundaries, request sequences,
+scope separation, and provider layouts.
+See [Storage providers](STORAGE-PROVIDERS.md) for the provider contract and
+conformance requirements.
 
 ## Reference path
 
@@ -97,13 +103,19 @@ Logout-time key rotation requires cross-tab coordination.
 
 ## Provider model
 
+The database engine depends on an ObjectStore interface rather than a cloud
+SDK. Provider adapters supply bytes, ETags, conditional writes, deletion, and
+prefix listing.
+
 | Provider | Write authority | Durable storage | Browser read pattern |
 | --- | --- | --- | --- |
 | Cloudflare | Worker | R2 | Encrypted custom-domain objects, or temporary credentials/presigned URLs |
+| Local | Node process | Local filesystem | Same-origin `/objects` endpoint |
 | Azure | Container App or Node service | Blob Storage | Read-only user-delegation or container SAS |
 | AWS | App Runner or another Node host | S3 | CloudFront signed access, Cognito temporary credentials, or a read broker |
 
 The stored envelope and trie protocol do not change between providers.
+Cloudflare is preferred, not required.
 
 ## Current boundaries
 

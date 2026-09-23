@@ -3,6 +3,9 @@
 This document states what ThimbleDB protects, what it does not protect, and
 which parts remain demonstration code.
 
+See [System diagrams](DIAGRAMS.md#trust-boundaries) for the browser, public
+read, authority, and platform-secret boundaries.
+
 ## Assets
 
 ThimbleDB protects:
