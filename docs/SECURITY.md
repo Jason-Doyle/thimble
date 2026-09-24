@@ -1,7 +1,7 @@
 # Security model
 
 This document states what ThimbleDB protects, what it does not protect, and
-which parts remain demonstration code.
+which responsibilities remain with the application and identity provider.
 
 See [System diagrams](DIAGRAMS.md#trust-boundaries) for the browser, read
 broker, authority, and platform-secret boundaries.

@@ -12,8 +12,8 @@
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |
 | [Versioning](VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
 | [Public API](PUBLIC-API.md) | Stable package exports and authority integration |
-| [Proof of concept](POC.md) | Browser harness, sample store, and benchmark usage |
-| [Benchmarks](BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
+| [Evaluation harness](EVALUATION.md) | Browser harness, sample store, and benchmark usage |
+| [Benchmarks](BENCHMARKS.md) | R2 browser methodology, results, and limitations |
 | [Tradeoffs](TRADEOFFS.md) | Proven, expected, and unsuitable use cases |
 | [Cloudflare deployment](DEPLOYMENT-CLOUDFLARE.md) | Reference Worker and R2 deployment |
 | [Azure deployment](DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |

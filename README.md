@@ -8,7 +8,7 @@
 
 # ThimbleDB
 
-ThimbleDB is an experimental Cloudflare-first database for small web
+ThimbleDB is a Cloudflare-first database for small, read-heavy web
 applications. Browsers read encrypted immutable objects through an
 authenticated storage broker and retain them in memory and IndexedDB caches.
 Writes and key grants use the same small authority.
@@ -71,7 +71,7 @@ flowchart TB
 The stored object and encryption protocol stays the same across providers.
 Only bindings, credentials, and browser read authorisation differ.
 
-## Current capabilities
+## Features
 
 - framework-free browser client
 - memory and encrypted IndexedDB caches
@@ -115,7 +115,7 @@ Use the browser/core API from `thimbledb`, external identity primitives from
 dependency on `thimbledb.com`; consumers supply their own domain, storage, OIDC
 application, and secrets.
 
-To run this repository:
+To run a source checkout:
 
 ```powershell
 npm install
@@ -131,8 +131,8 @@ See [Authentication](docs/AUTHENTICATION.md).
 The local provider is intended for development and one Node process. It is not
 a multi-process coordination backend.
 
-For the evaluation harness, sample store, and benchmark commands, see
-[Proof of concept](docs/POC.md).
+For the browser harness, sample store, and benchmark commands, see
+[Evaluation harness](docs/EVALUATION.md).
 
 ## Cloudflare reference deployment
 
@@ -145,16 +145,15 @@ The reference deployment uses:
 
 Start with [Deploy to Cloudflare](docs/DEPLOYMENT-CLOUDFLARE.md).
 
-## Evidence status
+## Performance characteristics
 
-The repository includes raw Azure Standard Blob Storage measurements and live
-multi-region browser results against `db.thimbledb.com`:
+Published evidence includes live multi-region R2 browser results against
+`db.thimbledb.com`:
 
-- `evidence/azure-standard-small.json`
 - `evidence/r2-browser-multiregion-trie-2026-09-24.json`
 - `evidence/r2-browser-multiregion-snapshot-2026-09-24.json`
 
-Measured so far:
+The measurements show:
 
 - full-content caching dominates repeated-read latency
 - location-only caching greatly reduces trie point-read bytes
@@ -168,9 +167,10 @@ Measured so far:
 - cold reads and external session creation still miss the original latency
   targets and remain documented limitations
 
-These results do not yet prove better cost or latency than D1, Durable Objects,
-Turso, Firestore, or another managed database. The remaining evidence plan and
-stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
+These results do not establish better cost or latency than D1, Durable Objects,
+Turso, Firestore, or another managed database. See
+[Benchmarks](docs/BENCHMARKS.md) for methods, raw artifacts, limitations, and
+layout decision thresholds.
 
 ## Documentation
 
@@ -186,21 +186,22 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [Protocol](docs/PROTOCOL.md) | Binary envelope and object layout |
 | [Versioning](docs/VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
 | [Public API](docs/PUBLIC-API.md) | Stable package exports and authority integration |
-| [Proof of concept](docs/POC.md) | Browser harness, sample application, and benchmark usage |
-| [Benchmarks](docs/BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
+| [Evaluation harness](docs/EVALUATION.md) | Browser harness, sample application, and benchmark usage |
+| [Benchmarks](docs/BENCHMARKS.md) | R2 browser methodology, results, and limitations |
 | [Tradeoffs](docs/TRADEOFFS.md) | Proven, expected, and unsuitable use cases |
 | [Cloudflare deployment](docs/DEPLOYMENT-CLOUDFLARE.md) | Worker and R2 reference deployment |
 | [Azure deployment](docs/DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
 | [AWS deployment](docs/DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
 | [Operations](docs/OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
 
-## Release status
+## When to use ThimbleDB
 
-Version 1.0 passes the repository's unit, cross-browser, package, container,
-deployment-template, live Cloudflare conformance, and regional browser checks.
-ThimbleDB now has a real Cloudflare/R2 reference deployment, external identity
-mapping and administration, retained deletion, adaptive collection layouts,
-multi-region browser evidence, Apache-2.0 licensing, and documented authority
-exports. The current evidence does not support claims of database-wide latency
-superiority: cold object reads and external session creation remain slower than
-the original stop/go targets.
+ThimbleDB is suited to small per-user or per-tenant datasets, catalogues,
+configuration, internal tools, and applications whose hot working set fits in
+browser storage.
+
+Choose another database for relational transactions, high-frequency shared
+counters, large cross-tenant queries, or strict immediate revocation. Warm
+cached reads are fast, but cold object reads and external session creation can
+take seconds from distant regions. Design the first-load experience with those
+limits in mind.

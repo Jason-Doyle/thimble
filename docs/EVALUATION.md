@@ -1,8 +1,7 @@
-# Proof of concept
+# Evaluation harness
 
 This document covers the browser harness, sample store, local provider, and
-storage-layout benchmark. It is evaluation material rather than the product
-overview.
+storage-layout benchmark.
 
 ## Run the browser harness
 
@@ -31,6 +30,9 @@ The UI can:
 - run 100 hot reads or a collection scan
 - clear memory separately from persistent cache
 - mutate product stock through the authority
+- delete and restore retained documents
+- link external identities and use administrator controls
+- compare trie and snapshot collection behaviour
 - display remote reads, transferred bytes, cache hits, ETag 304 responses,
   offline fallbacks, and retained memory
 
@@ -93,7 +95,7 @@ The deterministic store contains:
 The browser harness uses the same data generator as the storage-layout
 benchmark.
 
-## Azure authentication experiment
+## Use Azure in the harness
 
 For a browser test against Azure:
 
@@ -118,7 +120,7 @@ See [Deploy to Azure](DEPLOYMENT-AZURE.md) for the complete path.
 
 ## Storage-layout benchmark
 
-The original benchmark compares:
+The storage benchmark compares:
 
 | Engine | Storage model | Expected strength | Expected weakness |
 | --- | --- | --- | --- |
@@ -157,15 +159,6 @@ npm run benchmark:local
 npm run benchmark -- --provider local --profile small --latency-ms 8
 ```
 
-### Run against Azure
-
-```powershell
-$env:AZURE_STORAGE_CONNECTION_STRING = "<set locally>"
-$env:AZURE_STORAGE_CONTAINER = "object-db-poc"
-npm run benchmark -- --provider azure --profile small
-Remove-Item Env:AZURE_STORAGE_CONNECTION_STRING
-```
-
 ### Run against S3 or R2 through the S3 API
 
 ```powershell
@@ -186,25 +179,21 @@ npm run benchmark -- --provider s3 --profile small
 The benchmark uses the normal AWS credential chain. Do not put credentials in
 command arguments or source files.
 
-## Current evidence
+## Published evidence
 
-The raw Azure Standard artifact is
-`evidence/azure-standard-small.json`.
+Published benchmark artifacts cover live multi-region browser runs against the
+Cloudflare/R2 reference deployment.
 
 See [Benchmarks](BENCHMARKS.md) for the measured table, interpretation,
-unproven claims, and stop/go thresholds.
+limitations, and layout decision thresholds.
 
-## POC boundaries
+## What the harness does not model
 
-The harness does not prove:
+The harness does not model:
 
-- production authentication behaviour under real traffic
-- automated key rotation
-- crash-safe concurrent garbage collection
+- production-scale authentication traffic
+- sustained multi-region write contention
 - cross-collection transactions
-- document deletion and retention semantics
 - search or analytics
+- residential last-mile latency
 - cost or latency superiority over managed databases
-
-Those boundaries are intentional and documented so evaluation results are not
-presented as product claims.

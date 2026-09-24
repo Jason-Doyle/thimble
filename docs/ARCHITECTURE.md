@@ -118,7 +118,7 @@ prefix listing.
 The stored envelope, trie, and snapshot protocols do not change between providers.
 Cloudflare is preferred, not required.
 
-## Current boundaries
+## Boundaries
 
 - One HEAD serialises writes within a collection and scope.
 - Production engines retain old generations. Destructive garbage collection is

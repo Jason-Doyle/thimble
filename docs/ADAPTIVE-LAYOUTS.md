@@ -68,12 +68,13 @@ maintenance drops its entire retired prefix. Open browser clients periodically
 check the layout generation and reload before they can read or mutate through
 a retired layout.
 
-## Reference deployment decision
+## Example decision from measured R2 results
 
-The first multi-region production run used trie for the 128-product catalogue.
-Cold reads required four sequential broker requests and took 2.55-4.84 seconds
-from the tested Azure regions. The measured evidence therefore selected
-snapshot for `products` and `customers`. With a 10-second HEAD TTL, final warm
-product-read p95 was 1.6-8.3 ms across the three tested regions.
+A multi-region run used trie for a 128-product catalogue. Cold reads required
+four sequential broker requests and took 2.55-4.84 seconds from the tested
+regions. Switching `products` and `customers` to snapshots reduced product
+cold-read time by 29-53 percent. With a 10-second HEAD TTL, warm product-read
+p95 was 1.6-8.3 ms.
 
-This is a decision for the reference workload, not a universal rule.
+For a similar small, mostly idle catalogue, start with snapshot. Measure before
+using the same choice for a write-heavy or much larger collection.

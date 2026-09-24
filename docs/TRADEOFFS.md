@@ -1,6 +1,6 @@
 # Tradeoffs
 
-## Proven by the current POC
+## Verified behaviour
 
 - Browsers can read immutable object pages through the authority broker.
 - Memory and IndexedDB materially reduce repeated network reads.
@@ -15,7 +15,7 @@
 - Real R2 conditional writes, external sessions, retained deletion, and
   snapshot migration work on the `db.thimbledb.com` reference deployment.
 
-## Expected benefits that are not yet proven
+## Not established by the published evidence
 
 - Lower total cost than a managed database for real user workloads.
 - Better end-user latency than D1, Durable Objects, Turso, or Firestore.
@@ -56,8 +56,9 @@ Poor candidates:
 - workloads with strict immediate revocation
 - applications unable to defend their browser origin against XSS
 
-## Current recommendation
+## Recommended use
 
-Continue as an experimental Cloudflare-first project. Do not position it as a
-general database replacement. The next evidence should compare cost and
-end-user behaviour in a real small application against one managed database.
+Use ThimbleDB for small, mostly idle, read-heavy applications that benefit from
+encrypted browser caching and per-user or per-tenant storage scopes. Do not
+treat it as a general database replacement. Compare it with a managed database
+using the application's real workload before choosing a production data layer.

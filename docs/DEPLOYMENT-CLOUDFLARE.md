@@ -26,8 +26,8 @@ npm run build:client
 npm run build:worker
 ```
 
-The current dry-run Worker bundle is about 33.8 KB gzip. Record the compressed
-size during release checks.
+The version 1.0 Worker bundle is about 33.8 KB gzip. Track bundle growth before
+deploying an upgrade.
 
 ## 2. Authenticate Wrangler
 
@@ -101,7 +101,7 @@ application hostname.
 
 ## 7. Create secrets
 
-Generate independent values:
+Generate the deployment master key:
 
 ```powershell
 $masterKey = node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
@@ -132,10 +132,10 @@ npx wrangler deploy --config deploy\cloudflare\wrangler.local.jsonc
 7. Confirm a second HEAD request returns 304.
 8. Confirm the browser key is non-extractable.
 9. Confirm logout revokes the session and blocks brokered reads.
-
-The reference conformance run verified all nine checks, plus retained
-delete/restore, administrator user listing, maintenance-mode write blocking,
-and trie-to-snapshot migration.
+10. Delete and restore a test document.
+11. Confirm administrator user listing is restricted to `thimble.admin`.
+12. Enable maintenance mode in a non-production scope and verify writes return
+    `503 maintenance_mode`.
 
 ## 10. Operations
 

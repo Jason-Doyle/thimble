@@ -14,7 +14,7 @@ The Bicep template is `deploy/azure/main.bicep`.
 - Azure CLI
 - Bicep support in Azure CLI
 - a resource group
-- a pushed OCI image containing this repository's Dockerfile output
+- a pushed OCI image built from the supplied Dockerfile
 
 Build locally:
 
@@ -87,15 +87,15 @@ readable.
 - The Container App can seed and mutate data.
 - Direct browser reads cannot write or delete blobs.
 
-## Production improvements
+## Recommended production hardening
 
-The current Node provider uses a storage connection string. A production Azure
-adapter should use the Container App managed identity and Entra authorisation
-instead of Shared Key.
+The supplied Node adapter uses a storage connection string. Prefer Container
+App managed identity and Entra authorisation over Shared Key for a long-lived
+production deployment.
 
 Store master and session secrets in Key Vault and reference them from
-Container Apps. The current Bicep accepts secure parameters to keep the example
-complete but does not provision Key Vault.
+Container Apps. The Bicep template accepts secure parameters but does not
+provision Key Vault.
 
 The example disables source-IP rate limiting because Container Apps ingress
 does not provide a peer address that this implementation independently

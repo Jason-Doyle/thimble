@@ -204,7 +204,7 @@ OIDC_REQUIRED_SCOPE and/or OIDC_REQUIRED_ROLE
 
 The provider ID becomes the route segment used during session exchange.
 
-## Current API
+## HTTP API
 
 | Route | Authentication | Purpose |
 | --- | --- | --- |

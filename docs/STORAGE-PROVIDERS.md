@@ -40,7 +40,7 @@ multi-writer backend.
 | Local filesystem | Development and single-process use | In-process file adapter | Same-origin authenticated broker |
 | Azure Blob Storage | Supported secondary provider | Azure SDK and conditional blob writes | Authenticated authority broker |
 | Amazon S3 | Supported secondary provider | AWS SDK and IAM role | Authenticated authority broker |
-| S3-compatible storage | Experimental compatibility | S3 endpoint adapter | Provider-specific |
+| S3-compatible storage | Requires conformance testing | S3 endpoint adapter | Provider-specific |
 
 ## Cloudflare R2
 
@@ -66,19 +66,19 @@ The local provider stores object keys below `.thimble-data`. It is useful for:
 - offline demonstrations
 
 Its key locks exist only inside one Node process. Two independent processes can
-race and violate compare-and-swap semantics. Do not use the current local
-adapter for a multi-process or shared-network-filesystem deployment.
+race and violate compare-and-swap semantics. Do not use the local adapter for
+a multi-process or shared-network-filesystem deployment.
 
-A future durable local provider could use SQLite, OS file locks, or another
-transactional embedded store while preserving the ObjectStore interface.
+Use SQLite, OS file locks, or another transactional embedded store when a
+durable multi-process local provider is required.
 
 ## Azure Blob Storage
 
 Azure maps protocol conditions to `If-None-Match` and `If-Match`. Browser reads
 use the authority broker.
 
-The Node authority currently uses a connection string. Managed identity is the
-preferred production improvement.
+The supplied Node authority uses a connection string. Prefer managed identity
+for a long-lived production deployment.
 
 ## Amazon S3
 

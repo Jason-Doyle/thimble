@@ -36,19 +36,18 @@ The `npm run migrate:keys` command rewrites selected live collections under the
 current write key. Old objects are retained until an operator-approved offline
 cleanup.
 
-## v1 release evidence
+## Version 1.0
 
-The v1 candidate includes:
+Version 1.0 provides:
 
 - Apache-2.0 licensing
-- frozen documented package and authority exports
-- a real `db.thimbledb.com` Cloudflare Worker/R2 deployment
-- Entra-backed identity mapping and administration
+- stable documented package and authority exports
+- Node and Cloudflare authority implementations
+- Entra and generic OIDC identity mapping and administration
 - retained deletion and quiescent physical collection
 - explicit snapshot/trie recommendations and migration
-- raw browser evidence from North Europe, US East, and Southeast Asia
-- no unresolved high-severity correctness or security findings from the
-  release review
+- TDB1 read compatibility fixtures
 
-The evidence does not claim latency superiority. Cold reads and external
-session creation remain above the original stop/go targets.
+Performance is not part of the compatibility guarantee. Published R2 evidence
+shows fast warm cache reads, while cold reads and external session creation can
+take seconds from distant regions.

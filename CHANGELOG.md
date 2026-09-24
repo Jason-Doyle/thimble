@@ -6,6 +6,13 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 1.0.1 - 2026-09-24
+
+- Rewrote public documentation for application developers and operators.
+- Renamed the proof-of-concept guide to the evaluation harness.
+- Limited published benchmark documentation to live Cloudflare R2 browser
+  measurements.
+
 ## 1.0.0 - 2026-09-24
 
 - Added a typed package export surface for browser, protocol, trie, envelope,
@@ -36,4 +43,4 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## 0.1.0
 
-- Initial private research implementation and benchmark harness.
+- Initial storage-engine implementation and benchmark harness.
