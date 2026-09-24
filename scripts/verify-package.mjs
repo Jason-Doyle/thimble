@@ -105,17 +105,42 @@ try {
     `
       import { ThimbleClient } from "thimbledb";
       import { AuthService } from "thimbledb/auth";
-      import { createNodeAuthorityServer } from "thimbledb/authority/node";
-      import authority from "thimbledb/authority/cloudflare";
       import { LocalObjectStore } from "thimbledb/providers/local";
 
       void [
         ThimbleClient,
         AuthService,
-        createNodeAuthorityServer,
-        authority,
         LocalObjectStore,
       ];
+    `,
+  );
+  runTypeScript(consumer);
+
+  run(
+    [
+      "install",
+      "--save-dev",
+      "@types/node",
+      "@cloudflare/workers-types",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+    ],
+    consumer,
+  );
+  await assertMissing(
+    path.join(consumer, "node_modules", "@aws-sdk", "client-s3"),
+  );
+  await assertMissing(
+    path.join(consumer, "node_modules", "@azure", "storage-blob"),
+  );
+  await writeFile(
+    path.join(consumer, "authorities.ts"),
+    `
+      import { createNodeAuthorityServer } from "thimbledb/authority/node";
+      import authority from "thimbledb/authority/cloudflare";
+
+      void [createNodeAuthorityServer, authority];
     `,
   );
   runTypeScript(consumer);
