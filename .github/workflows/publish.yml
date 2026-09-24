@@ -1,0 +1,112 @@
+name: Publish npm package
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Verify release tag
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Release tag ${GITHUB_REF_NAME} does not match package version ${version}."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run check
+
+      - name: Test
+        run: npm test
+
+      - name: Build package
+        run: npm run build:package
+
+      - name: Verify package exports
+        run: |
+          node -e "Promise.all([import('./dist/package/index.js'), import('./dist/package/auth/index.js'), import('./dist/package/authority/node.js'), import('./dist/package/authority/cloudflare.js')]).then(([core, auth, nodeAuthority, cloudflareAuthority]) => { if (!core.ThimbleClient || !core.ImmutableSnapshotEngine || !core.recommendCollectionLayout || !auth.AuthService || !auth.OidcIdentityAdapter || !nodeAuthority.createNodeAuthorityServer || !cloudflareAuthority.createCloudflareAuthority) process.exit(1) })"
+
+      - name: Pack release artifact
+        run: |
+          mkdir .release
+          npm pack --pack-destination .release
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: .release/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Verify npm trusted-publishing support
+        shell: bash
+        run: |
+          npm_version="$(npm --version)"
+          node -e "const [major, minor, patch] = process.argv[1].split('.').map(Number); if (major < 11 || (major === 11 && minor < 5) || (major === 11 && minor === 5 && patch < 1)) { console.error('npm 11.5.1 or newer is required; found ' + process.argv[1]); process.exit(1) }" "${npm_version}"
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: .release
+
+      - name: Check registry version
+        id: registry
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if npm view "thimbledb@${version}" version >/dev/null 2>&1; then
+            echo "published=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "published=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Publish with npm trusted publishing
+        if: steps.registry.outputs.published != 'true'
+        shell: bash
+        run: npm publish "$(find .release -maxdepth 1 -name '*.tgz' -print -quit)" --access public
+
+      - name: Report existing version
+        if: steps.registry.outputs.published == 'true'
+        run: echo "Package version is already published; no registry change was made."

@@ -185,6 +185,7 @@ layout decision thresholds.
 | --- | --- |
 | [Quickstart](docs/QUICKSTART.md) | Package, authority, browser client, and verification setup |
 | [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
+| [npm publishing](docs/NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
 | [Use cases](docs/USE-CASES.md) | Fit criteria and application-specific guides |
 | [Architecture](docs/ARCHITECTURE.md) | Components, data flow, and scope model |
 | [System diagrams](docs/DIAGRAMS.md) | Trust boundaries, sequences, keys, and providers |
