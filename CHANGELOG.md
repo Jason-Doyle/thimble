@@ -6,6 +6,12 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 1.0.5 - 2026-09-24
+
+- Added an npm trusted-publishing workflow using GitHub Actions OIDC.
+- Added first-publish, trusted-publisher, token-restriction, and release
+  instructions.
+
 ## 1.0.4 - 2026-09-24
 
 - Removed the hosted reference domain from tracked documentation, benchmark
