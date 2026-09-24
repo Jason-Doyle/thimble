@@ -13,7 +13,7 @@
 - The same envelope, trie, and snapshot code bundles for Node and Cloudflare
   Workers.
 - Real R2 conditional writes, external sessions, retained deletion, and
-  snapshot migration work on the `db.thimbledb.com` reference deployment.
+  snapshot migration work on the tested Cloudflare reference deployment.
 
 ## Not established by the published evidence
 

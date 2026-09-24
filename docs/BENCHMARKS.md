@@ -25,8 +25,8 @@ evidence/r2-browser-multiregion-snapshot-2026-09-24.json
 ```
 
 Disposable Chromium 153 containers ran in North Europe, US East, and Southeast
-Asia against the real `https://db.thimbledb.com` Worker, private R2 buckets,
-and Entra session exchange.
+Asia against a private Worker custom domain, private R2 buckets, and Entra
+session exchange.
 
 Initial run, product trie, customer snapshot, one-second HEAD TTL:
 

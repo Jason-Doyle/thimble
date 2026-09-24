@@ -2,11 +2,6 @@
 
 Cloudflare Workers and R2 are the reference ThimbleDB deployment.
 
-The maintained reference instance is `https://db.thimbledb.com`. It uses
-private `thimbledb-data` and `thimbledb-auth` R2 buckets, Microsoft Entra,
-snapshot layouts for products and customers, a ten-second HEAD TTL, and the
-documented auth lifecycle rules.
-
 The design uses:
 
 - one Worker for static assets, writes, sessions, and scope-key grants
