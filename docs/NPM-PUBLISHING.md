@@ -60,7 +60,7 @@ unused write-capable npm automation tokens.
 1. Update `package.json`, `package-lock.json`, and `CHANGELOG.md` through a
    pull request.
 2. Merge only after the protected `verify` check and required review pass.
-3. Create a matching tag such as `v1.0.6`.
+3. Create a matching tag such as `v2.0.1`.
 4. Publish a GitHub release for that tag.
 5. The release event runs `publish.yml`.
 6. The workflow verifies that the tag matches the package version, runs

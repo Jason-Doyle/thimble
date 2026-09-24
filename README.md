@@ -109,6 +109,18 @@ Install the package:
 npm install thimbledb
 ```
 
+The base install includes the browser/core APIs, authentication, Cloudflare
+authority, local provider, and Node authority without cloud storage SDKs.
+Install only the Node storage adapter your deployment uses:
+
+```powershell
+# Azure Blob
+npm install @azure/storage-blob
+
+# Amazon S3 or R2 through the S3 API
+npm install @aws-sdk/client-s3
+```
+
 Use the browser/core API from `thimbledb`, external identity primitives from
 `thimbledb/auth`, and the complete endpoint authority from either
 `thimbledb/authority/node` or `thimbledb/authority/cloudflare`. Consumers

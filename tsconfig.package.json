@@ -13,6 +13,9 @@
     "src/index.ts",
     "src/auth/index.ts",
     "src/authority/node.ts",
-    "src/authority/cloudflare.ts"
+    "src/authority/cloudflare.ts",
+    "src/providers/local.ts",
+    "src/providers/azure.ts",
+    "src/providers/s3.ts"
   ]
 }
