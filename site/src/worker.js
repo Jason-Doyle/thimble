@@ -8,9 +8,14 @@ export default {
    */
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.hostname === `www.${apexHostname}`) {
+    if (
+      url.protocol !== "https:" ||
+      url.hostname === `www.${apexHostname}`
+    ) {
       url.protocol = "https:";
-      url.hostname = apexHostname;
+      if (url.hostname === `www.${apexHostname}`) {
+        url.hostname = apexHostname;
+      }
       url.port = "";
       return new Response(null, {
         status: permanentRedirectStatus,
@@ -65,6 +70,8 @@ function cacheControl(pathname, status) {
   }
   if (
     pathname === "/robots.txt" ||
+    pathname === "/llms.txt" ||
+    pathname === "/llms-full.txt" ||
     pathname === "/sitemap-index.xml" ||
     pathname.startsWith("/sitemap-")
   ) {
