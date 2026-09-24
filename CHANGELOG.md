@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+- Corrected the npm publishing guide to describe signed provenance for the
+  public repository.
+
 ## 1.0.5 - 2026-09-24
 
 - Added an npm trusted-publishing workflow using GitHub Actions OIDC.

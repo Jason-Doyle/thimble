@@ -82,9 +82,10 @@ published manually before the trusted publisher exists.
 - Protected `main` rules require CI and code-owner approval before version
   changes can merge.
 
-The repository is private, so npm provenance attestations are not generated.
-Trusted OIDC publishing still works. If the repository becomes public later,
-npm can generate provenance automatically.
+The repository is public, so npm automatically generates a signed provenance
+attestation for trusted publishes. If the repository becomes private,
+trusted OIDC publishing will continue to work, but npm will stop generating
+provenance attestations.
 
 ## Troubleshooting
 
