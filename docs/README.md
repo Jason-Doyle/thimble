@@ -3,9 +3,11 @@
 | Document | Purpose |
 | --- | --- |
 | [Quickstart](QUICKSTART.md) | Package, authority, browser client, and verification setup |
+| [Vibe-coded app fit guide](VIBE-CODED-APPS.md) | Exact workload decision criteria for AI-assisted small apps |
 | [Implementation prompts](IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
 | [npm publishing](NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
 | [Use cases](USE-CASES.md) | Fit criteria and application-specific guides |
+| [Database comparisons](COMPARISONS.md) | Workload comparisons with D1, SQLite, Firestore, lowdb, and direct object storage |
 | [Architecture](ARCHITECTURE.md) | Components, data flow, scopes, and provider model |
 | [System diagrams](DIAGRAMS.md) | Trust boundaries, sequences, keys, scopes, and providers |
 | [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |

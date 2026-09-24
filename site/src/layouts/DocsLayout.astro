@@ -27,8 +27,18 @@ const tableOfContents = headings.filter(
   (heading) => heading.depth === 2 || heading.depth === 3,
 );
 const isUseCase = meta.id === "use-cases" || meta.id.startsWith("use-cases/");
-const sectionLabel = isUseCase ? "Use cases" : "Documentation";
-const sectionHref = isUseCase ? "/use-cases/" : "/docs/";
+const isComparison =
+  meta.id === "comparisons" || meta.id.startsWith("compare/");
+const sectionLabel = isUseCase
+  ? "Use cases"
+  : isComparison
+    ? "Compare"
+    : "Documentation";
+const sectionHref = isUseCase
+  ? "/use-cases/"
+  : isComparison
+    ? "/compare/"
+    : "/docs/";
 const articleSchema = {
   "@context": "https://schema.org",
   "@type": "TechArticle",

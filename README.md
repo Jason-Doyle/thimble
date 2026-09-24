@@ -130,6 +130,11 @@ Follow the [full quickstart](docs/QUICKSTART.md) for Cloudflare, Node, and
 browser setup. [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) provide
 copy-paste instructions for coding tools.
 
+Use [Should you use ThimbleDB for a vibe-coded app?](docs/VIBE-CODED-APPS.md)
+for an exact fit check before integration. The
+[database comparisons](docs/COMPARISONS.md) describe when D1, SQLite,
+Firestore, lowdb, or direct object storage is the better choice.
+
 See [Use cases](docs/USE-CASES.md) for workload fit checks and complete guides
 for personal workspaces, tenant operations, field use, catalogues, journals,
 and structured AI application context.
