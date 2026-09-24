@@ -56,7 +56,7 @@ jobs:
           npm pack --pack-destination release-package
 
       - name: Upload release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-package
           path: release-package/*.tgz
@@ -86,7 +86,7 @@ jobs:
           node -e "const [major, minor, patch] = process.argv[1].split('.').map(Number); if (major < 11 || (major === 11 && minor < 5) || (major === 11 && minor === 5 && patch < 1)) { console.error('npm 11.5.1 or newer is required; found ' + process.argv[1]); process.exit(1) }" "${npm_version}"
 
       - name: Download release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: npm-package
           path: release-package
@@ -105,7 +105,7 @@ jobs:
       - name: Publish with npm trusted publishing
         if: steps.registry.outputs.published != 'true'
         shell: bash
-        run: npm publish "$(find release-package -maxdepth 1 -name '*.tgz' -print -quit)" --access public
+        run: npm publish "$(find "${GITHUB_WORKSPACE}/release-package" -maxdepth 1 -name '*.tgz' -print -quit)" --access public
 
       - name: Report existing version
         if: steps.registry.outputs.published == 'true'
