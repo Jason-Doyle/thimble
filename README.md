@@ -1,12 +1,12 @@
-<p align="center">
+<h1>
   <img
     src="https://db.thimbledb.com/thimbledb-logo.png"
     alt="ThimbleDB logo"
-    width="180"
+    width="72"
+    align="center"
   />
-</p>
-
-# ThimbleDB
+  ThimbleDB
+</h1>
 
 ThimbleDB is a Cloudflare-first database for small, read-heavy web
 applications. Browsers read encrypted immutable objects through an
@@ -115,6 +115,10 @@ Use the browser/core API from `thimbledb`, external identity primitives from
 dependency on `thimbledb.com`; consumers supply their own domain, storage, OIDC
 application, and secrets.
 
+Follow the [full quickstart](docs/QUICKSTART.md) for Cloudflare, Node, and
+browser setup. [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) provide
+copy-paste instructions for coding tools.
+
 To run a source checkout:
 
 ```powershell
@@ -176,6 +180,8 @@ layout decision thresholds.
 
 | Document | Purpose |
 | --- | --- |
+| [Quickstart](docs/QUICKSTART.md) | Package, authority, browser client, and verification setup |
+| [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
 | [Architecture](docs/ARCHITECTURE.md) | Components, data flow, and scope model |
 | [System diagrams](docs/DIAGRAMS.md) | Trust boundaries, sequences, keys, and providers |
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |

@@ -6,6 +6,13 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 1.0.2 - 2026-09-24
+
+- Added Cloudflare, Node, and browser quickstart guides.
+- Added copy-paste implementation, deployment, migration, and review prompts
+  for coding tools.
+- Updated README branding and repository metadata.
+
 ## 1.0.1 - 2026-09-24
 
 - Rewrote public documentation for application developers and operators.
