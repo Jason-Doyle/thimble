@@ -119,6 +119,10 @@ Follow the [full quickstart](docs/QUICKSTART.md) for Cloudflare, Node, and
 browser setup. [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) provide
 copy-paste instructions for coding tools.
 
+See [Use cases](docs/USE-CASES.md) for workload fit checks and complete guides
+for personal workspaces, tenant operations, field use, catalogues, journals,
+and structured AI application context.
+
 To run a source checkout:
 
 ```powershell
@@ -182,6 +186,7 @@ layout decision thresholds.
 | --- | --- |
 | [Quickstart](docs/QUICKSTART.md) | Package, authority, browser client, and verification setup |
 | [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
+| [Use cases](docs/USE-CASES.md) | Fit criteria and application-specific guides |
 | [Architecture](docs/ARCHITECTURE.md) | Components, data flow, and scope model |
 | [System diagrams](docs/DIAGRAMS.md) | Trust boundaries, sequences, keys, and providers |
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |

@@ -6,6 +6,14 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 1.0.3 - 2026-09-24
+
+- Added a workload fit guide for small vibe-coded applications.
+- Added six complete use-case guides with data models, layout choices,
+  examples, scaffold prompts, caveats, and validation checklists.
+- Documented the workloads that should use a relational, search, analytics, or
+  real-time system instead.
+
 ## 1.0.2 - 2026-09-24
 
 - Added Cloudflare, Node, and browser quickstart guides.

@@ -4,6 +4,7 @@
 | --- | --- |
 | [Quickstart](QUICKSTART.md) | Package, authority, browser client, and verification setup |
 | [Implementation prompts](IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
+| [Use cases](USE-CASES.md) | Fit criteria and application-specific guides |
 | [Architecture](ARCHITECTURE.md) | Components, data flow, scopes, and provider model |
 | [System diagrams](DIAGRAMS.md) | Trust boundaries, sequences, keys, scopes, and providers |
 | [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |
