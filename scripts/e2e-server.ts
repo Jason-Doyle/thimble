@@ -28,9 +28,13 @@ const identityProvider = createServer((request, response) => {
   }
   if (url.pathname === "/token") {
     const subject = url.searchParams.get("subject") ?? "e2e-user";
+    const roles = ["thimble.tenant.writer"];
+    if (url.searchParams.get("admin") === "true") {
+      roles.push("thimble.admin");
+    }
     void new SignJWT({
       scp: "thimble.access",
-      roles: ["thimble.tenant.writer"],
+      roles,
       tid: "tenant-e2e",
     })
       .setProtectedHeader({ alg: "RS256", kid: "e2e-key" })
@@ -106,6 +110,10 @@ Object.assign(childEnvironment, {
   THIMBLE_KEY_VERSION: "1",
   THIMBLE_READ_KEY_VERSIONS: "",
   THIMBLE_HEAD_TTL_MS: "0",
+  THIMBLE_COLLECTION_LAYOUTS: "customers=snapshot",
+  THIMBLE_DELETE_RETENTION_DAYS: "30",
+  THIMBLE_DELETE_GRACE_DAYS: "7",
+  THIMBLE_MAINTENANCE_MODE: "false",
   THIMBLE_AUTH_RATE_LIMIT: "100",
   THIMBLE_AUTH_RATE_WINDOW_MS: "60000",
   THIMBLE_SESSION_TTL_SECONDS: "3600",

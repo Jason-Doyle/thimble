@@ -4,11 +4,15 @@ export type Identity =
       issuer: string;
       subject: string;
       tenantId: string;
+      roles: string[];
+      tenants: string[];
     }
   | {
       provider: "oidc";
       issuer: string;
       subject: string;
+      roles: string[];
+      tenants: string[];
     };
 
 export type AuthUser = {
@@ -26,6 +30,7 @@ export type Principal = {
   userId: string;
   authVersion: number;
   provider: Identity["provider"];
+  issuer: string;
   subject: string;
   tenantIds: string[];
   roles: string[];
@@ -41,6 +46,8 @@ export type AuthSession = {
   userId: string;
   authVersion: number;
   provider: Identity["provider"];
+  issuer: string;
+  subject: string;
   csrfToken: string;
   grants: ScopeGrant[];
   createdAt: string;

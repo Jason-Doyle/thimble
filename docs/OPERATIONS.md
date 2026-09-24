@@ -30,30 +30,64 @@ Normal scope rotation:
 
 1. Set `THIMBLE_KEY_VERSION` to the new write version.
 2. Add the previous version to `THIMBLE_READ_KEY_VERSIONS`.
-3. Restart authorities so browsers receive both readable keys.
-4. Rewrite each live collection:
+3. Put every authority into `THIMBLE_MAINTENANCE_MODE=true`.
+4. Restart authorities so reads receive both versions and writes are blocked.
+5. Rewrite each live collection:
 
 ```powershell
 $env:THIMBLE_SCOPE_ID = "user:<id>"
 $env:THIMBLE_KEY_VERSION = "2"
 $env:THIMBLE_READ_KEY_VERSIONS = "1"
 $env:THIMBLE_COLLECTIONS = "products,orders,settings"
+$env:THIMBLE_COLLECTION_LAYOUTS = "products=snapshot"
+$env:THIMBLE_MIGRATION_QUIESCENT = "true"
 npm run migrate:keys
 ```
 
-The migration compares the collection HEAD it scanned with the HEAD it commits.
-It aborts without replacing HEAD if a concurrent write wins. Re-run the
-collection after writes are quiescent. Verification reads the rewritten
-collection using only the current key and compares full content.
+The migration rewrites every reachable stored record in the configured active
+layout, including retained tombstones. Verification reads the active layout
+using only the current key and compares full stored content.
 
-5. Verify application reads and collection content.
-6. Retain the old version for the required rollback window.
-7. Remove the old version from `THIMBLE_READ_KEY_VERSIONS`.
-8. Remove unreachable old objects only through a safe offline maintenance
+6. Verify application reads and collection content.
+7. Disable maintenance mode.
+8. Retain the old version for the required rollback window.
+9. Remove the old version from `THIMBLE_READ_KEY_VERSIONS`.
+10. Remove unreachable old objects only through a safe offline maintenance
    process.
 
 The migration is idempotent per collection and rewrites the live trie under the
 current write key. It does not delete historical objects.
+
+## Collection layout changes
+
+Use `npm run advise:layout` to record a recommendation. To apply one:
+
+1. Put every authority into `THIMBLE_MAINTENANCE_MODE=true`.
+2. Confirm normal writes return `503 maintenance_mode`.
+3. Ensure the collection has no retained tombstones.
+4. Run `npm run migrate:layout`, or use the administrator migration endpoint.
+5. Add `collection=snapshot` or `collection=trie` to
+   `THIMBLE_COLLECTION_LAYOUTS`.
+6. Disable maintenance mode and verify browser reads.
+
+The migration verifies full document equality and leaves the old layout in
+place for rollback.
+
+## Retention maintenance
+
+Document and scope erasure use a 30-day restore window and seven-day purge
+grace by default. Physical collection is a separate quiescent operation:
+
+```powershell
+$env:THIMBLE_MAINTENANCE_QUIESCENT = "true"
+$env:THIMBLE_SCOPE_ID = "user:<id>"
+$env:THIMBLE_COLLECTIONS = "products,customers,orders"
+$env:THIMBLE_COLLECTION_LAYOUTS = "products=snapshot,customers=snapshot"
+npm run maintain:retention
+```
+
+Do not run this while any authority can write or while the rollback window
+still requires old immutable generations.
 
 ## Backup
 

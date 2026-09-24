@@ -1,4 +1,8 @@
-import type { JsonValue, ObjectStore } from "../core.js";
+import type {
+  JsonValue,
+  ObjectStore,
+  StoredObject,
+} from "../core.js";
 import {
   decodeJson,
   encodeJson,
@@ -14,12 +18,27 @@ import type {
 
 type IdentityIndex = {
   userId: string;
+  linked?: boolean;
+  nonce?: string;
 };
 
 export type SessionHandle = {
   cookieValue: string;
   session: AuthSession;
 };
+
+export type IdentityReference = Pick<
+  Identity,
+  "provider" | "issuer" | "subject"
+>;
+
+export type LinkIdentityResult =
+  | { status: "linked"; user: AuthUser }
+  | { status: "conflict" };
+
+export type UnlinkIdentityResult =
+  | { status: "unlinked"; user: AuthUser }
+  | { status: "missing" | "last_identity" | "concurrent" };
 
 export class AuthRepository {
   constructor(
@@ -48,15 +67,41 @@ export class AuthRepository {
         ifNoneMatch: true,
       });
       try {
-        await this.putJson<IdentityIndex>(
-          indexKey,
-          { userId: user.id },
-          { ifNoneMatch: true },
-        );
+        const index = await this.loadIdentityIndex(indexKey);
+        if (index?.value.linked !== false) {
+          if (index) {
+            throw new Error("identity_index_active");
+          }
+          await this.putJson<IdentityIndex>(
+            indexKey,
+            {
+              userId: user.id,
+              linked: true,
+              nonce: randomToken(16),
+            },
+            { ifNoneMatch: true },
+          );
+        } else {
+          await this.putJson<IdentityIndex>(
+            indexKey,
+            {
+              userId: user.id,
+              linked: true,
+              nonce: randomToken(16),
+            },
+            { ifMatch: index.object.etag },
+          );
+        }
         return user;
       } catch (error) {
         await this.store.delete(this.userKey(user.id));
-        if (!isPreconditionFailure(error)) {
+        if (
+          !isPreconditionFailure(error) &&
+          !(
+            error instanceof Error &&
+            error.message === "identity_index_active"
+          )
+        ) {
           throw error;
         }
         const raced = await this.waitForIdentityUser(identityValue);
@@ -80,11 +125,22 @@ export class AuthRepository {
     return this.getExternalUser(this.userKey(userId));
   }
 
+  async listUsers(): Promise<AuthUser[]> {
+    const users = await Promise.all(
+      (await this.store.list("users/")).map((key) =>
+        this.getExternalUser(key),
+      ),
+    );
+    return users
+      .filter((user): user is AuthUser => user !== null)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
   async createSession(
     user: AuthUser,
     grants: ScopeGrant[],
     ttlSeconds: number,
-    provider: Identity["provider"],
+    identity: Identity,
   ): Promise<SessionHandle> {
     const token = randomToken(32);
     const tokenDigest = await this.digestValue(token);
@@ -93,7 +149,9 @@ export class AuthRepository {
       id: tokenDigest,
       userId: user.id,
       authVersion: user.authVersion,
-      provider,
+      provider: identity.provider,
+      issuer: identity.issuer,
+      subject: identity.subject,
       csrfToken: randomToken(32),
       grants,
       createdAt: now.toISOString(),
@@ -127,7 +185,11 @@ export class AuthRepository {
     if (!session) {
       return null;
     }
-    if (!isExternalProvider(session.provider)) {
+    if (
+      !isExternalProvider(session.provider) ||
+      typeof session.issuer !== "string" ||
+      typeof session.subject !== "string"
+    ) {
       await this.store.delete(
         this.sessionKey(parsed.userId, digest),
       );
@@ -143,7 +205,8 @@ export class AuthRepository {
     if (
       !user ||
       user.status !== "active" ||
-      user.authVersion !== session.authVersion
+      user.authVersion !== session.authVersion ||
+      !findIdentity(user, session)
     ) {
       return null;
     }
@@ -167,13 +230,235 @@ export class AuthRepository {
     await Promise.all(keys.map((key) => this.store.delete(key)));
   }
 
+  async linkExternalIdentity(
+    userId: string,
+    identity: ExternalIdentity,
+  ): Promise<LinkIdentityResult> {
+    const identityValue = identityValueFor(identity);
+    const indexKey = await this.identityIndexKey(identityValue);
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const index = await this.loadIdentityIndex(indexKey);
+      if (
+        index &&
+        index.value.linked !== false &&
+        index.value.userId !== userId
+      ) {
+        return { status: "conflict" };
+      }
+      if (index) {
+        try {
+          await this.putJson<IdentityIndex>(
+            indexKey,
+            {
+              userId,
+              linked: true,
+              nonce: randomToken(16),
+            },
+            { ifMatch: index.object.etag },
+          );
+        } catch (error) {
+          if (isPreconditionFailure(error)) {
+            continue;
+          }
+          throw error;
+        }
+      } else {
+        try {
+          await this.putJson<IdentityIndex>(
+            indexKey,
+            {
+              userId,
+              linked: true,
+              nonce: randomToken(16),
+            },
+            { ifNoneMatch: true },
+          );
+        } catch (error) {
+          if (isPreconditionFailure(error)) {
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      const key = this.userKey(userId);
+      const object = await this.store.get(key);
+      if (!object) {
+        await this.store.delete(indexKey);
+        throw new Error(`External user ${userId} is missing`);
+      }
+      const current = normaliseExternalAuthUser(
+        decodeJson<unknown>(object.bytes),
+      );
+      if (!current) {
+        throw new Error(`External user ${userId} is invalid`);
+      }
+      if (findIdentity(current, identity)) {
+        return {
+          status: "linked",
+          user: await this.refreshExternalUser(userId, identity),
+        };
+      }
+      const updated: AuthUser = {
+        ...current,
+        identities: [
+          ...current.identities,
+          storedIdentity(identity),
+        ],
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        await this.putJson(key, updated, {
+          ifMatch: object.etag,
+        });
+        return { status: "linked", user: updated };
+      } catch (error) {
+        if (!isPreconditionFailure(error)) {
+          throw error;
+        }
+      }
+    }
+    throw new Error(`External identity could not be linked to ${userId}`);
+  }
+
+  async unlinkExternalIdentity(
+    userId: string,
+    reference: IdentityReference,
+  ): Promise<UnlinkIdentityResult> {
+    const key = this.userKey(userId);
+    const indexKey = await this.identityIndexKey(
+      identityValueFor(reference),
+    );
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const index = await this.loadIdentityIndex(indexKey);
+      if (
+        !index ||
+        index.value.linked === false ||
+        index.value.userId !== userId
+      ) {
+        return { status: "missing" };
+      }
+      const object = await this.store.get(key);
+      if (!object) {
+        return { status: "missing" };
+      }
+      const current = normaliseExternalAuthUser(
+        decodeJson<unknown>(object.bytes),
+      );
+      if (!current) {
+        return { status: "missing" };
+      }
+      const identity = findIdentity(current, reference);
+      if (!identity) {
+        return { status: "missing" };
+      }
+      if (current.identities.length <= 1) {
+        return { status: "last_identity" };
+      }
+      const updated: AuthUser = {
+        ...current,
+        authVersion: current.authVersion + 1,
+        identities: current.identities.filter(
+          (candidate) => candidate !== identity,
+        ),
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        await this.putJson(key, updated, {
+          ifMatch: object.etag,
+        });
+      } catch (error) {
+        if (isPreconditionFailure(error)) {
+          continue;
+        }
+        throw error;
+      }
+      try {
+        await this.putJson<IdentityIndex>(
+          indexKey,
+          {
+            userId,
+            linked: false,
+            nonce: randomToken(16),
+          },
+          { ifMatch: index.object.etag },
+        );
+      } catch (error) {
+        if (!isPreconditionFailure(error)) {
+          throw error;
+        }
+        const latestUser = await this.getUser(userId);
+        if (latestUser && findIdentity(latestUser, reference)) {
+          return { status: "concurrent" };
+        }
+        const latestIndex = await this.loadIdentityIndex(indexKey);
+        if (latestIndex?.value.linked !== false) {
+          continue;
+        }
+      }
+      await this.revokeAllSessions(userId);
+      return { status: "unlinked", user: updated };
+    }
+    throw new Error(`External identity could not be unlinked from ${userId}`);
+  }
+
+  async updateAdministration(
+    userId: string,
+    changes: {
+      status?: AuthUser["status"];
+      roles?: string[];
+      tenants?: string[];
+    },
+  ): Promise<AuthUser | null> {
+    const key = this.userKey(userId);
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const object = await this.store.get(key);
+      if (!object) {
+        return null;
+      }
+      const current = normaliseExternalAuthUser(
+        decodeJson<unknown>(object.bytes),
+      );
+      if (!current) {
+        return null;
+      }
+      const updated: AuthUser = {
+        ...current,
+        authVersion: current.authVersion + 1,
+        ...(changes.status ? { status: changes.status } : {}),
+        ...(changes.roles
+          ? { roles: sortedUnique(changes.roles) }
+          : {}),
+        ...(changes.tenants
+          ? { tenants: sortedUnique(changes.tenants) }
+          : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        await this.putJson(key, updated, {
+          ifMatch: object.etag,
+        });
+      } catch (error) {
+        if (isPreconditionFailure(error)) {
+          continue;
+        }
+        throw error;
+      }
+      await this.revokeAllSessions(userId);
+      return updated;
+    }
+    throw new Error(`External user ${userId} could not be administered`);
+  }
+
   private async findByIdentity(
     identityValue: string,
   ): Promise<AuthUser | null> {
     const index = await this.getJson<IdentityIndex>(
       await this.identityIndexKey(identityValue),
     );
-    return index ? this.getUser(index.userId) : null;
+    return index && index.linked !== false
+      ? this.getUser(index.userId)
+      : null;
   }
 
   private async waitForIdentityUser(
@@ -199,19 +484,31 @@ export class AuthRepository {
       if (!object) {
         throw new Error(`External user ${userId} is missing`);
       }
-      const current = decodeJson<AuthUser>(object.bytes);
-      const tenants = identity.tenantId ? [identity.tenantId] : [];
-      const roles = [...identity.roles].sort();
+      const raw = decodeJson<unknown>(object.bytes);
+      const current = normaliseExternalAuthUser(raw);
+      if (!current) {
+        throw new Error(`External user ${userId} is invalid`);
+      }
+      const stored = storedIdentity(identity);
+      const identityIndex = current.identities.findIndex(
+        (candidate) => identityMatches(candidate, identity),
+      );
+      if (identityIndex < 0) {
+        throw new Error(`External identity is missing from user ${userId}`);
+      }
+      const existingIdentity = current.identities[identityIndex]!;
       if (
-        sameStrings(current.tenants, tenants) &&
-        sameStrings(current.roles, roles)
+        currentSchema(raw) &&
+        sameStrings(existingIdentity.roles, stored.roles) &&
+        sameStrings(existingIdentity.tenants, stored.tenants)
       ) {
         return current;
       }
+      const identities = [...current.identities];
+      identities[identityIndex] = stored;
       const updated: AuthUser = {
         ...current,
-        tenants,
-        roles,
+        identities,
         updatedAt: new Date().toISOString(),
       };
       try {
@@ -253,11 +550,24 @@ export class AuthRepository {
     return object ? decodeJson<T>(object.bytes) : null;
   }
 
+  private async loadIdentityIndex(key: string): Promise<{
+    object: StoredObject;
+    value: IdentityIndex;
+  } | null> {
+    const object = await this.store.get(key);
+    return object
+      ? {
+          object,
+          value: decodeJson<IdentityIndex>(object.bytes),
+        }
+      : null;
+  }
+
   private async getExternalUser(
     key: string,
   ): Promise<AuthUser | null> {
     const value = await this.getJson<unknown>(key);
-    return isExternalAuthUser(value) ? value : null;
+    return normaliseExternalAuthUser(value);
   }
 
   private putJson<T>(
@@ -276,53 +586,118 @@ export class AuthRepository {
   }
 }
 
-function isExternalAuthUser(value: unknown): value is AuthUser {
+function normaliseExternalAuthUser(
+  value: unknown,
+): AuthUser | null {
   if (
     typeof value !== "object" ||
     value === null ||
     Array.isArray(value) ||
     "password" in value
   ) {
-    return false;
+    return null;
   }
-  const candidate = value as Partial<AuthUser>;
-  return (
-    typeof candidate.id === "string" &&
-    (candidate.status === "active" ||
-      candidate.status === "disabled") &&
-    typeof candidate.authVersion === "number" &&
-    Array.isArray(candidate.identities) &&
-    candidate.identities.every(isStoredExternalIdentity) &&
-    Array.isArray(candidate.roles) &&
-    candidate.roles.every((role) => typeof role === "string") &&
-    Array.isArray(candidate.tenants) &&
-    candidate.tenants.every(
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.id !== "string" ||
+    (candidate.status !== "active" &&
+      candidate.status !== "disabled") ||
+    typeof candidate.authVersion !== "number" ||
+    !Array.isArray(candidate.identities) ||
+    !Array.isArray(candidate.roles) ||
+    !candidate.roles.every((role) => typeof role === "string") ||
+    !Array.isArray(candidate.tenants) ||
+    !candidate.tenants.every(
       (tenant) => typeof tenant === "string",
-    ) &&
-    typeof candidate.createdAt === "string" &&
-    typeof candidate.updatedAt === "string"
+    ) ||
+    typeof candidate.createdAt !== "string" ||
+    typeof candidate.updatedAt !== "string"
+  ) {
+    return null;
+  }
+  const usesCurrentSchema = candidate.identities.every(
+    (identity) =>
+      typeof identity === "object" &&
+      identity !== null &&
+      !Array.isArray(identity) &&
+      Array.isArray((identity as { roles?: unknown }).roles) &&
+      Array.isArray((identity as { tenants?: unknown }).tenants),
   );
+  const identities = candidate.identities.map((identity) =>
+    normaliseStoredIdentity(
+      identity,
+      usesCurrentSchema ? [] : candidate.roles as string[],
+      usesCurrentSchema ? [] : candidate.tenants as string[],
+    ),
+  );
+  if (identities.some((identity) => identity === null)) {
+    return null;
+  }
+  return {
+    id: candidate.id,
+    status: candidate.status,
+    authVersion: candidate.authVersion,
+    identities: identities as Identity[],
+    roles: usesCurrentSchema
+      ? sortedUnique(candidate.roles as string[])
+      : [],
+    tenants: usesCurrentSchema
+      ? sortedUnique(candidate.tenants as string[])
+      : [],
+    createdAt: candidate.createdAt,
+    updatedAt: candidate.updatedAt,
+  };
 }
 
-function isStoredExternalIdentity(
+function normaliseStoredIdentity(
   value: unknown,
-): value is Identity {
+  fallbackRoles: string[],
+  fallbackTenants: string[],
+): Identity | null {
   if (
     typeof value !== "object" ||
     value === null ||
     Array.isArray(value)
   ) {
-    return false;
+    return null;
   }
-  const candidate = value as Partial<Identity>;
-  return (
-    (candidate.provider === "entra" ||
-      candidate.provider === "oidc") &&
-    typeof candidate.issuer === "string" &&
-    typeof candidate.subject === "string" &&
-    (candidate.provider !== "entra" ||
-      typeof candidate.tenantId === "string")
-  );
+  const candidate = value as Record<string, unknown>;
+  if (
+    (candidate.provider !== "entra" &&
+      candidate.provider !== "oidc") ||
+    typeof candidate.issuer !== "string" ||
+    typeof candidate.subject !== "string" ||
+    (candidate.provider === "entra" &&
+      typeof candidate.tenantId !== "string")
+  ) {
+    return null;
+  }
+  const roles = Array.isArray(candidate.roles)
+    ? candidate.roles.filter(
+        (role): role is string => typeof role === "string",
+      )
+    : fallbackRoles;
+  const tenants = Array.isArray(candidate.tenants)
+    ? candidate.tenants.filter(
+        (tenant): tenant is string => typeof tenant === "string",
+      )
+    : fallbackTenants;
+  return candidate.provider === "entra"
+    ? {
+        provider: "entra",
+        issuer: candidate.issuer,
+        subject: candidate.subject,
+        tenantId: candidate.tenantId as string,
+        roles: sortedUnique(roles),
+        tenants: sortedUnique(tenants),
+      }
+    : {
+        provider: "oidc",
+        issuer: candidate.issuer,
+        subject: candidate.subject,
+        roles: sortedUnique(roles),
+        tenants: sortedUnique(tenants),
+      };
 }
 
 function isExternalProvider(
@@ -359,29 +734,87 @@ function randomToken(bytes: number): string {
 
 function externalUser(identity: ExternalIdentity): AuthUser {
   const now = new Date().toISOString();
-  const storedIdentity: Identity =
-    identity.provider === "entra"
-      ? {
-          provider: "entra",
-          issuer: identity.issuer,
-          subject: identity.subject,
-          tenantId: identity.tenantId ?? "",
-        }
-      : {
-          provider: "oidc",
-          issuer: identity.issuer,
-          subject: identity.subject,
-        };
   return {
     id: crypto.randomUUID(),
     status: "active",
     authVersion: 1,
-    identities: [storedIdentity],
-    roles: [...identity.roles].sort(),
-    tenants: identity.tenantId ? [identity.tenantId] : [],
+    identities: [storedIdentity(identity)],
+    roles: [],
+    tenants: [],
     createdAt: now,
     updatedAt: now,
   };
+}
+
+function storedIdentity(identity: ExternalIdentity): Identity {
+  const roles = sortedUnique(identity.roles);
+  const tenants = identity.tenantId ? [identity.tenantId] : [];
+  return identity.provider === "entra"
+    ? {
+        provider: "entra",
+        issuer: identity.issuer,
+        subject: identity.subject,
+        tenantId: identity.tenantId ?? "",
+        roles,
+        tenants,
+      }
+    : {
+        provider: "oidc",
+        issuer: identity.issuer,
+        subject: identity.subject,
+        roles,
+        tenants,
+      };
+}
+
+export function findIdentity(
+  user: AuthUser,
+  reference: IdentityReference,
+): Identity | null {
+  return (
+    user.identities.find((identity) =>
+      identityMatches(identity, reference),
+    ) ?? null
+  );
+}
+
+function identityMatches(
+  identity: Identity,
+  reference: IdentityReference,
+): boolean {
+  return (
+    identity.provider === reference.provider &&
+    identity.issuer === reference.issuer &&
+    identity.subject === reference.subject
+  );
+}
+
+function identityValueFor(
+  identity: IdentityReference,
+): string {
+  return `${identity.provider}|${identity.issuer}|${identity.subject}`;
+}
+
+function currentSchema(value: unknown): boolean {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+  const identities = (value as { identities?: unknown }).identities;
+  return (
+    Array.isArray(identities) &&
+    identities.every(
+      (identity) =>
+        typeof identity === "object" &&
+        identity !== null &&
+        !Array.isArray(identity) &&
+        Array.isArray((identity as { roles?: unknown }).roles) &&
+        Array.isArray((identity as { tenants?: unknown }).tenants),
+    )
+  );
 }
 
 function sameStrings(left: string[], right: string[]): boolean {
@@ -389,4 +822,8 @@ function sameStrings(left: string[], right: string[]): boolean {
     left.length === right.length &&
     left.every((value, index) => value === right[index])
   );
+}
+
+function sortedUnique(values: string[]): string[] {
+  return [...new Set(values)].sort();
 }

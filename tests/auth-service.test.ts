@@ -120,12 +120,187 @@ describe("AuthService", () => {
       await fixture.cleanup();
     }
   });
+
+  it("links a second proven identity and protects the final identity", async () => {
+    const entra = mutableAdapter(
+      externalIdentity([], "entra-user"),
+      "entra",
+    );
+    const oidc = mutableAdapter(
+      {
+        provider: "oidc",
+        issuer: "https://oidc.example",
+        subject: "oidc-user",
+        roles: [],
+        scopes: ["thimble.read"],
+      },
+      "oidc",
+    );
+    const fixture = await authFixture(entra, oidc);
+    try {
+      const first = await fixture.auth.loginExternal(
+        entra.id,
+        "token",
+        null,
+      );
+      const linked = await fixture.auth.linkIdentity(
+        first,
+        oidc.id,
+        "token",
+        null,
+      );
+      expect(linked.identities).toHaveLength(2);
+
+      const throughOidc = await fixture.auth.loginExternal(
+        oidc.id,
+        "token",
+        null,
+      );
+      expect(throughOidc.user.id).toBe(first.user.id);
+
+      const unlinked = await fixture.auth.unlinkIdentity(
+        throughOidc,
+        {
+          provider: "entra",
+          issuer: "https://issuer.example",
+          subject: "entra-user",
+        },
+      );
+      expect(unlinked.identities).toHaveLength(1);
+
+      const refreshed = await fixture.auth.loginExternal(
+        oidc.id,
+        "token",
+        null,
+      );
+      await expect(
+        fixture.auth.unlinkIdentity(refreshed, {
+          provider: "oidc",
+          issuer: "https://oidc.example",
+          subject: "oidc-user",
+        }),
+      ).rejects.toMatchObject({
+        status: 409,
+        code: "last_identity",
+      });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("allows provider-role administrators to disable users", async () => {
+    const admin = mutableAdapter(
+      externalIdentity(["thimble.admin"], "admin"),
+      "admin",
+    );
+    const member = mutableAdapter(
+      externalIdentity([], "member"),
+      "member",
+    );
+    const fixture = await authFixture(admin, member);
+    try {
+      const administrator = await fixture.auth.loginExternal(
+        admin.id,
+        "token",
+        null,
+      );
+      const user = await fixture.auth.loginExternal(
+        member.id,
+        "token",
+        null,
+      );
+
+      await expect(
+        fixture.auth.listUsers(administrator),
+      ).resolves.toHaveLength(2);
+      await expect(
+        fixture.auth.administerUser(
+          administrator,
+          user.user.id,
+          { status: "disabled" },
+        ),
+      ).resolves.toMatchObject({ status: "disabled" });
+      await expect(
+        fixture.auth.authenticate(user.cookieValue),
+      ).resolves.toBeNull();
+      await expect(
+        fixture.auth.listUsers(user),
+      ).rejects.toMatchObject({
+        status: 403,
+        code: "administrator_required",
+      });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("keeps identity ownership consistent during concurrent link and unlink", async () => {
+    const entra = mutableAdapter(
+      externalIdentity([], "race-primary"),
+      "entra",
+    );
+    const oidcIdentity: ExternalIdentity = {
+      provider: "oidc",
+      issuer: "https://oidc.example",
+      subject: "race-secondary",
+      roles: [],
+      scopes: ["thimble.read"],
+    };
+    const oidc = mutableAdapter(oidcIdentity, "oidc");
+    const fixture = await authFixture(entra, oidc);
+    try {
+      const authenticated = await fixture.auth.loginExternal(
+        entra.id,
+        "token",
+        null,
+      );
+      await fixture.auth.linkIdentity(
+        authenticated,
+        oidc.id,
+        "token",
+        null,
+      );
+
+      await Promise.allSettled([
+        fixture.auth.unlinkIdentity(authenticated, {
+          provider: "oidc",
+          issuer: oidcIdentity.issuer,
+          subject: oidcIdentity.subject,
+        }),
+        fixture.auth.linkIdentity(
+          authenticated,
+          oidc.id,
+          "token",
+          null,
+        ),
+      ]);
+
+      const original = await fixture.repository.getUser(
+        authenticated.user.id,
+      );
+      const mapped =
+        await fixture.repository.findExternalUser(oidcIdentity);
+      const originalContainsIdentity = original?.identities.some(
+        (identity) =>
+          identity.provider === oidcIdentity.provider &&
+          identity.issuer === oidcIdentity.issuer &&
+          identity.subject === oidcIdentity.subject,
+      );
+      expect(Boolean(mapped)).toBe(Boolean(originalContainsIdentity));
+      if (mapped) {
+        expect(mapped.id).toBe(authenticated.user.id);
+      }
+    } finally {
+      await fixture.cleanup();
+    }
+  });
 });
 
 async function authFixture(
-  adapter: MutableIdentityAdapter,
+  ...adapters: MutableIdentityAdapter[]
 ): Promise<{
   auth: AuthService;
+  repository: AuthRepository;
   cleanup(): Promise<void>;
 }> {
   const directory = await mkdtemp(
@@ -157,10 +332,13 @@ async function authFixture(
       repository,
       authorizer: new DefaultScopeAuthorizer(),
       rateLimiter: new InMemoryAuthRateLimiter(20),
-      identityAdapters: new Map([[adapter.id, adapter]]),
+      identityAdapters: new Map(
+        adapters.map((adapter) => [adapter.id, adapter]),
+      ),
       sessionTtlSeconds: 3_600,
       secureCookies: true,
     }),
+    repository,
     cleanup: () =>
       rm(directory, { recursive: true, force: true }),
   };
@@ -172,9 +350,10 @@ type MutableIdentityAdapter = IdentityAdapter & {
 
 function mutableAdapter(
   identity: ExternalIdentity | null,
+  id = "entra",
 ): MutableIdentityAdapter {
   return {
-    id: "entra",
+    id,
     identity,
     async authenticate() {
       return this.identity;
@@ -184,11 +363,12 @@ function mutableAdapter(
 
 function externalIdentity(
   roles = ["reader"],
+  subject = "object-1",
 ): ExternalIdentity {
   return {
     provider: "entra",
     issuer: "https://issuer.example",
-    subject: "object-1",
+    subject,
     tenantId: "tenant-1",
     roles,
     scopes: ["thimble.read"],

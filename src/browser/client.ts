@@ -7,6 +7,7 @@ import {
   trieHeadKey,
   trieNodeKey,
   triePathFromHash,
+  visibleTrieDocument,
   type TrieBranchNode,
   type TrieHead,
   type TrieLeafNode,
@@ -15,6 +16,13 @@ import {
   type TrieRootNode,
 } from "../trie-protocol.js";
 import { ownValue } from "../shared-utils.js";
+import {
+  snapshotHeadKey,
+  snapshotPageKey,
+  type CollectionLayout,
+  type SnapshotHead,
+  type SnapshotPage,
+} from "../snapshot-protocol.js";
 import {
   type BrowserCacheMetrics,
   type CachedJsonObject,
@@ -42,6 +50,8 @@ export class ThimbleClient {
   private offlineFallbacks = 0;
   private active = true;
   private lifecycleGeneration = 0;
+  private layoutCheckedAt = 0;
+  private layoutCheckPromise: Promise<void> | undefined;
   private readonly channel: BroadcastChannel | null;
 
   constructor(
@@ -56,6 +66,11 @@ export class ThimbleClient {
       channelName?: string;
       fetchImplementation?: typeof fetch;
       onLogout?: (error?: unknown) => void;
+      collectionLayouts?: Record<string, CollectionLayout>;
+      layoutGeneration?: string;
+      configurationUrl?: string;
+      layoutCheckTtlMs?: number;
+      onLayoutChange?: () => void;
     },
   ) {
     this.channel =
@@ -71,9 +86,11 @@ export class ThimbleClient {
             event.data,
             false,
             this.lifecycleGeneration,
-          );
+          ).catch(() => undefined);
         } else if (isLogoutMessage(event.data)) {
           void this.handleLogout().catch(() => undefined);
+        } else if (isLayoutChangeMessage(event.data)) {
+          void this.handleLayoutChange().catch(() => undefined);
         }
       };
     }
@@ -99,7 +116,11 @@ export class ThimbleClient {
     collection: string,
     id: string,
   ): Promise<JsonDocument | null> {
+    await this.ensureLayoutCurrent(false);
     const generation = this.currentGeneration();
+    if (this.layoutFor(collection) === "snapshot") {
+      return this.getSnapshot(collection, id, generation);
+    }
     const head = await this.readHead(collection, generation);
     if (head.rootHash === null) {
       return null;
@@ -134,11 +155,15 @@ export class ThimbleClient {
       generation,
     );
     this.assertGeneration(generation);
-    return ownValue(leaf.documents, id) ?? null;
+    return visibleTrieDocument(ownValue(leaf.documents, id));
   }
 
   async scan(collection: string): Promise<JsonDocument[]> {
+    await this.ensureLayoutCurrent(false);
     const generation = this.currentGeneration();
+    if (this.layoutFor(collection) === "snapshot") {
+      return this.scanSnapshot(collection, generation);
+    }
     const head = await this.readHead(collection, generation);
     if (head.rootHash === null) {
       return [];
@@ -178,7 +203,14 @@ export class ThimbleClient {
     );
     this.assertGeneration(generation);
     return leaves
-      .flatMap((leaf) => Object.values(leaf.documents))
+      .flatMap((leaf) =>
+        Object.values(leaf.documents)
+          .map(visibleTrieDocument)
+          .filter(
+            (document): document is JsonDocument =>
+              document !== null,
+          ),
+      )
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
@@ -187,6 +219,7 @@ export class ThimbleClient {
     id: string,
     document: JsonDocument,
   ): Promise<TrieReadBundle> {
+    await this.ensureLayoutCurrent(true);
     this.requireActive();
     const generation = this.lifecycleGeneration;
     const baseUrl = this.options.writeBaseUrl ?? "";
@@ -206,6 +239,12 @@ export class ThimbleClient {
           ...(this.options.scopeId
             ? { "x-thimble-scope": this.options.scopeId }
             : {}),
+          ...(this.options.layoutGeneration
+            ? {
+                "x-thimble-layout-generation":
+                  this.options.layoutGeneration,
+              }
+            : {}),
         },
         body: JSON.stringify({ ...document, id }),
       },
@@ -223,6 +262,30 @@ export class ThimbleClient {
     return bundle;
   }
 
+  async delete(
+    collection: string,
+    id: string,
+  ): Promise<TrieReadBundle> {
+    return this.mutateDocument(
+      "DELETE",
+      collection,
+      id,
+      "{}",
+    );
+  }
+
+  async restore(
+    collection: string,
+    id: string,
+  ): Promise<TrieReadBundle> {
+    return this.mutateDocument(
+      "POST",
+      collection,
+      `${id}/restore`,
+      "{}",
+    );
+  }
+
   async applyBundle(
     bundle: TrieReadBundle,
     broadcast = false,
@@ -235,6 +298,15 @@ export class ThimbleClient {
     const head = bundle.objects.find((object) =>
       object.key.endsWith("/HEAD.json"),
     );
+    const bundleLayout = bundle.objects.some((object) =>
+      object.key.startsWith("content-snapshot/"),
+    )
+      ? "snapshot"
+      : "trie";
+    if (bundleLayout !== this.layoutFor(bundle.collection)) {
+      await this.handleLayoutChange();
+      throw new Error("Collection layout changed; reload required");
+    }
     await withBrowserLock(this.lifecycleLockName(), async () => {
       if (!this.active || generation !== this.lifecycleGeneration) {
         return;
@@ -363,6 +435,116 @@ export class ThimbleClient {
     });
   }
 
+  private async getSnapshot(
+    collection: string,
+    id: string,
+    generation: number,
+  ): Promise<JsonDocument | null> {
+    const head = await this.readSnapshotHead(collection, generation);
+    if (!head.snapshotHash) {
+      return null;
+    }
+    const page = await this.readSnapshotPage(
+      collection,
+      head.snapshotHash,
+      generation,
+    );
+    return visibleTrieDocument(ownValue(page.documents, id));
+  }
+
+  private async scanSnapshot(
+    collection: string,
+    generation: number,
+  ): Promise<JsonDocument[]> {
+    const head = await this.readSnapshotHead(collection, generation);
+    if (!head.snapshotHash) {
+      return [];
+    }
+    const page = await this.readSnapshotPage(
+      collection,
+      head.snapshotHash,
+      generation,
+    );
+    return Object.values(page.documents)
+      .map(visibleTrieDocument)
+      .filter(
+        (document): document is JsonDocument =>
+          document !== null,
+      )
+      .sort((left, right) => left.id.localeCompare(right.id));
+  }
+
+  private async readSnapshotHead(
+    collection: string,
+    generation: number,
+  ): Promise<SnapshotHead> {
+    this.assertGeneration(generation);
+    const key = snapshotHeadKey(collection);
+    return withBrowserLock(`thimbledb:${key}`, async () => {
+      const cached = await this.options.cache.get(key);
+      this.assertGeneration(generation);
+      const now = Date.now();
+      if (
+        cached &&
+        now - cached.checkedAt < this.options.headTtlMs
+      ) {
+        return asSnapshotHead(cached.value);
+      }
+      let remote: RemoteJsonObject;
+      try {
+        remote = await this.readRemote(key, cached?.etag);
+      } catch (error) {
+        if (cached && this.active) {
+          this.offlineFallbacks += 1;
+          this.assertGeneration(generation);
+          return asSnapshotHead(cached.value);
+        }
+        throw error;
+      }
+      if (remote.status === "not-modified" && cached) {
+        const refreshed = { ...cached, checkedAt: now };
+        await this.cacheSetIfActive(refreshed, generation);
+        return asSnapshotHead(refreshed.value);
+      }
+      if (remote.status === "missing") {
+        return { revision: 0, snapshotHash: null };
+      }
+      if (remote.status !== "found") {
+        throw new Error(
+          `Cannot resolve snapshot HEAD for ${collection}`,
+        );
+      }
+      await this.cacheSetIfActive(
+        cacheEntryFromRemote(remote, false),
+        generation,
+      );
+      return asSnapshotHead(remote.value);
+    });
+  }
+
+  private async readSnapshotPage(
+    collection: string,
+    hash: string,
+    generation: number,
+  ): Promise<SnapshotPage> {
+    const key = snapshotPageKey(collection, hash);
+    const cached = await this.options.cache.get(key);
+    this.assertGeneration(generation);
+    if (cached) {
+      return asSnapshotPage(cached.value);
+    }
+    const remote = await this.readRemote(key);
+    this.assertGeneration(generation);
+    if (remote.status !== "found") {
+      throw new Error(`Immutable snapshot ${key} is unavailable`);
+    }
+    await this.cacheSetIfActive(
+      cacheEntryFromRemote(remote, true),
+      generation,
+    );
+    return asSnapshotPage(remote.value);
+  }
+
   private async readNode<T extends TrieNode>(
     collection: string,
     hash: string,
@@ -440,6 +622,10 @@ export class ThimbleClient {
     return `thimbledb:lifecycle:${this.options.scopeId ?? "default"}`;
   }
 
+  private layoutFor(collection: string): CollectionLayout {
+    return this.options.collectionLayouts?.[collection] ?? "trie";
+  }
+
   private cacheSetIfActive(
     entry: CachedJsonObject,
     generation: number,
@@ -466,6 +652,121 @@ export class ThimbleClient {
     }
     return result;
   }
+
+  private async mutateDocument(
+    method: "DELETE" | "POST",
+    collection: string,
+    routeId: string,
+    body: string,
+  ): Promise<TrieReadBundle> {
+    await this.ensureLayoutCurrent(true);
+    const generation = this.currentGeneration();
+    const baseUrl = this.options.writeBaseUrl ?? "";
+    const fetchImplementation =
+      this.options.fetchImplementation ?? fetch;
+    const response = await fetchImplementation.call(
+      globalThis,
+      `${baseUrl}/api/collections/${encodeURIComponent(collection)}/documents/${routeId
+        .split("/")
+        .map((segment) => encodeURIComponent(segment))
+        .join("/")}`,
+      {
+        method,
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          ...(this.options.csrfToken
+            ? { "x-thimble-csrf": this.options.csrfToken }
+            : {}),
+          ...(this.options.scopeId
+            ? { "x-thimble-scope": this.options.scopeId }
+            : {}),
+          ...(this.options.layoutGeneration
+            ? {
+                "x-thimble-layout-generation":
+                  this.options.layoutGeneration,
+              }
+            : {}),
+        },
+        body,
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Mutation failed with ${response.status}: ${await response.text()}`,
+      );
+    }
+    const bundle = (await response.json()) as TrieReadBundle;
+    this.assertGeneration(generation);
+    await this.applyBundle(bundle, true, generation);
+    return bundle;
+  }
+
+  private ensureLayoutCurrent(force: boolean): Promise<void> {
+    if (
+      !this.options.layoutGeneration ||
+      !this.options.configurationUrl
+    ) {
+      return Promise.resolve();
+    }
+    const ttl = this.options.layoutCheckTtlMs ?? 1_000;
+    if (!force && Date.now() - this.layoutCheckedAt < ttl) {
+      return Promise.resolve();
+    }
+    this.layoutCheckPromise ??= this.checkLayoutGeneration().finally(
+      () => {
+        this.layoutCheckPromise = undefined;
+      },
+    );
+    return this.layoutCheckPromise;
+  }
+
+  private async checkLayoutGeneration(): Promise<void> {
+    this.requireActive();
+    const fetchImplementation =
+      this.options.fetchImplementation ?? fetch;
+    const response = await fetchImplementation.call(
+      globalThis,
+      this.options.configurationUrl!,
+      {
+        credentials: "same-origin",
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Layout configuration check failed with ${response.status}`,
+      );
+    }
+    const config = (await response.json()) as {
+      layoutGeneration?: unknown;
+    };
+    if (
+      config.layoutGeneration !== this.options.layoutGeneration
+    ) {
+      await this.handleLayoutChange();
+      throw new Error("Collection layout changed; reload required");
+    }
+    this.layoutCheckedAt = Date.now();
+  }
+
+  private async handleLayoutChange(): Promise<void> {
+    if (!this.active) {
+      return;
+    }
+    this.active = false;
+    this.lifecycleGeneration += 1;
+    this.channel?.postMessage({ type: "layout-change" });
+    try {
+      await withBrowserLock(
+        this.lifecycleLockName(),
+        () => this.options.cache.destroy(),
+      );
+    } finally {
+      this.channel?.close();
+      this.options.onLayoutChange?.();
+    }
+  }
 }
 
 function revisionFromValue(value: JsonValue): number {
@@ -475,6 +776,39 @@ function revisionFromValue(value: JsonValue): number {
     typeof value.revision === "number"
     ? value.revision
     : -1;
+}
+
+function asSnapshotHead(value: JsonValue): SnapshotHead {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    typeof value.revision !== "number" ||
+    !(
+      value.snapshotHash === null ||
+      typeof value.snapshotHash === "string"
+    )
+  ) {
+    throw new Error("Invalid snapshot HEAD object");
+  }
+  return {
+    revision: value.revision,
+    snapshotHash: value.snapshotHash,
+  };
+}
+
+function asSnapshotPage(value: JsonValue): SnapshotPage {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    typeof value.documents !== "object" ||
+    value.documents === null ||
+    Array.isArray(value.documents)
+  ) {
+    throw new Error("Invalid snapshot page object");
+  }
+  return value as unknown as SnapshotPage;
 }
 
 function cacheEntryFromRemote(
@@ -554,6 +888,17 @@ function isLogoutMessage(
     value !== null &&
     "type" in value &&
     value.type === "logout"
+  );
+}
+
+function isLayoutChangeMessage(
+  value: unknown,
+): value is { type: "layout-change" } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "layout-change"
   );
 }
 

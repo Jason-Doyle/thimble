@@ -79,3 +79,9 @@ export type CacheMetrics = {
 };
 
 export type CachePolicy = "none" | "locations" | "content";
+
+export type DeletionPolicy = {
+  restoreWindowMs: number;
+  purgeGraceMs: number;
+  now?: Date;
+};

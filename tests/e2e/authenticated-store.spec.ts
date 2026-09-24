@@ -8,7 +8,7 @@ test("authenticates externally, reads, writes, persists cache, and logs out", as
   const subject = `${browserName}-${crypto.randomUUID()}`;
   const token = await request
     .get(
-      `http://127.0.0.1:8790/token?subject=${encodeURIComponent(subject)}`,
+      `http://127.0.0.1:8790/token?subject=${encodeURIComponent(subject)}&admin=true`,
     )
     .then((response) => response.text());
 
@@ -19,12 +19,54 @@ test("authenticates externally, reads, writes, persists cache, and logs out", as
   await page.locator("#oidc-login").click();
   await expect(page.locator("#status")).toContainText("Ready:");
   await expect(page.locator("#auth-panel")).toBeHidden();
+  await expect(page.locator("#admin-panel")).toBeVisible();
+  const currentUserId = await page.evaluate(() =>
+    fetch("/api/config").then(async (response) => {
+      const config = await response.json() as {
+        user: { id: string };
+      };
+      return config.user.id;
+    }),
+  );
+  await page.locator("#admin-user").selectOption(currentUserId);
+  await expect(page.locator("#admin-output")).toContainText(subject);
+
+  const linkedSubject = `${subject}-linked`;
+  const linkedToken = await request
+    .get(
+      `http://127.0.0.1:8790/token?subject=${encodeURIComponent(linkedSubject)}`,
+    )
+    .then((response) => response.text());
+  await page.locator("#link-provider").selectOption("e2e");
+  await page.locator("#link-token").fill(linkedToken);
+  await page.locator("#link-identity").click();
+  await expect(page.locator("#status")).toContainText("Ready:");
+  await expect(page.locator("#identity-output")).toContainText(
+    linkedSubject,
+  );
 
   await page.locator("#seed").click();
   await expect(page.locator("#benchmark-output")).toContainText(
     '"products": 128',
   );
 
+  await page.locator("#read-product").click();
+  await expect(page.locator("#product-output")).toContainText(
+    "product-00000",
+  );
+
+  await page.locator("#delete-product").click();
+  await expect(page.locator("#status")).toContainText(
+    "Product deleted",
+  );
+  await page.locator("#read-product").click();
+  await expect(page.locator("#product-output")).toContainText(
+    '"product": null',
+  );
+  await page.locator("#restore-product").click();
+  await expect(page.locator("#status")).toContainText(
+    "Product restored",
+  );
   await page.locator("#read-product").click();
   await expect(page.locator("#product-output")).toContainText(
     "product-00000",

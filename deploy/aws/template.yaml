@@ -54,6 +54,20 @@ Parameters:
     Type: Number
     Default: 1
     MinValue: 1
+  CollectionLayouts:
+    Type: String
+    Default: ""
+  RetiredCollectionLayouts:
+    Type: String
+    Default: ""
+  DeleteRetentionDays:
+    Type: Number
+    Default: 30
+    MinValue: 0
+  DeleteGraceDays:
+    Type: Number
+    Default: 7
+    MinValue: 0
   MasterKey:
     Type: String
     NoEcho: true
@@ -173,6 +187,11 @@ Resources:
           THIMBLE_ALLOWED_ORIGIN: !Ref AllowedOrigin
           THIMBLE_KEY_VERSION: !Ref KeyVersion
           THIMBLE_READ_KEY_VERSIONS: !Ref ReadKeyVersions
+          THIMBLE_COLLECTION_LAYOUTS: !Ref CollectionLayouts
+          THIMBLE_RETIRED_COLLECTION_LAYOUTS: !Ref RetiredCollectionLayouts
+          THIMBLE_DELETE_RETENTION_DAYS: !Ref DeleteRetentionDays
+          THIMBLE_DELETE_GRACE_DAYS: !Ref DeleteGraceDays
+          THIMBLE_MAINTENANCE_MODE: "false"
           ENTRA_TENANT_ID: !Ref EntraTenantId
           ENTRA_AUDIENCE: !Ref EntraAudience
           ENTRA_REQUIRED_SCOPE: !Ref EntraRequiredScope

@@ -1,0 +1,249 @@
+{
+  "generatedAt": "2026-09-24T01:24:33.6965289Z",
+  "target": "https://db.thimbledb.com",
+  "deployment": {
+    "provider": "Cloudflare Workers and R2 Standard",
+    "productCollectionLayout": "trie",
+    "customerCollectionLayout": "snapshot",
+    "browser": "Chromium 153 in disposable Azure Container Instances"
+  },
+  "methodology": [
+    "Navigate to the production custom domain and exchange a real Entra access token.",
+    "Clear browser caches and measure one cold trie point read.",
+    "Measure 100 sequential product reads with the configured 1 second HEAD TTL.",
+    "Clear caches and measure one full customer snapshot scan."
+  ],
+  "limitations": [
+    "Azure regions approximate client geography but do not represent residential last-mile networks.",
+    "Authentication time includes Entra token exchange, Worker auth-store operations, and browser reload.",
+    "The 100-read loop exceeds the HEAD TTL in higher-latency regions, so p95 includes remote 304 revalidation.",
+    "These results do not establish superiority over another database."
+  ],
+  "results": [
+    {
+      "generatedAt": "2026-09-24T01:14:56.709Z",
+      "region": "northeurope",
+      "target": "https://db.thimbledb.com",
+      "browserVersion": "153.0.8010.12",
+      "navigationMs": 483.6936149999999,
+      "authenticationMs": 8068.198995999999,
+      "coldPointRead": {
+        "elapsedMs": 4149,
+        "product": {
+          "active": true,
+          "category": "clothing",
+          "createdAt": "2023-03-28T10:40:00Z",
+          "description": "Portable Speaker for a small online store. This representative description adds enough payload to expose read and write amplification.",
+          "id": "product-00000",
+          "name": "Portable Speaker",
+          "priceCents": 17243,
+          "sku": "SKU-10000",
+          "stock": 39,
+          "tags": [
+            "clothing",
+            "portable",
+            "speaker"
+          ]
+        }
+      },
+      "hotReads": {
+        "operations": 100,
+        "p50Ms": 0.3,
+        "p95Ms": 1908.6,
+        "maxMs": 3116.9,
+        "metrics": {
+          "remoteReads": 21,
+          "remoteBytes": 4848,
+          "notModified": 9,
+          "missing": 0,
+          "offlineFallbacks": 0,
+          "cache": {
+            "policy": "content",
+            "memoryHits": 388,
+            "indexedDbHits": 0,
+            "misses": 12,
+            "writes": 21,
+            "memoryEntries": 16,
+            "memoryBytes": 12785,
+            "evictions": 0,
+            "persistentErrors": 0
+          }
+        }
+      },
+      "snapshotScan": {
+        "collection": "customers",
+        "layout": "snapshot",
+        "elapsedMs": 1959.2,
+        "documents": 32,
+        "metrics": {
+          "remoteReads": 2,
+          "remoteBytes": 1170,
+          "notModified": 0,
+          "missing": 0,
+          "offlineFallbacks": 0,
+          "cache": {
+            "policy": "content",
+            "memoryHits": 0,
+            "indexedDbHits": 0,
+            "misses": 2,
+            "writes": 2,
+            "memoryEntries": 2,
+            "memoryBytes": 8619,
+            "evictions": 0,
+            "persistentErrors": 0
+          }
+        }
+      }
+    },
+    {
+      "generatedAt": "2026-09-24T01:14:40.776Z",
+      "region": "eastus",
+      "target": "https://db.thimbledb.com",
+      "browserVersion": "153.0.8010.12",
+      "navigationMs": 448.3288540000001,
+      "authenticationMs": 5348.562068,
+      "coldPointRead": {
+        "elapsedMs": 2550,
+        "product": {
+          "active": true,
+          "category": "clothing",
+          "createdAt": "2023-03-28T10:40:00Z",
+          "description": "Portable Speaker for a small online store. This representative description adds enough payload to expose read and write amplification.",
+          "id": "product-00000",
+          "name": "Portable Speaker",
+          "priceCents": 17243,
+          "sku": "SKU-10000",
+          "stock": 39,
+          "tags": [
+            "clothing",
+            "portable",
+            "speaker"
+          ]
+        }
+      },
+      "hotReads": {
+        "operations": 100,
+        "p50Ms": 0.3,
+        "p95Ms": 1319,
+        "maxMs": 2019.6,
+        "metrics": {
+          "remoteReads": 20,
+          "remoteBytes": 4848,
+          "notModified": 8,
+          "missing": 0,
+          "offlineFallbacks": 0,
+          "cache": {
+            "policy": "content",
+            "memoryHits": 388,
+            "indexedDbHits": 0,
+            "misses": 12,
+            "writes": 20,
+            "memoryEntries": 16,
+            "memoryBytes": 12785,
+            "evictions": 0,
+            "persistentErrors": 0
+          }
+        }
+      },
+      "snapshotScan": {
+        "collection": "customers",
+        "layout": "snapshot",
+        "elapsedMs": 1250.4,
+        "documents": 32,
+        "metrics": {
+          "remoteReads": 2,
+          "remoteBytes": 1170,
+          "notModified": 0,
+          "missing": 0,
+          "offlineFallbacks": 0,
+          "cache": {
+            "policy": "content",
+            "memoryHits": 0,
+            "indexedDbHits": 0,
+            "misses": 2,
+            "writes": 2,
+            "memoryEntries": 2,
+            "memoryBytes": 8619,
+            "evictions": 0,
+            "persistentErrors": 0
+          }
+        }
+      }
+    },
+    {
+      "generatedAt": "2026-09-24T01:22:59.645Z",
+      "region": "southeastasia",
+      "target": "https://db.thimbledb.com",
+      "browserVersion": "153.0.8010.12",
+      "navigationMs": 1291.1037579999997,
+      "authenticationMs": 16137.253072,
+      "coldPointRead": {
+        "elapsedMs": 4844.9,
+        "product": {
+          "active": true,
+          "category": "clothing",
+          "createdAt": "2023-03-28T10:40:00Z",
+          "description": "Portable Speaker for a small online store. This representative description adds enough payload to expose read and write amplification.",
+          "id": "product-00000",
+          "name": "Portable Speaker",
+          "priceCents": 17243,
+          "sku": "SKU-10000",
+          "stock": 39,
+          "tags": [
+            "clothing",
+            "portable",
+            "speaker"
+          ]
+        }
+      },
+      "hotReads": {
+        "operations": 100,
+        "p50Ms": 1216,
+        "p95Ms": 2559.9,
+        "maxMs": 4531,
+        "metrics": {
+          "remoteReads": 112,
+          "remoteBytes": 4848,
+          "notModified": 100,
+          "missing": 0,
+          "offlineFallbacks": 0,
+          "cache": {
+            "policy": "content",
+            "memoryHits": 388,
+            "indexedDbHits": 0,
+            "misses": 12,
+            "writes": 112,
+            "memoryEntries": 16,
+            "memoryBytes": 12785,
+            "evictions": 0,
+            "persistentErrors": 0
+          }
+        }
+      },
+      "snapshotScan": {
+        "collection": "customers",
+        "layout": "snapshot",
+        "elapsedMs": 3122.4,
+        "documents": 32,
+        "metrics": {
+          "remoteReads": 2,
+          "remoteBytes": 1170,
+          "notModified": 0,
+          "missing": 0,
+          "offlineFallbacks": 0,
+          "cache": {
+            "policy": "content",
+            "memoryHits": 0,
+            "indexedDbHits": 0,
+            "misses": 2,
+            "writes": 2,
+            "memoryEntries": 2,
+            "memoryBytes": 8619,
+            "evictions": 0,
+            "persistentErrors": 0
+          }
+        }
+      }
+    }
+  ]
+}

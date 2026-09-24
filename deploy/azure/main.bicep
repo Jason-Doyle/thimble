@@ -32,6 +32,20 @@ param readKeyVersions string = ''
 @minValue(1)
 param keyVersion int = 1
 
+@description('Comma-separated collection=layout overrides.')
+param collectionLayouts string = ''
+
+@description('Comma-separated collection=layout generations retained for rollback.')
+param retiredCollectionLayouts string = ''
+
+@description('Days during which deleted documents can be restored.')
+@minValue(0)
+param deleteRetentionDays int = 30
+
+@description('Additional grace days before a tombstone leaves the live layout.')
+@minValue(0)
+param deleteGraceDays int = 7
+
 @description('Optional Microsoft Entra tenant ID.')
 param entraTenantId string = ''
 
@@ -237,6 +251,26 @@ resource app 'Microsoft.App/containerApps@2026-01-01' = if (deployAuthority) {
             {
               name: 'THIMBLE_READ_KEY_VERSIONS'
               value: readKeyVersions
+            }
+            {
+              name: 'THIMBLE_COLLECTION_LAYOUTS'
+              value: collectionLayouts
+            }
+            {
+              name: 'THIMBLE_RETIRED_COLLECTION_LAYOUTS'
+              value: retiredCollectionLayouts
+            }
+            {
+              name: 'THIMBLE_DELETE_RETENTION_DAYS'
+              value: string(deleteRetentionDays)
+            }
+            {
+              name: 'THIMBLE_DELETE_GRACE_DAYS'
+              value: string(deleteGraceDays)
+            }
+            {
+              name: 'THIMBLE_MAINTENANCE_MODE'
+              value: 'false'
             }
             {
               name: 'ENTRA_TENANT_ID'

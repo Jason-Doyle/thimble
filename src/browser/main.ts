@@ -2,6 +2,7 @@ import type {
   CachePolicy,
   JsonDocument,
 } from "../core.js";
+import type { CollectionLayout } from "../snapshot-protocol.js";
 import {
   base64ToBytes,
   importAesGcmKey,
@@ -22,18 +23,43 @@ type AuthConfig = {
   oidcProviders: string[];
 };
 
+type IdentitySummary = {
+  provider: "entra" | "oidc";
+  issuer: string;
+  subject: string;
+};
+
+type AdminUser = {
+  id: string;
+  status: "active" | "disabled";
+  authVersion: number;
+  roles: string[];
+  tenants: string[];
+  identities: Array<
+    IdentitySummary & {
+      roles: string[];
+      tenants: string[];
+    }
+  >;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type BrowserConfig = {
   name: string;
   provider: "local" | "azure" | "s3" | "r2";
   readBaseUrl: string;
   headTtlMs: number;
   cachePolicy: CachePolicy;
+  collectionLayouts: Record<string, CollectionLayout>;
+  layoutGeneration: string;
   csrfToken: string;
   user: {
     id: string;
     provider: string;
     roles: string[];
     tenants: string[];
+    identities: IdentitySummary[];
   };
   scope: {
     id: string;
@@ -51,6 +77,21 @@ const authProvider =
   element<HTMLSelectElement>("auth-provider");
 const authToken = element<HTMLTextAreaElement>("auth-token");
 const authMessage = element<HTMLParagraphElement>("auth-message");
+const identityOutput =
+  element<HTMLPreElement>("identity-output");
+const linkProvider =
+  element<HTMLSelectElement>("link-provider");
+const linkToken = element<HTMLTextAreaElement>("link-token");
+const unlinkIdentity =
+  element<HTMLSelectElement>("unlink-identity");
+const adminPanel = element<HTMLElement>("admin-panel");
+const adminUser = element<HTMLSelectElement>("admin-user");
+const adminStatus =
+  element<HTMLSelectElement>("admin-status");
+const adminRoles = element<HTMLInputElement>("admin-roles");
+const adminTenants =
+  element<HTMLInputElement>("admin-tenants");
+const adminOutput = element<HTMLPreElement>("admin-output");
 const cachePolicy = element<HTMLSelectElement>("cache-policy");
 const productId = element<HTMLInputElement>("product-id");
 const productOutput = element<HTMLPreElement>("product-output");
@@ -61,6 +102,7 @@ const metricsOutput = element<HTMLDivElement>("metrics");
 let client: ThimbleClient | null = null;
 let config: BrowserConfig | null = null;
 let authConfig: AuthConfig | null = null;
+let adminUsers: AdminUser[] = [];
 
 try {
   await bootstrap();
@@ -74,6 +116,133 @@ element<HTMLButtonElement>("oidc-login").addEventListener(
   "click",
   async () => {
     await authenticateExternal();
+  },
+);
+
+element<HTMLButtonElement>("link-identity").addEventListener(
+  "click",
+  async () => {
+    await runUiAction(async () => {
+      const current = requireConfig();
+      const provider = linkProvider.value;
+      const token = linkToken.value.trim();
+      if (!provider || !token) {
+        throw new Error(
+          "Select a provider and supply a fresh access token",
+        );
+      }
+      const response = await fetch(
+        `/api/auth/identities/${encodeURIComponent(provider)}/link`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            ...mutationHeaders(current),
+            authorization: `Bearer ${token}`,
+          },
+          body: "{}",
+        },
+      );
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      linkToken.value = "";
+      window.location.reload();
+    }, "External identity linked");
+  },
+);
+
+element<HTMLButtonElement>("unlink-identity-button").addEventListener(
+  "click",
+  async () => {
+    const current = requireConfig();
+    const selected = unlinkIdentity.value;
+    if (!selected) {
+      setStatus("Select an identity to unlink", "error");
+      return;
+    }
+    const response = await fetch(
+      "/api/auth/identities/unlink",
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: mutationHeaders(current),
+        body: selected,
+      },
+    );
+    if (!response.ok) {
+      setStatus(await response.text(), "error");
+      return;
+    }
+    await requireClient().logout();
+  },
+);
+
+element<HTMLButtonElement>("load-admin-users").addEventListener(
+  "click",
+  async () => {
+    await loadAdminUsers();
+  },
+);
+
+adminUser.addEventListener("change", renderSelectedAdminUser);
+
+element<HTMLButtonElement>("save-admin-user").addEventListener(
+  "click",
+  async () => {
+    await runUiAction(async () => {
+      const current = requireConfig();
+      const userId = adminUser.value;
+      if (!userId) {
+        throw new Error("Select a user");
+      }
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: mutationHeaders(current),
+        body: JSON.stringify({
+          status: adminStatus.value,
+          roles: commaSeparated(adminRoles.value),
+          tenants: commaSeparated(adminTenants.value),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      if (userId === current.user.id) {
+        await requireClient().logout();
+        return;
+      }
+      await loadAdminUsers();
+    }, "User access updated");
+  },
+);
+
+element<HTMLButtonElement>("revoke-admin-sessions").addEventListener(
+  "click",
+  async () => {
+    await runUiAction(async () => {
+      const current = requireConfig();
+      const userId = adminUser.value;
+      if (!userId) {
+        throw new Error("Select a user");
+      }
+      const response = await fetch(
+        `/api/admin/users/${userId}/revoke-sessions`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: mutationHeaders(current),
+          body: "{}",
+        },
+      );
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      if (userId === current.user.id) {
+        await requireClient().logout();
+      }
+    }, "User sessions revoked");
   },
 );
 
@@ -218,6 +387,46 @@ element<HTMLButtonElement>("update-stock").addEventListener(
   },
 );
 
+element<HTMLButtonElement>("delete-product").addEventListener(
+  "click",
+  async () => {
+    await runUiAction(async () => {
+      const bundle = await requireClient().delete(
+        "products",
+        productId.value,
+      );
+      productOutput.textContent = JSON.stringify(
+        {
+          revision: bundle.revision,
+          deleted: bundle.document === null,
+        },
+        null,
+        2,
+      );
+    }, "Product deleted with retention tombstone");
+  },
+);
+
+element<HTMLButtonElement>("restore-product").addEventListener(
+  "click",
+  async () => {
+    await runUiAction(async () => {
+      const bundle = await requireClient().restore(
+        "products",
+        productId.value,
+      );
+      productOutput.textContent = JSON.stringify(
+        {
+          revision: bundle.revision,
+          product: bundle.document,
+        },
+        null,
+        2,
+      );
+    }, "Product restored");
+  },
+);
+
 element<HTMLButtonElement>("benchmark-reads").addEventListener(
   "click",
   async () => {
@@ -270,6 +479,29 @@ element<HTMLButtonElement>("scan-products").addEventListener(
         2,
       );
     }, "Product scan complete");
+  },
+);
+
+element<HTMLButtonElement>("scan-customers").addEventListener(
+  "click",
+  async () => {
+    await runUiAction(async () => {
+      const database = requireClient();
+      const started = performance.now();
+      const customers = await database.scan("customers");
+      benchmarkOutput.textContent = JSON.stringify(
+        {
+          collection: "customers",
+          layout:
+            requireConfig().collectionLayouts.customers ?? "trie",
+          elapsedMs: round(performance.now() - started),
+          documents: customers.length,
+          metrics: database.metrics(),
+        },
+        null,
+        2,
+      );
+    }, "Customer snapshot scan complete");
   },
 );
 
@@ -326,13 +558,24 @@ async function bootstrap(): Promise<void> {
       : {}),
     channelName: `thimbledb:${namespace}`,
     onLogout: (error) => showSignedOut(error),
+    collectionLayouts: config.collectionLayouts,
+    layoutGeneration: config.layoutGeneration,
+    configurationUrl: "/api/config",
+    layoutCheckTtlMs: 1_000,
+    onLayoutChange: () => window.location.reload(),
   });
   const persistentStorage = await requestPersistentStorage();
   cachePolicy.value = config.cachePolicy;
   for (const section of document.querySelectorAll<HTMLElement>(
     ".authenticated",
   )) {
-    section.hidden = false;
+    section.hidden =
+      section.dataset.admin === "true" &&
+      !config.user.roles.includes("thimble.admin");
+  }
+  renderIdentityControls(config);
+  if (config.user.roles.includes("thimble.admin")) {
+    await loadAdminUsers();
   }
   setStatus(
     `Ready: ${config.provider}, ${config.scope.encrypted ? `encrypted ${config.scope.keyId}` : "public"}, signed in with ${config.user.provider}, persistent cache ${persistentStorage ? "granted" : "best effort"}`,
@@ -372,6 +615,82 @@ async function authenticateExternal(): Promise<void> {
     authMessage.textContent = errorMessage(error);
     setStatus("Sign in failed", "error");
   }
+}
+
+function renderIdentityControls(current: BrowserConfig): void {
+  identityOutput.textContent = JSON.stringify(
+    current.user.identities,
+    null,
+    2,
+  );
+  linkProvider.replaceChildren(
+    ...(authConfig?.oidcProviders ?? []).map((provider) => {
+      const option = document.createElement("option");
+      option.value = provider;
+      option.textContent = provider;
+      return option;
+    }),
+  );
+  unlinkIdentity.replaceChildren(
+    ...current.user.identities.map((identity) => {
+      const option = document.createElement("option");
+      option.value = JSON.stringify(identity);
+      option.textContent =
+        `${identity.provider}: ${identity.subject}`;
+      return option;
+    }),
+  );
+  element<HTMLButtonElement>("unlink-identity-button").disabled =
+    current.user.identities.length <= 1;
+}
+
+async function loadAdminUsers(): Promise<void> {
+  const response = await fetch("/api/admin/users", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  const result = (await response.json()) as {
+    users: AdminUser[];
+  };
+  adminUsers = result.users;
+  adminUser.replaceChildren(
+    ...adminUsers.map((user) => {
+      const option = document.createElement("option");
+      option.value = user.id;
+      option.textContent = `${user.id} (${user.status})`;
+      return option;
+    }),
+  );
+  adminPanel.hidden = false;
+  renderSelectedAdminUser();
+}
+
+function renderSelectedAdminUser(): void {
+  const selected = adminUsers.find(
+    (user) => user.id === adminUser.value,
+  );
+  if (!selected) {
+    adminOutput.textContent = "No users loaded.";
+    return;
+  }
+  adminStatus.value = selected.status;
+  adminRoles.value = selected.roles.join(", ");
+  adminTenants.value = selected.tenants.join(", ");
+  adminOutput.textContent = JSON.stringify(selected, null, 2);
+}
+
+function commaSeparated(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ].sort();
 }
 
 async function runUiAction(
@@ -488,6 +807,7 @@ function mutationHeaders(
     "content-type": "application/json",
     "x-thimble-csrf": current.csrfToken,
     "x-thimble-scope": current.scope.id,
+    "x-thimble-layout-generation": current.layoutGeneration,
   };
 }
 

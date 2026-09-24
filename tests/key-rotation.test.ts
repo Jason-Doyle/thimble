@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ContentAddressedTrieEngine } from "../src/engines/content-trie.js";
+import { ImmutableSnapshotEngine } from "../src/engines/immutable-snapshot.js";
 import { EnvelopeObjectStore } from "../src/envelope-store.js";
 import {
   bytesToBase64,
@@ -130,6 +131,92 @@ describe("scope key rotation", () => {
         engine.get("products", "one"),
       ).resolves.toMatchObject({ value: "concurrent" });
     } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rewrites snapshot tombstones under the current key", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimbledb-snapshot-key-rotation-"),
+    );
+    const previous = process.env.THIMBLE_MASTER_KEY;
+    process.env.THIMBLE_MASTER_KEY = bytesToBase64(
+      crypto.getRandomValues(new Uint8Array(32)),
+    );
+    try {
+      const root = new LocalObjectStore(directory);
+      const scopeId = "user:snapshot";
+      const prefix = scopeStoragePrefix(scopeId);
+      const v1 = await loadScopeMaterial({
+        scopeId,
+        encrypted: true,
+        keyVersion: 1,
+        local: false,
+      });
+      const raw = new PrefixObjectStore(root, prefix);
+      const first = new ImmutableSnapshotEngine(
+        new EnvelopeObjectStore(raw, {
+          key: v1.key!,
+          keyId: v1.keyId!,
+          objectKeyPrefix: prefix,
+        }),
+        40,
+        v1.addressNode,
+      );
+      await first.put("items", "one", { id: "one", value: 1 });
+      await first.delete("items", "one", {
+        restoreWindowMs: 30 * 86_400_000,
+        purgeGraceMs: 7 * 86_400_000,
+        now: new Date("2026-01-01T00:00:00.000Z"),
+      });
+
+      const v2 = await loadScopeMaterial({
+        scopeId,
+        encrypted: true,
+        keyVersion: 2,
+        local: false,
+      });
+      const rotating = new ImmutableSnapshotEngine(
+        new EnvelopeObjectStore(raw, {
+          key: v2.key!,
+          keyId: v2.keyId!,
+          decryptionKeys: new Map([
+            [v1.keyId!, v1.key!],
+            [v2.keyId!, v2.key!],
+          ]),
+          objectKeyPrefix: prefix,
+        }),
+        40,
+        v2.addressNode,
+      );
+      const stored = await rotating.exportStored("items");
+      await rotating.replaceStored("items", stored);
+
+      const currentOnly = new ImmutableSnapshotEngine(
+        new EnvelopeObjectStore(raw, {
+          key: v2.key!,
+          keyId: v2.keyId!,
+          objectKeyPrefix: prefix,
+        }),
+        40,
+        v2.addressNode,
+      );
+      await expect(
+        currentOnly.retainedDeletionCount("items"),
+      ).resolves.toBe(1);
+      await expect(
+        currentOnly.restore(
+          "items",
+          "one",
+          new Date("2026-01-02T00:00:00.000Z"),
+        ),
+      ).resolves.toMatchObject({ value: 1 });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.THIMBLE_MASTER_KEY;
+      } else {
+        process.env.THIMBLE_MASTER_KEY = previous;
+      }
       await rm(directory, { recursive: true, force: true });
     }
   });

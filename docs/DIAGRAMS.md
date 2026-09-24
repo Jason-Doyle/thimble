@@ -172,10 +172,10 @@ flowchart TB
   Root --> TenantB["Scope: tenant-b<br/>key tenant-b:v1"]
   Root --> User["Scope: user-42<br/>key user-42:v2"]
 
-  Public --> PublicTree["Independent HEAD and trie"]
-  TenantA --> TenantATree["Independent HEAD and trie"]
-  TenantB --> TenantBTree["Independent HEAD and trie"]
-  User --> UserTree["Independent HEAD and trie"]
+  Public --> PublicTree["Independent HEAD and selected layout"]
+  TenantA --> TenantATree["Independent HEAD and selected layout"]
+  TenantB --> TenantBTree["Independent HEAD and selected layout"]
+  User --> UserTree["Independent HEAD and selected layout"]
 ```
 
 Pages from different scopes are never combined. Granting one key therefore

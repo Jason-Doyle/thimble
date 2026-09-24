@@ -1,6 +1,7 @@
 import type {
   DatabaseEngine,
   EngineDiagnostics,
+  DeletionPolicy,
   JsonDocument,
   JsonValue,
   ObjectStore,
@@ -15,16 +16,20 @@ import {
   validateName,
 } from "../shared-utils.js";
 import {
+  isTrieTombstone,
   trieCollectionPrefix,
   trieHeadKey,
   trieNodeKey,
   triePathFromHash,
+  visibleTrieDocument,
   type TrieBranchNode,
   type TrieHead,
   type TrieLeafNode,
   type TrieNode,
   type TrieReadBundle,
   type TrieRootNode,
+  type TrieStoredDocument,
+  type TrieTombstone,
 } from "../trie-protocol.js";
 
 type LoadedHead = {
@@ -34,7 +39,7 @@ type LoadedHead = {
 
 type TrieUpdate = {
   id: string;
-  document: JsonDocument;
+  document: TrieStoredDocument | null;
   first: string;
   second: string;
 };
@@ -89,7 +94,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       leafHash,
       "leaf",
     );
-    return ownValue(leaf.documents, id) ?? null;
+    return visibleTrieDocument(ownValue(leaf.documents, id));
   }
 
   async scan(collection: string): Promise<JsonDocument[]> {
@@ -126,7 +131,14 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
             ),
           ),
         );
-        return leaves.flatMap((leaf) => Object.values(leaf.documents));
+        return leaves.flatMap((leaf) =>
+          Object.values(leaf.documents)
+            .map(visibleTrieDocument)
+            .filter(
+              (document): document is JsonDocument =>
+                document !== null,
+            ),
+        );
       }),
     );
 
@@ -140,6 +152,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     id: string,
     document: JsonDocument,
   ): Promise<void> {
+    assertUserDocument(document);
     return this.putMany(collection, [{ ...document, id }]);
   }
 
@@ -147,7 +160,14 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     collection: string,
     documents: JsonDocument[],
   ): Promise<void> {
-    await this.putManyInternal(collection, documents);
+    documents.forEach(assertUserDocument);
+    await this.applyChanges(
+      collection,
+      documents.map((document) => ({
+        id: document.id,
+        document,
+      })),
+    );
   }
 
   rewriteIfHeadUnchanged(
@@ -155,25 +175,260 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     documents: JsonDocument[],
     expectedHeadEtag: string | null,
   ): Promise<boolean> {
-    return this.putManyInternal(
+    documents.forEach(assertUserDocument);
+    return this.applyChanges(
       collection,
-      documents,
+      documents.map((document) => ({
+        id: document.id,
+        document,
+      })),
       expectedHeadEtag,
     );
   }
 
-  private async putManyInternal(
+  async delete(
     collection: string,
-    documents: JsonDocument[],
+    id: string,
+    policy: DeletionPolicy,
+  ): Promise<boolean> {
+    const normalized = validateName(collection, "Collection");
+    for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
+      const head = await this.loadHead(normalized);
+      const current = await this.readStoredAtHead(
+        normalized,
+        id,
+        head.state,
+      );
+      if (!current || isTrieTombstone(current)) {
+        return false;
+      }
+      const now = policy.now ?? new Date();
+      const restoreUntil = new Date(
+        now.getTime() + policy.restoreWindowMs,
+      );
+      const tombstone: TrieTombstone = {
+        id,
+        __thimbleTombstone: {
+          deletedAt: now.toISOString(),
+          restoreUntil: restoreUntil.toISOString(),
+          purgeAfter: new Date(
+            restoreUntil.getTime() + policy.purgeGraceMs,
+          ).toISOString(),
+        },
+        document: structuredClone(current),
+      };
+      if (
+        await this.applyChanges(
+          normalized,
+          [{ id, document: tombstone }],
+          head.object?.etag ?? null,
+        )
+      ) {
+        return true;
+      }
+      this.casRetries += 1;
+    }
+    throw new Error(
+      `Content-addressed trie delete exceeded ${this.maxRetries} retries`,
+    );
+  }
+
+  async restore(
+    collection: string,
+    id: string,
+    now = new Date(),
+  ): Promise<JsonDocument | null> {
+    const normalized = validateName(collection, "Collection");
+    for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
+      const head = await this.loadHead(normalized);
+      const current = await this.readStoredAtHead(
+        normalized,
+        id,
+        head.state,
+      );
+      if (
+        !current ||
+        !isTrieTombstone(current) ||
+        current.__thimbleTombstone.restoreUntil < now.toISOString()
+      ) {
+        return null;
+      }
+      if (
+        await this.applyChanges(
+          normalized,
+          [{ id, document: current.document }],
+          head.object?.etag ?? null,
+        )
+      ) {
+        return structuredClone(current.document);
+      }
+      this.casRetries += 1;
+    }
+    throw new Error(
+      `Content-addressed trie restore exceeded ${this.maxRetries} retries`,
+    );
+  }
+
+  async eraseAll(
+    collection: string,
+    policy: DeletionPolicy,
+  ): Promise<number> {
+    const normalized = validateName(collection, "Collection");
+    for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
+      const head = await this.loadHead(normalized);
+      const documents = await this.scanStoredFromHead(
+        normalized,
+        head.state,
+      );
+      const visible = documents.filter(
+        (document): document is JsonDocument =>
+          !isTrieTombstone(document),
+      );
+      if (visible.length === 0) {
+        return 0;
+      }
+      const now = policy.now ?? new Date();
+      const restoreUntil = new Date(
+        now.getTime() + policy.restoreWindowMs,
+      );
+      const changes = visible.map((document) => ({
+        id: document.id,
+        document: {
+          id: document.id,
+          __thimbleTombstone: {
+            deletedAt: now.toISOString(),
+            restoreUntil: restoreUntil.toISOString(),
+            purgeAfter: new Date(
+              restoreUntil.getTime() + policy.purgeGraceMs,
+            ).toISOString(),
+          },
+          document: structuredClone(document),
+        } satisfies TrieTombstone,
+      }));
+      if (
+        await this.applyChanges(
+          normalized,
+          changes,
+          head.object?.etag ?? null,
+        )
+      ) {
+        return changes.length;
+      }
+      this.casRetries += 1;
+    }
+    throw new Error(
+      `Content-addressed trie erasure exceeded ${this.maxRetries} retries`,
+    );
+  }
+
+  async purgeDeleted(
+    collection: string,
+    now = new Date(),
+  ): Promise<number> {
+    const normalized = validateName(collection, "Collection");
+    for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
+      const head = await this.loadHead(normalized);
+      const documents = await this.scanStoredFromHead(
+        normalized,
+        head.state,
+      );
+      const expired = documents.filter(
+        (document): document is TrieTombstone =>
+          isTrieTombstone(document) &&
+          document.__thimbleTombstone.purgeAfter <= now.toISOString(),
+      );
+      if (expired.length === 0) {
+        return 0;
+      }
+      if (
+        await this.applyChanges(
+          normalized,
+          expired.map((document) => ({
+            id: document.id,
+            document: null,
+          })),
+          head.object?.etag ?? null,
+        )
+      ) {
+        return expired.length;
+      }
+      this.casRetries += 1;
+    }
+    throw new Error(
+      `Content-addressed trie purge exceeded ${this.maxRetries} retries`,
+    );
+  }
+
+  async retainedDeletionCount(
+    collection: string,
+  ): Promise<number> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    return (
+      await this.scanStoredFromHead(normalized, head.state)
+    ).filter(isTrieTombstone).length;
+  }
+
+  async exportStored(
+    collection: string,
+  ): Promise<TrieStoredDocument[]> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    return this.scanStoredFromHead(normalized, head.state);
+  }
+
+  async replaceStored(
+    collection: string,
+    documents: TrieStoredDocument[],
+  ): Promise<void> {
+    const current = await this.exportStored(collection);
+    const desiredIds = new Set(documents.map((document) => document.id));
+    await this.applyChanges(collection, [
+      ...documents.map((document) => ({
+        id: document.id,
+        document,
+      })),
+      ...current
+        .filter((document) => !desiredIds.has(document.id))
+        .map((document) => ({
+          id: document.id,
+          document: null,
+        })),
+    ]);
+  }
+
+  async dropCollection(collection: string): Promise<number> {
+    if (!this.allowQuiescentGarbageCollection) {
+      throw new Error(
+        "Dropping a trie collection requires quiescent garbage collection",
+      );
+    }
+    const normalized = validateName(collection, "Collection");
+    const keys = await this.store.list(
+      `${this.collectionPrefix(normalized)}/`,
+    );
+    await Promise.all(keys.map((key) => this.store.delete(key)));
+    this.garbageCollected += keys.length;
+    return keys.length;
+  }
+
+  private async applyChanges(
+    collection: string,
+    changes: Array<{
+      id: string;
+      document: TrieStoredDocument | null;
+    }>,
     expectedHeadEtag?: string | null,
   ): Promise<boolean> {
     const normalized = validateName(collection, "Collection");
     const updates = await Promise.all(
-      documents.map(async (document) => {
-        const [first, second] = await this.pathFor(document.id);
+      changes.map(async (change) => {
+        const [first, second] = await this.pathFor(change.id);
         return {
-          id: document.id,
-          document: structuredClone(document),
+          id: change.id,
+          document: change.document
+            ? structuredClone(change.document)
+            : null,
           first,
           second,
         };
@@ -236,7 +491,14 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
                 ),
               };
               for (const update of leafUpdates) {
-                nextLeaf.documents[update.id] = update.document;
+                if (update.document === null) {
+                  delete nextLeaf.documents[update.id];
+                } else {
+                  nextLeaf.documents[update.id] = update.document;
+                }
+              }
+              if (Object.keys(nextLeaf.documents).length === 0) {
+                return [second, null] as const;
               }
               return [
                 second,
@@ -245,7 +507,14 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
             }),
           );
           for (const [second, leafHash] of changedLeaves) {
-            nextBranch.children[second] = leafHash;
+            if (leafHash === null) {
+              delete nextBranch.children[second];
+            } else {
+              nextBranch.children[second] = leafHash;
+            }
+          }
+          if (Object.keys(nextBranch.children).length === 0) {
+            return [first, null] as const;
           }
 
           return [
@@ -255,10 +524,17 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         }),
       );
       for (const [first, branchHash] of changedBranches) {
-        nextRoot.children[first] = branchHash;
+        if (branchHash === null) {
+          delete nextRoot.children[first];
+        } else {
+          nextRoot.children[first] = branchHash;
+        }
       }
 
-      const rootHash = await this.writeNode(normalized, nextRoot);
+      const rootHash =
+        Object.keys(nextRoot.children).length === 0
+          ? null
+          : await this.writeNode(normalized, nextRoot);
       const nextHead: TrieHead = {
         revision: head.state.revision + 1,
         rootHash,
@@ -429,7 +705,9 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       collection: normalized,
       id,
       revision: head.state.revision,
-      document: ownValue(leaf.value.documents, id) ?? null,
+      document: visibleTrieDocument(
+        ownValue(leaf.value.documents, id),
+      ),
       objects,
     };
   }
@@ -443,6 +721,82 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       };
     }
     return { object, state: decodeJson<TrieHead>(object.bytes) };
+  }
+
+  private async readStoredAtHead(
+    collection: string,
+    id: string,
+    head: TrieHead,
+  ): Promise<TrieStoredDocument | null> {
+    if (head.rootHash === null) {
+      return null;
+    }
+    const [first, second] = await this.pathFor(id);
+    const root = await this.readNode<TrieRootNode>(
+      collection,
+      head.rootHash,
+      "root",
+    );
+    const branchHash = root.children[first];
+    if (!branchHash) {
+      return null;
+    }
+    const branch = await this.readNode<TrieBranchNode>(
+      collection,
+      branchHash,
+      "branch",
+    );
+    const leafHash = branch.children[second];
+    if (!leafHash) {
+      return null;
+    }
+    const leaf = await this.readNode<TrieLeafNode>(
+      collection,
+      leafHash,
+      "leaf",
+    );
+    return ownValue(leaf.documents, id) ?? null;
+  }
+
+  private async scanStoredFromHead(
+    collection: string,
+    head: TrieHead,
+  ): Promise<TrieStoredDocument[]> {
+    if (head.rootHash === null) {
+      return [];
+    }
+    const root = await this.readNode<TrieRootNode>(
+      collection,
+      head.rootHash,
+      "root",
+    );
+    const branches = await Promise.all(
+      Object.values(root.children).map((branchHash) =>
+        this.readNode<TrieBranchNode>(
+          collection,
+          branchHash,
+          "branch",
+        ),
+      ),
+    );
+    const leaves = await Promise.all(
+      [
+        ...new Set(
+          branches.flatMap((branch) =>
+            Object.values(branch.children),
+          ),
+        ),
+      ].map((leafHash) =>
+        this.readNode<TrieLeafNode>(
+          collection,
+          leafHash,
+          "leaf",
+        ),
+      ),
+    );
+    return leaves
+      .flatMap((leaf) => Object.values(leaf.documents))
+      .sort((left, right) => left.id.localeCompare(right.id));
   }
 
   private async writeNode(
@@ -548,4 +902,12 @@ function groupUpdates(
     leaves.set(update.second, leafUpdates);
   }
   return branches;
+}
+
+function assertUserDocument(document: JsonDocument): void {
+  if ("__thimbleTombstone" in document) {
+    throw new Error(
+      'Document field "__thimbleTombstone" is reserved',
+    );
+  }
 }

@@ -81,6 +81,18 @@ header {
   margin-bottom: 1.5rem;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.brand-logo {
+  width: clamp(5.5rem, 12vw, 8.5rem);
+  height: auto;
+  flex: none;
+}
+
 h1,
 h2,
 p {

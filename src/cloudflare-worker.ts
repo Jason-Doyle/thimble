@@ -18,6 +18,8 @@ import {
 } from "./auth/rate-limit.js";
 import { AuthRepository } from "./auth/repository.js";
 import type {
+  AuthUser,
+  Identity,
   IdentityAdapter,
   ScopeGrant,
 } from "./auth/types.js";
@@ -26,8 +28,14 @@ import {
   R2ObjectStore,
   type R2BucketBinding,
 } from "./cloudflare/r2-object-store.js";
-import type { JsonDocument, ObjectStore } from "./core.js";
+import type {
+  DeletionPolicy,
+  JsonDocument,
+  JsonValue,
+  ObjectStore,
+} from "./core.js";
 import { ContentAddressedTrieEngine } from "./engines/content-trie.js";
+import { ImmutableSnapshotEngine } from "./engines/immutable-snapshot.js";
 import { EnvelopeObjectStore } from "./envelope-store.js";
 import {
   base64ToBytes,
@@ -40,13 +48,17 @@ import {
   workloadProfiles,
 } from "./workload.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
-import { validateName } from "./shared-utils.js";
+import {
+  stableStringify,
+  validateName,
+} from "./shared-utils.js";
+import type { CollectionLayout } from "./snapshot-protocol.js";
 
 type RateLimitBinding = {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 };
 
-type Env = {
+export type CloudflareAuthorityEnv = {
   DB: R2BucketBinding;
   AUTH_DB: R2BucketBinding;
   AUTH_RATE_LIMITER?: RateLimitBinding;
@@ -57,6 +69,10 @@ type Env = {
   THIMBLE_KEY_VERSION?: string;
   THIMBLE_READ_KEY_VERSIONS?: string;
   THIMBLE_HEAD_TTL_MS?: string;
+  THIMBLE_COLLECTION_LAYOUTS?: string;
+  THIMBLE_DELETE_RETENTION_DAYS?: string;
+  THIMBLE_DELETE_GRACE_DAYS?: string;
+  THIMBLE_MAINTENANCE_MODE?: string;
   ENTRA_TENANT_ID?: string;
   ENTRA_AUDIENCE?: string;
   ENTRA_REQUIRED_SCOPE?: string;
@@ -70,10 +86,13 @@ type Env = {
   OIDC_REQUIRED_ROLE?: string;
 };
 
+type Env = CloudflareAuthorityEnv;
+
 type ScopeRuntime = {
   material: WorkerScopeMaterial;
   materials: WorkerScopeMaterial[];
-  engine: ContentAddressedTrieEngine;
+  trie: ContentAddressedTrieEngine;
+  snapshot: ImmutableSnapshotEngine;
 };
 
 type WorkerScopeMaterial = {
@@ -89,6 +108,10 @@ type Runtime = {
   auth: AuthService;
   dataRootStore: ObjectStore;
   headTtlMs: number;
+  deletionPolicy: DeletionPolicy;
+  collectionLayouts: Record<string, CollectionLayout>;
+  layoutGeneration: string;
+  maintenanceMode: boolean;
   oidcProviders: string[];
   allowedOrigin: string;
   scope(scopeId: string): Promise<ScopeRuntime>;
@@ -96,7 +119,7 @@ type Runtime = {
 
 let runtimePromise: Promise<Runtime> | undefined;
 
-export default {
+const cloudflareAuthority = {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       return await route(await runtimeFor(env), request, env);
@@ -126,6 +149,12 @@ export default {
     }
   },
 };
+
+export function createCloudflareAuthority(): typeof cloudflareAuthority {
+  return cloudflareAuthority;
+}
+
+export default cloudflareAuthority;
 
 async function route(
   runtime: Runtime,
@@ -201,6 +230,113 @@ async function route(
     );
   }
 
+  const linkRoute =
+    /^\/api\/auth\/identities\/([^/]+)\/link$/.exec(
+      url.pathname,
+    );
+  if (request.method === "POST" && linkRoute?.[1]) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const user = await runtime.auth.linkIdentity(
+      authenticated,
+      decodePathSegment(linkRoute[1]),
+      bearerToken(request),
+      clientRateKey(request),
+    );
+    return json({ user: storedUserResponse(user) });
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/identities/unlink"
+  ) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const user = await runtime.auth.unlinkIdentity(
+      authenticated,
+      identityReference(await readJsonRequest(request)),
+    );
+    return json(
+      { user: storedUserResponse(user) },
+      200,
+      new Headers({
+        "set-cookie": runtime.auth.clearSessionCookie(),
+      }),
+    );
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/admin/users"
+  ) {
+    requireAuthenticated(authenticated);
+    const users = await runtime.auth.listUsers(authenticated);
+    return json({
+      users: users.map(storedUserResponse),
+    });
+  }
+
+  const adminUserRoute =
+    /^\/api\/admin\/users\/([0-9a-f-]{36})$/.exec(
+      url.pathname,
+    );
+  if (request.method === "POST" && adminUserRoute?.[1]) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const user = await runtime.auth.administerUser(
+      authenticated,
+      adminUserRoute[1],
+      administrationChanges(await readJsonRequest(request)),
+    );
+    return json(
+      { user: storedUserResponse(user) },
+      200,
+      user.id === authenticated.user.id
+        ? new Headers({
+            "set-cookie": runtime.auth.clearSessionCookie(),
+          })
+        : new Headers(),
+    );
+  }
+
+  const revokeSessionsRoute =
+    /^\/api\/admin\/users\/([0-9a-f-]{36})\/revoke-sessions$/.exec(
+      url.pathname,
+    );
+  if (request.method === "POST" && revokeSessionsRoute?.[1]) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    await runtime.auth.revokeUserSessions(
+      authenticated,
+      revokeSessionsRoute[1],
+    );
+    return json(
+      { revoked: true },
+      200,
+      revokeSessionsRoute[1] === authenticated.user.id
+        ? new Headers({
+            "set-cookie": runtime.auth.clearSessionCookie(),
+          })
+        : new Headers(),
+    );
+  }
+
 
   if (request.method === "GET" && url.pathname === "/api/config") {
     requireAuthenticated(authenticated);
@@ -212,6 +348,8 @@ async function route(
       readBaseUrl: "/api/objects",
       headTtlMs: runtime.headTtlMs,
       cachePolicy: "content",
+      collectionLayouts: runtime.collectionLayouts,
+      layoutGeneration: runtime.layoutGeneration,
       csrfToken: authenticated.session.csrfToken,
       user: publicUser(authenticated),
       scope: {
@@ -278,6 +416,8 @@ async function route(
 
   if (request.method === "POST" && url.pathname === "/api/seed") {
     requireAuthenticated(authenticated);
+    requireWritesEnabled(runtime);
+    requireLayoutGeneration(runtime, request);
     requireMutationRequest(
       runtime,
       request,
@@ -293,9 +433,18 @@ async function route(
         ? workloadProfiles.small
         : workloadProfiles.tiny;
     const dataset = generateStoreDataset(profile);
-    await scope.engine.putMany("products", dataset.products);
-    await scope.engine.putMany("customers", dataset.customers);
-    await scope.engine.putMany("orders", dataset.orders);
+    await engineFor(runtime, scope, "products").putMany(
+      "products",
+      dataset.products,
+    );
+    await engineFor(runtime, scope, "customers").putMany(
+      "customers",
+      dataset.customers,
+    );
+    await engineFor(runtime, scope, "orders").putMany(
+      "orders",
+      dataset.orders,
+    );
     return json({
       profile: profile.name,
       scopeId: grant.scopeId,
@@ -309,8 +458,80 @@ async function route(
     /^\/api\/collections\/([^/]+)\/documents\/([^/]+)$/.exec(
       url.pathname,
     );
+  const restoreRoute =
+    /^\/api\/collections\/([^/]+)\/documents\/([^/]+)\/restore$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    restoreRoute?.[1] &&
+    restoreRoute[2]
+  ) {
+    requireAuthenticated(authenticated);
+    requireWritesEnabled(runtime);
+    requireLayoutGeneration(runtime, request);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const grant = selectedWriteGrant(
+      authenticated.session.grants,
+      request,
+    );
+    const scope = await runtime.scope(grant.scopeId);
+    const collection = decodePathSegment(restoreRoute[1]);
+    const id = decodePathSegment(restoreRoute[2]);
+    const engine = engineFor(runtime, scope, collection);
+    const restored = await engine.restore(collection, id);
+    if (!restored) {
+      throw new AuthError(
+        404,
+        "document_not_restorable",
+        "Document cannot be restored",
+      );
+    }
+    return json(await engine.readBundle(collection, id));
+  }
+  if (
+    request.method === "DELETE" &&
+    writeRoute?.[1] &&
+    writeRoute[2]
+  ) {
+    requireAuthenticated(authenticated);
+    requireWritesEnabled(runtime);
+    requireLayoutGeneration(runtime, request);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const grant = selectedWriteGrant(
+      authenticated.session.grants,
+      request,
+    );
+    const scope = await runtime.scope(grant.scopeId);
+    const collection = decodePathSegment(writeRoute[1]);
+    const id = decodePathSegment(writeRoute[2]);
+    const engine = engineFor(runtime, scope, collection);
+    const deleted = await engine.delete(
+      collection,
+      id,
+      runtime.deletionPolicy,
+    );
+    if (!deleted) {
+      throw new AuthError(
+        404,
+        "document_not_found",
+        "Document was not found",
+      );
+    }
+    return json(await engine.readBundle(collection, id));
+  }
   if (request.method === "POST" && writeRoute?.[1] && writeRoute[2]) {
     requireAuthenticated(authenticated);
+    requireWritesEnabled(runtime);
+    requireLayoutGeneration(runtime, request);
     requireMutationRequest(
       runtime,
       request,
@@ -327,8 +548,129 @@ async function route(
       await readJsonRequest(request),
       id,
     );
-    await scope.engine.put(collection, id, document);
-    return json(await scope.engine.readBundle(collection, id));
+    const engine = engineFor(runtime, scope, collection);
+    await engine.put(collection, id, document);
+    return json(await engine.readBundle(collection, id));
+  }
+
+  const layoutMigrationRoute =
+    /^\/api\/admin\/scopes\/([^/]+)\/migrate-layout$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    layoutMigrationRoute?.[1]
+  ) {
+    requireAuthenticated(authenticated);
+    requireAdministratorSession(authenticated);
+    requireMaintenanceMode(runtime);
+    requireLayoutGeneration(runtime, request);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const scopeId = decodePathSegment(layoutMigrationRoute[1]);
+    const requestBody = layoutMigrationRequest(
+      await readJsonRequest(request),
+    );
+    const scope = await runtime.scope(scopeId);
+    const source = engineFor(
+      runtime,
+      scope,
+      requestBody.collection,
+    );
+    const target =
+      requestBody.targetLayout === "snapshot"
+        ? scope.snapshot
+        : scope.trie;
+    if (source === target) {
+      return json({
+        scopeId,
+        collection: requestBody.collection,
+        layout: requestBody.targetLayout,
+        migrated: 0,
+      });
+    }
+    if (
+      (await source.retainedDeletionCount(
+        requestBody.collection,
+      )) > 0
+    ) {
+      throw new AuthError(
+        409,
+        "retained_deletions",
+        "Resolve retained deletions before changing layout",
+      );
+    }
+    const documents = await source.exportStored(
+      requestBody.collection,
+    );
+    await target.replaceStored(requestBody.collection, documents);
+    const verified = await target.exportStored(
+      requestBody.collection,
+    );
+    if (
+      stableStringify(verified as unknown as JsonValue) !==
+      stableStringify(documents as unknown as JsonValue)
+    ) {
+      throw new Error("Target layout verification failed");
+    }
+    return json({
+      scopeId,
+      collection: requestBody.collection,
+      layout: requestBody.targetLayout,
+      migrated: documents.length,
+    });
+  }
+
+  const scopeMaintenanceRoute =
+    /^\/api\/admin\/scopes\/([^/]+)\/(erase|purge-deleted)$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    scopeMaintenanceRoute?.[1] &&
+    scopeMaintenanceRoute[2]
+  ) {
+    requireAuthenticated(authenticated);
+    requireAdministratorSession(authenticated);
+    requireWritesEnabled(runtime);
+    requireLayoutGeneration(runtime, request);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const scopeId = decodePathSegment(scopeMaintenanceRoute[1]);
+    const collections = collectionList(
+      await readJsonRequest(request),
+    );
+    const scope = await runtime.scope(scopeId);
+    const results: Record<string, number> = {};
+    for (const collection of collections) {
+      results[collection] =
+        scopeMaintenanceRoute[2] === "erase"
+          ? await engineFor(
+              runtime,
+              scope,
+              collection,
+            ).eraseAll(
+              collection,
+              runtime.deletionPolicy,
+            )
+          : await engineFor(
+              runtime,
+              scope,
+              collection,
+            ).purgeDeleted(collection);
+    }
+
+    return json({
+      scopeId,
+      operation: scopeMaintenanceRoute[2],
+      results,
+    });
   }
 
   if (url.pathname.startsWith("/api/")) {
@@ -396,6 +738,10 @@ async function createRuntime(env: Env): Promise<Runtime> {
     sessionTtlSeconds: 3_600,
     secureCookies: true,
   });
+  const collectionLayouts = configuredCollectionLayouts(env);
+  const layoutGeneration = (
+    await hashText(JSON.stringify(collectionLayouts))
+  ).slice(0, 16);
   const cache = new AsyncLruCache<string, ScopeRuntime>({
     maxEntries: 100,
     ttlMs: 15 * 60_000,
@@ -419,6 +765,10 @@ async function createRuntime(env: Env): Promise<Runtime> {
     auth,
     dataRootStore,
     headTtlMs: parseInteger(env.THIMBLE_HEAD_TTL_MS, 1_000),
+    deletionPolicy: configuredDeletionPolicy(env),
+    collectionLayouts,
+    layoutGeneration,
+    maintenanceMode: env.THIMBLE_MAINTENANCE_MODE === "true",
     oidcProviders: [...adapters.keys()],
     allowedOrigin: env.THIMBLE_ALLOWED_ORIGIN,
     scope,
@@ -460,7 +810,12 @@ async function createScopeRuntime(
   return {
     material,
     materials,
-    engine: new ContentAddressedTrieEngine(
+    trie: new ContentAddressedTrieEngine(
+      store,
+      40,
+      material.addressNode,
+    ),
+    snapshot: new ImmutableSnapshotEngine(
       store,
       40,
       material.addressNode,
@@ -773,7 +1128,8 @@ function asDocument(value: unknown, id: string): JsonDocument {
     typeof value !== "object" ||
     value === null ||
     Array.isArray(value) ||
-    (value as { id?: unknown }).id !== id
+    (value as { id?: unknown }).id !== id ||
+    "__thimbleTombstone" in value
   ) {
     throw new AuthError(
       400,
@@ -784,13 +1140,207 @@ function asDocument(value: unknown, id: string): JsonDocument {
   return value as JsonDocument;
 }
 
+function requireAdministratorSession(
+  authenticated: AuthenticatedSession,
+): void {
+  if (!authenticated.principal.roles.includes("thimble.admin")) {
+    throw new AuthError(403, "administrator_required", "Access denied");
+  }
+}
+
+function requireWritesEnabled(runtime: Runtime): void {
+  if (runtime.maintenanceMode) {
+    throw new AuthError(
+      503,
+      "maintenance_mode",
+      "Writes are temporarily disabled",
+    );
+  }
+}
+
+function requireLayoutGeneration(
+  runtime: Runtime,
+  request: Request,
+): void {
+  if (
+    request.headers.get("x-thimble-layout-generation") !==
+    runtime.layoutGeneration
+  ) {
+    throw new AuthError(
+      409,
+      "layout_changed",
+      "Reload configuration before writing",
+    );
+  }
+}
+
+function requireMaintenanceMode(runtime: Runtime): void {
+  if (!runtime.maintenanceMode) {
+    throw new AuthError(
+      409,
+      "maintenance_required",
+      "Enable maintenance mode before changing collection layout",
+    );
+  }
+}
+
+function collectionList(value: unknown): string[] {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    !Array.isArray(
+      (value as { collections?: unknown }).collections,
+    )
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return stringList(
+    (value as { collections: unknown[] }).collections,
+  );
+}
+
+function layoutMigrationRequest(value: unknown): {
+  collection: string;
+  targetLayout: CollectionLayout;
+} {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.collection !== "string" ||
+    (candidate.targetLayout !== "trie" &&
+      candidate.targetLayout !== "snapshot")
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return {
+    collection: validateName(candidate.collection, "Collection"),
+    targetLayout: candidate.targetLayout,
+  };
+}
+
 function publicUser(session: AuthenticatedSession) {
   return {
     id: session.user.id,
     provider: session.principal.provider,
     roles: [...session.principal.roles],
     tenants: [...session.principal.tenantIds],
+    identities: session.user.identities.map(identityResponse),
   };
+}
+
+function storedUserResponse(user: AuthUser) {
+  return {
+    id: user.id,
+    status: user.status,
+    authVersion: user.authVersion,
+    roles: [...user.roles],
+    tenants: [...user.tenants],
+    identities: user.identities.map((identity) => ({
+      ...identityResponse(identity),
+      roles: [...identity.roles],
+      tenants: [...identity.tenants],
+    })),
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+function identityResponse(identity: Identity) {
+  return {
+    provider: identity.provider,
+    issuer: identity.issuer,
+    subject: identity.subject,
+  };
+}
+
+function identityReference(value: unknown): {
+  provider: Identity["provider"];
+  issuer: string;
+  subject: string;
+} {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    (candidate.provider !== "entra" &&
+      candidate.provider !== "oidc") ||
+    typeof candidate.issuer !== "string" ||
+    typeof candidate.subject !== "string"
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return {
+    provider: candidate.provider,
+    issuer: candidate.issuer,
+    subject: candidate.subject,
+  };
+}
+
+function administrationChanges(value: unknown): {
+  status?: AuthUser["status"];
+  roles?: string[];
+  tenants?: string[];
+} {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  const candidate = value as Record<string, unknown>;
+  const changes: {
+    status?: AuthUser["status"];
+    roles?: string[];
+    tenants?: string[];
+  } = {};
+  if (candidate.status !== undefined) {
+    if (
+      candidate.status !== "active" &&
+      candidate.status !== "disabled"
+    ) {
+      throw new AuthError(400, "invalid_request", "Invalid request");
+    }
+    changes.status = candidate.status;
+  }
+  if (candidate.roles !== undefined) {
+    changes.roles = stringList(candidate.roles);
+  }
+  if (candidate.tenants !== undefined) {
+    changes.tenants = stringList(candidate.tenants);
+  }
+  if (Object.keys(changes).length === 0) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return changes;
+}
+
+function stringList(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > 100 ||
+    !value.every(
+      (item) =>
+        typeof item === "string" &&
+        item.length > 0 &&
+        item.length <= 256,
+    )
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return [...new Set(value)].sort();
 }
 
 function bearerToken(request: Request): string {
@@ -905,6 +1455,52 @@ function configuredKeyVersions(env: Env): number[] {
     writeVersion,
     ...historical.filter((value) => value !== writeVersion),
   ];
+}
+
+function configuredDeletionPolicy(
+  env: Env,
+): DeletionPolicy {
+  const day = 24 * 60 * 60 * 1_000;
+  return {
+    restoreWindowMs:
+      parseInteger(env.THIMBLE_DELETE_RETENTION_DAYS, 30) * day,
+    purgeGraceMs:
+      parseInteger(env.THIMBLE_DELETE_GRACE_DAYS, 7) * day,
+  };
+}
+
+function configuredCollectionLayouts(
+  env: Env,
+): Record<string, CollectionLayout> {
+  const layouts: Record<string, CollectionLayout> = {};
+  for (const entry of (env.THIMBLE_COLLECTION_LAYOUTS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)) {
+    const [collection, layout, ...extra] = entry.split("=");
+    if (
+      !collection ||
+      !layout ||
+      extra.length > 0 ||
+      (layout !== "trie" && layout !== "snapshot")
+    ) {
+      throw new Error(
+        `Invalid THIMBLE_COLLECTION_LAYOUTS entry: ${entry}`,
+      );
+    }
+    layouts[validateName(collection, "Collection")] = layout;
+  }
+  return layouts;
+}
+
+function engineFor(
+  runtime: Runtime,
+  scope: ScopeRuntime,
+  collection: string,
+): ContentAddressedTrieEngine | ImmutableSnapshotEngine {
+  return runtime.collectionLayouts[collection] === "snapshot"
+    ? scope.snapshot
+    : scope.trie;
 }
 
 function cookieValue(

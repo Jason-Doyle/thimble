@@ -4,10 +4,12 @@ import { nodeClientIp } from "./client-ip.js";
 import {
   createServer,
   type IncomingMessage,
+  type Server,
   type ServerResponse,
 } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   AuthError,
   AuthService,
@@ -21,11 +23,19 @@ import { DefaultScopeAuthorizer } from "./auth/policy.js";
 import { ObjectStoreAuthRateLimiter } from "./auth/rate-limit.js";
 import { AuthRepository } from "./auth/repository.js";
 import type {
+  AuthUser,
+  Identity,
   IdentityAdapter,
   ScopeGrant,
 } from "./auth/types.js";
-import type { JsonDocument, ObjectStore } from "./core.js";
+import type {
+  DeletionPolicy,
+  JsonDocument,
+  JsonValue,
+  ObjectStore,
+} from "./core.js";
 import { ContentAddressedTrieEngine } from "./engines/content-trie.js";
+import { ImmutableSnapshotEngine } from "./engines/immutable-snapshot.js";
 import { EnvelopeObjectStore } from "./envelope-store.js";
 import {
   loadScopeMaterial,
@@ -43,14 +53,19 @@ import {
   workloadProfiles,
 } from "./workload.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
-import { validateName } from "./shared-utils.js";
+import {
+  stableStringify,
+  validateName,
+} from "./shared-utils.js";
+import type { CollectionLayout } from "./snapshot-protocol.js";
 
-type Provider = "local" | "azure" | "s3" | "r2";
+export type Provider = "local" | "azure" | "s3" | "r2";
 
 type ScopeRuntime = {
   material: ScopeMaterial;
   materials: ScopeMaterial[];
-  engine: ContentAddressedTrieEngine;
+  trie: ContentAddressedTrieEngine;
+  snapshot: ImmutableSnapshotEngine;
 };
 
 type ServerContext = {
@@ -59,50 +74,48 @@ type ServerContext = {
   auth: AuthService;
   allowedOrigin: string;
   headTtlMs: number;
+  deletionPolicy: DeletionPolicy;
+  collectionLayouts: Record<string, CollectionLayout>;
+  layoutGeneration: string;
+  maintenanceMode: boolean;
   oidcProviders: string[];
   scope(scopeId: string): Promise<ScopeRuntime>;
 };
 
-const host = process.env.THIMBLE_HOST ?? "127.0.0.1";
-const port = parseInteger(process.env.THIMBLE_PORT, 8787);
-const context = await createContext();
-const server = createServer((request, response) => {
-  void handleRequest(context, request, response).catch((error) => {
-    if (!(error instanceof AuthError && error.status < 500)) {
-      console.error(error);
-    }
-    if (!response.headersSent) {
-      const status = error instanceof AuthError ? error.status : 500;
-      const headers: Record<string, string> = {};
-      if (error instanceof AuthError && error.retryAfterSeconds) {
-        headers["retry-after"] = String(error.retryAfterSeconds);
-      }
-      sendJson(
-        response,
-        status,
-        {
-          error:
-            error instanceof AuthError
-              ? error.code
-              : "internal_error",
-          message:
-            error instanceof AuthError
-              ? error.message
-              : "Request failed",
-        },
-        headers,
-      );
-    } else {
-      response.end();
-    }
-  });
-});
+export type NodeAuthorityServer = {
+  server: Server;
+  host: string;
+  port: number;
+  provider: Provider;
+};
 
-server.listen(port, host, () => {
+export async function createNodeAuthorityServer(): Promise<NodeAuthorityServer> {
+  const host = process.env.THIMBLE_HOST ?? "127.0.0.1";
+  const port = parseInteger(process.env.THIMBLE_PORT, 8787);
+  const context = await createContext();
+  const server = createServer((request, response) => {
+    void handleRequest(context, request, response).catch((error) => {
+      handleServerError(error, response);
+    });
+  });
+  return { server, host, port, provider: context.provider };
+}
+
+export async function startNodeAuthority(): Promise<NodeAuthorityServer> {
+  const authority = await createNodeAuthorityServer();
+  await new Promise<void>((resolve, reject) => {
+    authority.server.once("error", reject);
+    authority.server.listen(authority.port, authority.host, resolve);
+  });
   console.log(
-    `ThimbleDB authority listening on http://${host}:${port} (${context.provider})`,
+    `ThimbleDB authority listening on http://${authority.host}:${authority.port} (${authority.provider})`,
   );
-});
+  return authority;
+}
+
+if (isDirectExecution()) {
+  await startNodeAuthority();
+}
 
 async function createContext(): Promise<ServerContext> {
   const provider = providerName();
@@ -151,6 +164,11 @@ async function createContext(): Promise<ServerContext> {
     ),
     secureCookies,
   });
+  const collectionLayouts = configuredCollectionLayouts();
+  const layoutGeneration = createHash("sha256")
+    .update(JSON.stringify(collectionLayouts))
+    .digest("hex")
+    .slice(0, 16);
   const scopeCache = new AsyncLruCache<string, ScopeRuntime>({
     maxEntries: parseInteger(
       process.env.THIMBLE_SCOPE_CACHE_MAX,
@@ -188,6 +206,11 @@ async function createContext(): Promise<ServerContext> {
       process.env.THIMBLE_HEAD_TTL_MS,
       1_000,
     ),
+    deletionPolicy: configuredDeletionPolicy(),
+    collectionLayouts,
+    layoutGeneration,
+    maintenanceMode:
+      process.env.THIMBLE_MAINTENANCE_MODE === "true",
     oidcProviders: [...identityAdapters.keys()],
     scope,
   };
@@ -240,7 +263,12 @@ async function createScopeRuntime(
   return {
     material,
     materials,
-    engine: new ContentAddressedTrieEngine(
+    trie: new ContentAddressedTrieEngine(
+      store,
+      40,
+      material.addressNode,
+    ),
+    snapshot: new ImmutableSnapshotEngine(
       store,
       40,
       material.addressNode,
@@ -316,6 +344,112 @@ async function handleRequest(
     return;
   }
 
+  const linkRoute =
+    /^\/api\/auth\/identities\/([^/]+)\/link$/.exec(
+      url.pathname,
+    );
+  if (request.method === "POST" && linkRoute?.[1]) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const user = await context.auth.linkIdentity(
+      authenticated,
+      decodePathSegment(linkRoute[1]),
+      bearerToken(request),
+      clientRateKey(request),
+    );
+    sendJson(response, 200, { user: storedUserResponse(user) });
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/identities/unlink"
+  ) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const user = await context.auth.unlinkIdentity(
+      authenticated,
+      identityReference(await readJsonBody(request)),
+    );
+    response.setHeader(
+      "set-cookie",
+      context.auth.clearSessionCookie(),
+    );
+    sendJson(response, 200, { user: storedUserResponse(user) });
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/admin/users"
+  ) {
+    requireAuthenticated(authenticated);
+    const users = await context.auth.listUsers(authenticated);
+    sendJson(response, 200, {
+      users: users.map(storedUserResponse),
+    });
+    return;
+  }
+
+  const adminUserRoute =
+    /^\/api\/admin\/users\/([0-9a-f-]{36})$/.exec(
+      url.pathname,
+    );
+  if (request.method === "POST" && adminUserRoute?.[1]) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const user = await context.auth.administerUser(
+      authenticated,
+      adminUserRoute[1],
+      administrationChanges(await readJsonBody(request)),
+    );
+    if (user.id === authenticated.user.id) {
+      response.setHeader(
+        "set-cookie",
+        context.auth.clearSessionCookie(),
+      );
+    }
+    sendJson(response, 200, { user: storedUserResponse(user) });
+    return;
+  }
+
+  const revokeSessionsRoute =
+    /^\/api\/admin\/users\/([0-9a-f-]{36})\/revoke-sessions$/.exec(
+      url.pathname,
+    );
+  if (request.method === "POST" && revokeSessionsRoute?.[1]) {
+    requireAuthenticated(authenticated);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    await context.auth.revokeUserSessions(
+      authenticated,
+      revokeSessionsRoute[1],
+    );
+    if (revokeSessionsRoute[1] === authenticated.user.id) {
+      response.setHeader(
+        "set-cookie",
+        context.auth.clearSessionCookie(),
+      );
+    }
+    sendJson(response, 200, { revoked: true });
+    return;
+  }
+
 
   if (request.method === "GET" && url.pathname === "/api/config") {
     requireAuthenticated(authenticated);
@@ -327,6 +461,8 @@ async function handleRequest(
       readBaseUrl: "/api/objects",
       headTtlMs: context.headTtlMs,
       cachePolicy: "content",
+      collectionLayouts: context.collectionLayouts,
+      layoutGeneration: context.layoutGeneration,
       csrfToken: authenticated.session.csrfToken,
       user: publicUser(authenticated),
       scope: {
@@ -392,6 +528,8 @@ async function handleRequest(
 
   if (request.method === "POST" && url.pathname === "/api/seed") {
     requireAuthenticated(authenticated);
+    requireWritesEnabled(context);
+    requireLayoutGeneration(context, request);
     requireMutationRequest(
       context,
       request,
@@ -407,9 +545,18 @@ async function handleRequest(
         ? workloadProfiles.small
         : workloadProfiles.tiny;
     const dataset = generateStoreDataset(profile);
-    await runtime.engine.putMany("products", dataset.products);
-    await runtime.engine.putMany("customers", dataset.customers);
-    await runtime.engine.putMany("orders", dataset.orders);
+    await engineFor(context, runtime, "products").putMany(
+      "products",
+      dataset.products,
+    );
+    await engineFor(context, runtime, "customers").putMany(
+      "customers",
+      dataset.customers,
+    );
+    await engineFor(context, runtime, "orders").putMany(
+      "orders",
+      dataset.orders,
+    );
     sendJson(response, 200, {
       profile: profile.name,
       scopeId: grant.scopeId,
@@ -424,8 +571,90 @@ async function handleRequest(
     /^\/api\/collections\/([^/]+)\/documents\/([^/]+)$/.exec(
       url.pathname,
     );
+  const restoreRoute =
+    /^\/api\/collections\/([^/]+)\/documents\/([^/]+)\/restore$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    restoreRoute?.[1] &&
+    restoreRoute[2]
+  ) {
+    requireAuthenticated(authenticated);
+    requireWritesEnabled(context);
+    requireLayoutGeneration(context, request);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const grant = selectedWriteGrant(
+      authenticated.session.grants,
+      request,
+    );
+    const runtime = await context.scope(grant.scopeId);
+    const collection = decodePathSegment(restoreRoute[1]);
+    const id = decodePathSegment(restoreRoute[2]);
+    const engine = engineFor(context, runtime, collection);
+    const restored = await engine.restore(collection, id);
+    if (!restored) {
+      throw new AuthError(
+        404,
+        "document_not_restorable",
+        "Document cannot be restored",
+      );
+    }
+    sendJson(
+      response,
+      200,
+      await engine.readBundle(collection, id),
+    );
+    return;
+  }
+  if (
+    request.method === "DELETE" &&
+    writeRoute?.[1] &&
+    writeRoute[2]
+  ) {
+    requireAuthenticated(authenticated);
+    requireWritesEnabled(context);
+    requireLayoutGeneration(context, request);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const grant = selectedWriteGrant(
+      authenticated.session.grants,
+      request,
+    );
+    const runtime = await context.scope(grant.scopeId);
+    const collection = decodePathSegment(writeRoute[1]);
+    const id = decodePathSegment(writeRoute[2]);
+    const engine = engineFor(context, runtime, collection);
+    const deleted = await engine.delete(
+      collection,
+      id,
+      context.deletionPolicy,
+    );
+    if (!deleted) {
+      throw new AuthError(
+        404,
+        "document_not_found",
+        "Document was not found",
+      );
+    }
+    sendJson(
+      response,
+      200,
+      await engine.readBundle(collection, id),
+    );
+    return;
+  }
   if (request.method === "POST" && writeRoute?.[1] && writeRoute[2]) {
     requireAuthenticated(authenticated);
+    requireWritesEnabled(context);
+    requireLayoutGeneration(context, request);
     requireMutationRequest(
       context,
       request,
@@ -439,12 +668,134 @@ async function handleRequest(
     const collection = decodePathSegment(writeRoute[1]);
     const id = decodePathSegment(writeRoute[2]);
     const document = asDocument(await readJsonBody(request), id);
-    await runtime.engine.put(collection, id, document);
+    const engine = engineFor(context, runtime, collection);
+    await engine.put(collection, id, document);
     sendJson(
       response,
       200,
-      await runtime.engine.readBundle(collection, id),
+      await engine.readBundle(collection, id),
     );
+    return;
+  }
+
+  const layoutMigrationRoute =
+    /^\/api\/admin\/scopes\/([^/]+)\/migrate-layout$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    layoutMigrationRoute?.[1]
+  ) {
+    requireAuthenticated(authenticated);
+    requireAdministratorSession(authenticated);
+    requireMaintenanceMode(context);
+    requireLayoutGeneration(context, request);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const scopeId = decodePathSegment(layoutMigrationRoute[1]);
+    const requestBody = layoutMigrationRequest(
+      await readJsonBody(request),
+    );
+    const runtime = await context.scope(scopeId);
+    const source = engineFor(
+      context,
+      runtime,
+      requestBody.collection,
+    );
+    const target =
+      requestBody.targetLayout === "snapshot"
+        ? runtime.snapshot
+        : runtime.trie;
+    if (source === target) {
+      sendJson(response, 200, {
+        scopeId,
+        collection: requestBody.collection,
+        layout: requestBody.targetLayout,
+        migrated: 0,
+      });
+      return;
+    }
+    if (
+      (await source.retainedDeletionCount(
+        requestBody.collection,
+      )) > 0
+    ) {
+      throw new AuthError(
+        409,
+        "retained_deletions",
+        "Resolve retained deletions before changing layout",
+      );
+    }
+    const documents = await source.exportStored(
+      requestBody.collection,
+    );
+    await target.replaceStored(requestBody.collection, documents);
+    const verified = await target.exportStored(
+      requestBody.collection,
+    );
+    if (
+      stableStringify(verified as unknown as JsonValue) !==
+      stableStringify(documents as unknown as JsonValue)
+    ) {
+      throw new Error("Target layout verification failed");
+    }
+    sendJson(response, 200, {
+      scopeId,
+      collection: requestBody.collection,
+      layout: requestBody.targetLayout,
+      migrated: documents.length,
+    });
+    return;
+  }
+
+  const scopeMaintenanceRoute =
+    /^\/api\/admin\/scopes\/([^/]+)\/(erase|purge-deleted)$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    scopeMaintenanceRoute?.[1] &&
+    scopeMaintenanceRoute[2]
+  ) {
+    requireAuthenticated(authenticated);
+    requireAdministratorSession(authenticated);
+    requireWritesEnabled(context);
+    requireLayoutGeneration(context, request);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const scopeId = decodePathSegment(scopeMaintenanceRoute[1]);
+    const collections = collectionList(await readJsonBody(request));
+    const runtime = await context.scope(scopeId);
+    const results: Record<string, number> = {};
+    for (const collection of collections) {
+      results[collection] =
+        scopeMaintenanceRoute[2] === "erase"
+          ? await engineFor(
+              context,
+              runtime,
+              collection,
+            ).eraseAll(
+              collection,
+              context.deletionPolicy,
+            )
+          : await engineFor(
+              context,
+              runtime,
+              collection,
+            ).purgeDeleted(collection);
+    }
+
+    sendJson(response, 200, {
+      scopeId,
+      operation: scopeMaintenanceRoute[2],
+      results,
+    });
     return;
   }
 
@@ -699,7 +1050,8 @@ function asDocument(value: unknown, id: string): JsonDocument {
     typeof value !== "object" ||
     value === null ||
     Array.isArray(value) ||
-    (value as Record<string, unknown>).id !== id
+    (value as Record<string, unknown>).id !== id ||
+    "__thimbleTombstone" in value
   ) {
     throw new AuthError(
       400,
@@ -710,18 +1062,218 @@ function asDocument(value: unknown, id: string): JsonDocument {
   return value as JsonDocument;
 }
 
+function requireAdministratorSession(
+  authenticated: AuthenticatedSession,
+): void {
+  if (!authenticated.principal.roles.includes("thimble.admin")) {
+    throw new AuthError(403, "administrator_required", "Access denied");
+  }
+}
+
+function requireWritesEnabled(context: ServerContext): void {
+  if (context.maintenanceMode) {
+    throw new AuthError(
+      503,
+      "maintenance_mode",
+      "Writes are temporarily disabled",
+    );
+  }
+}
+
+function requireLayoutGeneration(
+  context: ServerContext,
+  request: IncomingMessage,
+): void {
+  if (
+    headerValue(
+      request.headers["x-thimble-layout-generation"],
+    ) !== context.layoutGeneration
+  ) {
+    throw new AuthError(
+      409,
+      "layout_changed",
+      "Reload configuration before writing",
+    );
+  }
+}
+
+function requireMaintenanceMode(context: ServerContext): void {
+  if (!context.maintenanceMode) {
+    throw new AuthError(
+      409,
+      "maintenance_required",
+      "Enable maintenance mode before changing collection layout",
+    );
+  }
+}
+
+function collectionList(value: unknown): string[] {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    !Array.isArray(
+      (value as { collections?: unknown }).collections,
+    )
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return stringList(
+    (value as { collections: unknown[] }).collections,
+  );
+}
+
+function layoutMigrationRequest(value: unknown): {
+  collection: string;
+  targetLayout: CollectionLayout;
+} {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.collection !== "string" ||
+    (candidate.targetLayout !== "trie" &&
+      candidate.targetLayout !== "snapshot")
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return {
+    collection: validateName(candidate.collection, "Collection"),
+    targetLayout: candidate.targetLayout,
+  };
+}
+
 function publicUser(session: AuthenticatedSession): {
   id: string;
   provider: string;
   roles: string[];
   tenants: string[];
+  identities: Array<{
+    provider: string;
+    issuer: string;
+    subject: string;
+  }>;
 } {
   return {
     id: session.user.id,
     provider: session.principal.provider,
     roles: [...session.principal.roles],
     tenants: [...session.principal.tenantIds],
+    identities: session.user.identities.map(identityResponse),
   };
+}
+
+function storedUserResponse(user: AuthUser) {
+  return {
+    id: user.id,
+    status: user.status,
+    authVersion: user.authVersion,
+    roles: [...user.roles],
+    tenants: [...user.tenants],
+    identities: user.identities.map((identity) => ({
+      ...identityResponse(identity),
+      roles: [...identity.roles],
+      tenants: [...identity.tenants],
+    })),
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+function identityResponse(identity: Identity) {
+  return {
+    provider: identity.provider,
+    issuer: identity.issuer,
+    subject: identity.subject,
+  };
+}
+
+function identityReference(value: unknown): {
+  provider: Identity["provider"];
+  issuer: string;
+  subject: string;
+} {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    (candidate.provider !== "entra" &&
+      candidate.provider !== "oidc") ||
+    typeof candidate.issuer !== "string" ||
+    typeof candidate.subject !== "string"
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return {
+    provider: candidate.provider,
+    issuer: candidate.issuer,
+    subject: candidate.subject,
+  };
+}
+
+function administrationChanges(value: unknown): {
+  status?: AuthUser["status"];
+  roles?: string[];
+  tenants?: string[];
+} {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  const candidate = value as Record<string, unknown>;
+  const changes: {
+    status?: AuthUser["status"];
+    roles?: string[];
+    tenants?: string[];
+  } = {};
+  if (candidate.status !== undefined) {
+    if (
+      candidate.status !== "active" &&
+      candidate.status !== "disabled"
+    ) {
+      throw new AuthError(400, "invalid_request", "Invalid request");
+    }
+    changes.status = candidate.status;
+  }
+  if (candidate.roles !== undefined) {
+    changes.roles = stringList(candidate.roles);
+  }
+  if (candidate.tenants !== undefined) {
+    changes.tenants = stringList(candidate.tenants);
+  }
+  if (Object.keys(changes).length === 0) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return changes;
+}
+
+function stringList(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > 100 ||
+    !value.every(
+      (item) =>
+        typeof item === "string" &&
+        item.length > 0 &&
+        item.length <= 256,
+    )
+  ) {
+    throw new AuthError(400, "invalid_request", "Invalid request");
+  }
+  return [...new Set(value)].sort();
 }
 
 function bearerToken(request: IncomingMessage): string {
@@ -1010,10 +1562,100 @@ function configuredKeyVersions(): number[] {
   ];
 }
 
+function configuredDeletionPolicy(): DeletionPolicy {
+  const day = 24 * 60 * 60 * 1_000;
+  return {
+    restoreWindowMs:
+      parseInteger(
+        process.env.THIMBLE_DELETE_RETENTION_DAYS,
+        30,
+      ) * day,
+    purgeGraceMs:
+      parseInteger(
+        process.env.THIMBLE_DELETE_GRACE_DAYS,
+        7,
+      ) * day,
+  };
+}
+
+function configuredCollectionLayouts(): Record<
+  string,
+  CollectionLayout
+> {
+  const layouts: Record<string, CollectionLayout> = {};
+  for (const entry of (
+    process.env.THIMBLE_COLLECTION_LAYOUTS ?? ""
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)) {
+    const [collection, layout, ...extra] = entry.split("=");
+    if (
+      !collection ||
+      !layout ||
+      extra.length > 0 ||
+      (layout !== "trie" && layout !== "snapshot")
+    ) {
+      throw new Error(
+        `Invalid THIMBLE_COLLECTION_LAYOUTS entry: ${entry}`,
+      );
+    }
+    layouts[validateName(collection, "Collection")] = layout;
+  }
+  return layouts;
+}
+
+function engineFor(
+  context: ServerContext,
+  runtime: ScopeRuntime,
+  collection: string,
+): ContentAddressedTrieEngine | ImmutableSnapshotEngine {
+  return context.collectionLayouts[collection] === "snapshot"
+    ? runtime.snapshot
+    : runtime.trie;
+}
+
 function requiredEnvironment(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(`${name} is required`);
   }
   return value;
+}
+
+function handleServerError(
+  error: unknown,
+  response: ServerResponse,
+): void {
+  if (!(error instanceof AuthError && error.status < 500)) {
+    console.error(error);
+  }
+  if (response.headersSent) {
+    response.end();
+    return;
+  }
+  const status = error instanceof AuthError ? error.status : 500;
+  const headers: Record<string, string> = {};
+  if (error instanceof AuthError && error.retryAfterSeconds) {
+    headers["retry-after"] = String(error.retryAfterSeconds);
+  }
+  sendJson(
+    response,
+    status,
+    {
+      error:
+        error instanceof AuthError ? error.code : "internal_error",
+      message:
+        error instanceof AuthError ? error.message : "Request failed",
+    },
+    headers,
+  );
+}
+
+function isDirectExecution(): boolean {
+  const entry = process.argv[1];
+  return Boolean(
+    entry &&
+      path.resolve(entry) === path.resolve(fileURLToPath(import.meta.url)),
+  );
 }

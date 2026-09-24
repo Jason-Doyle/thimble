@@ -7,19 +7,29 @@
       name="description"
       content="ThimbleDB browser-first object storage database proof of concept"
     />
-    <title>ThimbleDB POC</title>
+    <title>ThimbleDB</title>
+    <link rel="icon" href="/thimbledb-logo.png" />
     <link rel="stylesheet" href="/src/browser/styles.css" />
   </head>
   <body>
     <main class="shell">
       <header>
-        <div>
-          <p class="eyebrow">Browser read replica POC</p>
-          <h1>ThimbleDB</h1>
-          <p class="lede">
-            Reads use brokered encrypted objects plus memory and IndexedDB
-            caches. Writes go through the authenticated authority.
-          </p>
+        <div class="brand">
+          <img
+            class="brand-logo"
+            src="/thimbledb-logo.png"
+            alt=""
+            width="447"
+            height="555"
+          />
+          <div>
+            <p class="eyebrow">Cloudflare-first browser database</p>
+            <h1>ThimbleDB</h1>
+            <p class="lede">
+              Reads use brokered encrypted objects plus memory and IndexedDB
+              caches. Writes go through the authenticated authority.
+            </p>
+          </div>
         </div>
         <div id="status" class="status">Starting...</div>
       </header>
@@ -64,6 +74,78 @@
         <button id="logout" class="secondary">Sign out</button>
       </section>
 
+      <section class="panel authenticated" hidden>
+        <h2>Linked identities</h2>
+        <pre id="identity-output">No identity data loaded.</pre>
+        <div class="auth-fields">
+          <label>
+            Provider to link
+            <select id="link-provider"></select>
+          </label>
+          <label>
+            Fresh provider access token
+            <textarea
+              id="link-token"
+              rows="4"
+              autocomplete="off"
+              spellcheck="false"
+            ></textarea>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="link-identity">Link identity</button>
+        </div>
+        <label>
+          Identity to unlink
+          <select id="unlink-identity"></select>
+        </label>
+        <button id="unlink-identity-button" class="secondary">
+          Unlink selected identity
+        </button>
+      </section>
+
+      <section
+        id="admin-panel"
+        class="panel authenticated"
+        data-admin="true"
+        hidden
+      >
+        <div class="section-heading">
+          <h2>User administration</h2>
+          <button id="load-admin-users" class="secondary">
+            Refresh users
+          </button>
+        </div>
+        <label>
+          User
+          <select id="admin-user"></select>
+        </label>
+        <div class="auth-fields">
+          <label>
+            Status
+            <select id="admin-status">
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+          <label>
+            Application roles, comma separated
+            <input id="admin-roles" />
+          </label>
+          <label>
+            Application tenants, comma separated
+            <input id="admin-tenants" />
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="save-admin-user">Save access</button>
+          <button id="revoke-admin-sessions" class="secondary">
+            Revoke sessions
+          </button>
+        </div>
+        <pre id="admin-output">No users loaded.</pre>
+      </section>
+
       <section class="grid authenticated" hidden>
         <article class="panel">
           <h2>Product read</h2>
@@ -76,6 +158,12 @@
             <button id="update-stock" class="secondary">
               Decrement stock
             </button>
+            <button id="delete-product" class="secondary">
+              Delete product
+            </button>
+            <button id="restore-product" class="secondary">
+              Restore product
+            </button>
           </div>
           <pre id="product-output">No product loaded.</pre>
         </article>
@@ -86,6 +174,9 @@
             <button id="benchmark-reads">Run 100 hot reads</button>
             <button id="scan-products" class="secondary">
               Scan products
+            </button>
+            <button id="scan-customers" class="secondary">
+              Scan customers snapshot
             </button>
           </div>
           <pre id="benchmark-output">No benchmark run.</pre>

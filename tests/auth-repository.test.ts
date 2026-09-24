@@ -29,7 +29,7 @@ describe("AuthRepository", () => {
           },
         ],
         3_600,
-        "entra",
+        user.identities[0]!,
       );
       await expect(
         fixture.repository.getSession(handle.cookieValue),
@@ -57,8 +57,12 @@ describe("AuthRepository", () => {
         );
 
       expect(second.id).toBe(first.id);
-      expect(second.roles).toEqual(["admin"]);
-      expect(second.tenants).toEqual(["tenant-1"]);
+        expect(second.roles).toEqual([]);
+        expect(second.tenants).toEqual([]);
+        expect(second.identities[0]).toMatchObject({
+          roles: ["admin"],
+          tenants: ["tenant-1"],
+        });
     } finally {
       await fixture.cleanup();
     }

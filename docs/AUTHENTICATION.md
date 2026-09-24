@@ -110,6 +110,38 @@ On every authenticated request the authority reloads the current internal user
 record and recalculates grants. Role or tenant removal observed during a later
 OIDC exchange therefore also affects existing sessions.
 
+## Identity linking
+
+Linking never uses email matching. A user must have:
+
+- a current ThimbleDB session created within the last 10 minutes
+- a fresh valid access token for the identity being linked
+- an identity that is not already mapped to another internal user
+
+The new identity is attached to the existing internal UUID, so every linked
+provider reaches the same `user:<uuid>` content scope. Removing an identity
+increments the account security version and revokes every session. The final
+identity cannot be removed.
+
+Provider claims are retained per linked identity. Application-assigned roles
+and tenants are stored separately and combined with the claims for the
+identity that created the current session.
+
+## Administration
+
+The external app role `thimble.admin` authorizes the administration API and
+minimal browser panel. Administrators can:
+
+- list internal user mappings
+- activate or disable a mapping
+- assign application-specific roles and tenants
+- revoke every session for a user
+- schedule user or tenant scope erasure
+- run quiescent layout migration and retention maintenance
+
+Administrative changes increment the account security version and revoke
+existing sessions. They do not change credentials or provider-owned MFA.
+
 ## Scope grants
 
 The default authorizer grants:
@@ -179,8 +211,13 @@ The provider ID becomes the route segment used during session exchange.
 | `GET /api/auth/config` | Public | Configured external provider IDs |
 | `POST /api/auth/oidc/:provider/session` | Bearer token, rate limited, exact Origin | Validate identity, map internal user, issue session |
 | `POST /api/auth/logout` | Exact Origin; CSRF when session is valid | Revoke current session and clear cookie |
+| `POST /api/auth/identities/:provider/link` | Recent session + CSRF + fresh provider token | Link another external identity |
+| `POST /api/auth/identities/unlink` | Recent session + CSRF | Remove a non-final identity and revoke sessions |
 | `GET /api/config` | Session | Current user, scope, CSRF, and cache config |
 | `GET /api/keys/:scope` | Session + read grant | Scope key grant |
+| `GET /api/admin/users` | `thimble.admin` | List identity mappings |
+| `POST /api/admin/users/:id` | `thimble.admin` + CSRF | Change status, application roles, or tenants |
+| `POST /api/admin/users/:id/revoke-sessions` | `thimble.admin` + CSRF | Revoke every user session |
 
 ## Deliberately delegated controls
 
@@ -193,9 +230,7 @@ The identity provider owns:
 - suspicious-login detection
 - credential breach response
 
-ThimbleDB still needs identity linking and administrative APIs for disabling
-internal mappings, revoking every session, and managing application-specific
-roles or tenant access.
+ThimbleDB does not attempt to replace provider-side identity governance.
 
 ## References
 

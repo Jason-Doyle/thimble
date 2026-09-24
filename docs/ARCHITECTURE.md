@@ -46,11 +46,11 @@ Every collection tree belongs to one access scope:
 <application-prefix>/
   scopes/
     public/
-      content-trie/
+      content-trie/ or content-snapshot/
     tenant-123/
-      content-trie/
+      content-trie/ or content-snapshot/
     user-456/
-      content-trie/
+      content-trie/ or content-snapshot/
 ```
 
 A scope can represent public data, one tenant, one user, or a role. Pages from
@@ -64,10 +64,10 @@ encryption. Private scopes use a versioned AES-256-GCM data key.
 
 1. The browser reads `HEAD.json` from memory or IndexedDB.
 2. If its TTL expired, the browser revalidates HEAD with `If-None-Match`.
-3. A 304 response keeps the current tree.
-4. A changed HEAD points to an immutable root.
-5. Root and branch pages identify the required leaf page.
-6. The browser downloads only missing envelopes.
+3. A 304 response keeps the current layout generation.
+4. Trie HEAD points to an immutable root, branch, and leaf path.
+5. Snapshot HEAD points to one immutable collection snapshot.
+6. The browser downloads only missing envelopes for the configured layout.
 7. It decrypts, decompresses, parses, and retains the decoded value in memory.
 
 Immutable pages do not need revalidation. Their object key identifies their
@@ -78,10 +78,11 @@ content within the scope and key version.
 1. The browser sends a mutation to the authority.
 2. The authority authenticates the session and resolves allowed scopes.
 3. Application validation runs before storage work.
-4. Changed pages are serialised, gzip-compressed when useful, and encrypted.
-5. New immutable pages are created.
+4. Changed trie pages or the next immutable snapshot are serialised,
+   gzip-compressed when useful, and encrypted.
+5. New immutable objects are created.
 6. HEAD is updated with an ETag compare-and-swap.
-7. The response includes the new HEAD, root, branch, leaf, and changed
+7. The response includes the new HEAD, changed immutable objects, and
    document.
 8. The writing tab updates its cache and broadcasts the bundle to other tabs.
 
@@ -114,14 +115,14 @@ prefix listing.
 | Azure | Container App or Node service | Blob Storage | Authenticated authority broker |
 | AWS | Lambda or another Node host | S3 | Authenticated authority broker |
 
-The stored envelope and trie protocol do not change between providers.
+The stored envelope, trie, and snapshot protocols do not change between providers.
 Cloudflare is preferred, not required.
 
 ## Current boundaries
 
 - One HEAD serialises writes within a collection and scope.
 - Production engines retain old generations. Destructive garbage collection is
-  available only in an explicitly enabled, quiescent benchmark mode.
+  available only in an explicitly enabled, quiescent maintenance mode.
 - Every deployment uses an external OIDC identity provider. ThimbleDB stores
   only the stable provider-to-internal-user mapping and revocable sessions.
 - Revoking a user cannot erase plaintext they already downloaded.

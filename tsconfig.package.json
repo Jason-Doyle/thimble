@@ -11,6 +11,8 @@
   },
   "include": [
     "src/index.ts",
-    "src/auth/index.ts"
+    "src/auth/index.ts",
+    "src/authority/node.ts",
+    "src/authority/cloudflare.ts"
   ]
 }

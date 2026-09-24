@@ -10,7 +10,10 @@
 - Private object bodies do not contain plaintext JSON.
 - Persistent browser cache entries can be encrypted with a non-extractable
   device key.
-- The same envelope and trie code bundles for Node and Cloudflare Workers.
+- The same envelope, trie, and snapshot code bundles for Node and Cloudflare
+  Workers.
+- Real R2 conditional writes, external sessions, retained deletion, and
+  snapshot migration work on the `db.thimbledb.com` reference deployment.
 
 ## Expected benefits that are not yet proven
 
@@ -18,8 +21,6 @@
 - Better end-user latency than D1, Durable Objects, Turso, or Firestore.
 - Sufficient operational simplicity for non-specialist developers.
 - Safe key rotation at useful scale.
-- Correct R2 compare-and-swap behaviour in a real deployed conformance run.
-- Better performance from trie pages than adaptive immutable snapshots.
 - Reliable production behaviour under multi-region write contention.
 - A meaningful reduction in coding-agent database mistakes.
 
@@ -58,5 +59,5 @@ Poor candidates:
 ## Current recommendation
 
 Continue as an experimental Cloudflare-first project. Do not position it as a
-general database replacement. The next evidence should compare an adaptive
-snapshot layout with the trie under encrypted browser workloads on R2.
+general database replacement. The next evidence should compare cost and
+end-user behaviour in a real small application against one managed database.

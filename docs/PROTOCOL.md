@@ -10,6 +10,9 @@ scopes/<scope-id>/
   content-trie/<collection>/
     HEAD.json
     nodes/<opaque-address>.json
+  content-snapshot/<collection>/
+    HEAD.json
+    snapshots/<opaque-address>.json
 ```
 
 The `.json` suffix is retained for recognisable object names. The object body
@@ -31,9 +34,36 @@ same object layout.
 Root nodes map the first SHA-256 identifier nibble to branch addresses.
 Branches map the second nibble to leaf addresses. Leaves contain documents.
 
+Snapshot HEAD objects contain a revision and one immutable snapshot address.
+The snapshot stores the collection's current document dictionary. Snapshot
+layout uses two remote objects for a cold read and one immutable content object
+for full scans.
+
 Private node addresses use HMAC-SHA-256 with a scope-derived address key.
 Public deployments still use stable opaque addresses, but confidentiality is
 not expected for public content.
+
+## Retained deletion
+
+Both layouts store deleted documents as internal tombstones:
+
+```json
+{
+  "id": "document-id",
+  "__thimbleTombstone": {
+    "deletedAt": "2026-01-01T00:00:00.000Z",
+    "restoreUntil": "2026-01-31T00:00:00.000Z",
+    "purgeAfter": "2026-02-07T00:00:00.000Z"
+  },
+  "document": {
+    "id": "document-id"
+  }
+}
+```
+
+Normal reads hide tombstones. The original document remains encrypted until
+restoration expires and quiescent retention maintenance removes unreachable
+generations.
 
 ## Binary envelope version 1
 

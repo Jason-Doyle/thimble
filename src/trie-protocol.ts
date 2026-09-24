@@ -12,8 +12,22 @@ export type TrieBranchNode = {
 
 export type TrieLeafNode = {
   kind: "leaf";
-  documents: Record<string, JsonDocument>;
+  documents: Record<string, TrieStoredDocument>;
 };
+
+export type TrieTombstone = {
+  id: string;
+  __thimbleTombstone: {
+    deletedAt: string;
+    restoreUntil: string;
+    purgeAfter: string;
+  };
+  document: JsonDocument;
+};
+
+export type TrieStoredDocument =
+  | JsonDocument
+  | TrieTombstone;
 
 export type TrieNode =
   | TrieRootNode
@@ -60,4 +74,20 @@ export function triePathFromHash(hash: string): [string, string] {
 
 export function scopeStoragePrefix(scopeId: string): string {
   return `scopes/${encodeURIComponent(scopeId)}`;
+}
+
+export function isTrieTombstone(
+  value: TrieStoredDocument,
+): value is TrieTombstone {
+  return (
+    "__thimbleTombstone" in value &&
+    typeof value.__thimbleTombstone === "object" &&
+    value.__thimbleTombstone !== null
+  );
+}
+
+export function visibleTrieDocument(
+  value: TrieStoredDocument | undefined,
+): JsonDocument | null {
+  return value && !isTrieTombstone(value) ? value : null;
 }

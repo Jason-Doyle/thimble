@@ -1,3 +1,11 @@
+<p align="center">
+  <img
+    src="https://db.thimbledb.com/thimbledb-logo.png"
+    alt="ThimbleDB logo"
+    width="180"
+  />
+</p>
+
 # ThimbleDB
 
 ThimbleDB is an experimental Cloudflare-first database for small web
@@ -8,6 +16,8 @@ Writes and key grants use the same small authority.
 Cloudflare Workers and R2 are the reference deployment. Azure Blob Storage,
 Amazon S3, and a local filesystem adapter implement the same provider-neutral
 ObjectStore contract.
+
+Licensed under the [Apache License 2.0](LICENSE).
 
 ## Architecture
 
@@ -74,19 +84,38 @@ Only bindings, credentials, and browser read authorisation differ.
 - authority-only conditional writes with route and document ID validation
 - Microsoft Entra and generic OIDC identity mapping
 - opaque revocable sessions tied to stable internal user IDs
+- dual-proof identity linking and provider-role administration
 - per-user and per-tenant scope grants
+- retained deletion, restoration, and quiescent physical collection
+- immutable snapshot and content-addressed trie collection layouts
+- evidence-based layout recommendations and explicit migration
 - write responses that update all open browser tabs
 - Cloudflare Worker and native R2 binding
 - local, Azure Blob, and S3 Node adapters
 - historical key reads and an idempotent key-migration command
 - Chromium, Firefox, and WebKit recovery tests
 - typed package exports for the browser/core and auth APIs
+- reusable Node and Cloudflare authority endpoint exports
 - Docker, Wrangler, Bicep, and CloudFormation deployment paths
 
-The browser bundle is about 26.0 KB uncompressed and 8.4 KB gzip. It ships no
+The browser bundle is about 35.2 KB uncompressed and 10.1 KB gzip. It ships no
 database runtime or WASM module.
 
 ## Quick start
+
+Install the package:
+
+```powershell
+npm install thimbledb
+```
+
+Use the browser/core API from `thimbledb`, external identity primitives from
+`thimbledb/auth`, and the complete endpoint authority from either
+`thimbledb/authority/node` or `thimbledb/authority/cloudflare`. There is no
+dependency on `thimbledb.com`; consumers supply their own domain, storage, OIDC
+application, and secrets.
+
+To run this repository:
 
 ```powershell
 npm install
@@ -118,8 +147,12 @@ Start with [Deploy to Cloudflare](docs/DEPLOYMENT-CLOUDFLARE.md).
 
 ## Evidence status
 
-The repository includes raw Azure Standard Blob Storage measurements at
-`evidence/azure-standard-small.json`.
+The repository includes raw Azure Standard Blob Storage measurements and live
+multi-region browser results against `db.thimbledb.com`:
+
+- `evidence/azure-standard-small.json`
+- `evidence/r2-browser-multiregion-trie-2026-09-24.json`
+- `evidence/r2-browser-multiregion-snapshot-2026-09-24.json`
 
 Measured so far:
 
@@ -129,6 +162,11 @@ Measured so far:
   writes
 - monolithic compressed snapshots remain credible for small, rarely changed
   collections
+- moving the 128-document product catalogue from trie to snapshot reduced
+  measured cold reads by 29-53 percent across three Azure regions
+- a 10-second HEAD TTL reduced warm snapshot p95 to 1.6-8.3 ms in those runs
+- cold reads and external session creation still miss the original latency
+  targets and remain documented limitations
 
 These results do not yet prove better cost or latency than D1, Durable Objects,
 Turso, Firestore, or another managed database. The remaining evidence plan and
@@ -143,8 +181,11 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |
 | [Security](docs/SECURITY.md) | Threat model, encryption, keys, and revocation |
 | [Authentication](docs/AUTHENTICATION.md) | External identity mapping, sessions, and scope grants |
+| [Deletion and retention](docs/DELETION-RETENTION.md) | Tombstones, restoration, scope erasure, and physical collection |
+| [Adaptive layouts](docs/ADAPTIVE-LAYOUTS.md) | Snapshot/trie recommendations and explicit migration |
 | [Protocol](docs/PROTOCOL.md) | Binary envelope and object layout |
 | [Versioning](docs/VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
+| [Public API](docs/PUBLIC-API.md) | Stable package exports and authority integration |
 | [Proof of concept](docs/POC.md) | Browser harness, sample application, and benchmark usage |
 | [Benchmarks](docs/BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
 | [Tradeoffs](docs/TRADEOFFS.md) | Proven, expected, and unsuitable use cases |
@@ -153,18 +194,13 @@ stop/go thresholds are documented in [Benchmarks](docs/BENCHMARKS.md).
 | [AWS deployment](docs/DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
 | [Operations](docs/OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
 
-## Project status
+## Release status
 
-The current candidate passes the repository's unit, cross-browser, package,
-container, and deployment-template checks. That does not make it a true v1.
-ThimbleDB remains private research and still needs:
-
-- identity linking and administrative account controls
-- document deletion semantics and a safe retention or garbage-collection design
-- adaptive snapshot versus trie selection
-- R2 browser benchmarks from multiple regions
-- a real Cloudflare deployment conformance run
-- a licence decision and public API freeze
-
-The current goal is to prove a measurable benefit for small Cloudflare-hosted
-applications before defining a public release.
+Version 1.0 passes the repository's unit, cross-browser, package, container,
+deployment-template, live Cloudflare conformance, and regional browser checks.
+ThimbleDB now has a real Cloudflare/R2 reference deployment, external identity
+mapping and administration, retained deletion, adaptive collection layouts,
+multi-region browser evidence, Apache-2.0 licensing, and documented authority
+exports. The current evidence does not support claims of database-wide latency
+superiority: cold object reads and external session creation remain slower than
+the original stop/go targets.

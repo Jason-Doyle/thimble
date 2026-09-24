@@ -10,8 +10,9 @@ The npm package follows semantic versioning after 1.0:
 - minor: compatible APIs and optional protocol capabilities
 - major: breaking public API or supported-protocol changes
 
-The current package remains private and versioned `0.1.0`. Its exports are
-usable for evaluation but are not yet frozen.
+Package version `1.0.0` freezes the documented exports in
+[Public package API](PUBLIC-API.md). Semantic versioning applies to the root,
+auth, and authority subpaths.
 
 ## Object protocol version
 
@@ -35,14 +36,19 @@ The `npm run migrate:keys` command rewrites selected live collections under the
 current write key. Old objects are retained until an operator-approved offline
 cleanup.
 
-## v1 release gate
+## v1 release evidence
 
-A true v1 requires:
+The v1 candidate includes:
 
-- a chosen licence
-- frozen documented package exports
-- successful Cloudflare R2 conformance and cost benchmarks
-- a real application using external OIDC authentication
-- documented document-deletion and retention semantics
-- an explicit decision on adaptive snapshot versus trie layout
-- no high-severity correctness or security findings
+- Apache-2.0 licensing
+- frozen documented package and authority exports
+- a real `db.thimbledb.com` Cloudflare Worker/R2 deployment
+- Entra-backed identity mapping and administration
+- retained deletion and quiescent physical collection
+- explicit snapshot/trie recommendations and migration
+- raw browser evidence from North Europe, US East, and Southeast Asia
+- no unresolved high-severity correctness or security findings from the
+  release review
+
+The evidence does not claim latency superiority. Cold reads and external
+session creation remain above the original stop/go targets.

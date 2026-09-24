@@ -12,6 +12,7 @@ import type { DatabaseEngine, JsonDocument } from "../src/core.js";
 import { ContentAddressedTrieEngine } from "../src/engines/content-trie.js";
 import { LogSnapshotEngine } from "../src/engines/log-snapshot.js";
 import { MonolithEngine } from "../src/engines/monolith.js";
+import { ImmutableSnapshotEngine } from "../src/engines/immutable-snapshot.js";
 import {
   LocalObjectStore,
   PrefixObjectStore,
@@ -32,6 +33,10 @@ const factories: Array<{
   {
     name: "content-addressed trie",
     create: (store) => new ContentAddressedTrieEngine(store),
+  },
+  {
+    name: "immutable snapshot",
+    create: (store) => new ImmutableSnapshotEngine(store),
   },
 ];
 

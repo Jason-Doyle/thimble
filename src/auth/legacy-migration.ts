@@ -11,8 +11,25 @@ type LegacyLocalIdentity = {
   subject: string;
 };
 
+type LegacyExternalIdentity =
+  | {
+      provider: "entra";
+      issuer: string;
+      subject: string;
+      tenantId: string;
+      roles?: string[];
+      tenants?: string[];
+    }
+  | {
+      provider: "oidc";
+      issuer: string;
+      subject: string;
+      roles?: string[];
+      tenants?: string[];
+    };
+
 type LegacyAuthUser = Omit<AuthUser, "identities"> & {
-  identities: Array<Identity | LegacyLocalIdentity>;
+  identities: Array<LegacyExternalIdentity | LegacyLocalIdentity>;
   password?: unknown;
 };
 
@@ -50,11 +67,27 @@ export async function removeLegacyLocalAuth(
       ) {
         break;
       }
-      const externalIdentities = legacy.identities.filter(
-        (identity): identity is Identity =>
-          identity.provider === "entra" ||
-          identity.provider === "oidc",
-      );
+      const externalIdentities = legacy.identities
+        .filter(
+          (identity): identity is LegacyExternalIdentity =>
+            identity.provider === "entra" ||
+            identity.provider === "oidc",
+        )
+        .map((identity): Identity =>
+          identity.provider === "entra"
+            ? {
+                ...identity,
+                roles: identity.roles ?? [...legacy.roles],
+                tenants:
+                  identity.tenants ?? [...legacy.tenants],
+              }
+            : {
+                ...identity,
+                roles: identity.roles ?? [...legacy.roles],
+                tenants:
+                  identity.tenants ?? [...legacy.tenants],
+              },
+        );
       const {
         password: _password,
         identities: _identities,
@@ -68,6 +101,8 @@ export async function removeLegacyLocalAuth(
             : "disabled",
         authVersion: legacy.authVersion + 1,
         identities: externalIdentities,
+        roles: [],
+        tenants: [],
         updatedAt: new Date().toISOString(),
       };
       try {

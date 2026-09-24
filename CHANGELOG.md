@@ -2,15 +2,17 @@
 
 All notable changes will be documented in this file.
 
-The format follows Keep a Changelog and the package will use semantic
-versioning once its public API is declared stable.
+The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 1.0.0 - 2026-09-24
+
 - Added a typed package export surface for browser, protocol, trie, envelope,
-  and authentication APIs.
+  authentication, and authority APIs.
 - Added Cloudflare, local, Azure, and AWS authority deployments.
-- Added local Argon2id authentication and Entra/OIDC token exchange.
+- Added Entra and generic OIDC token exchange with stable internal user
+  mappings.
 - Added TDB1 protocol fixtures and Chromium, Firefox, and WebKit tests.
 - Added historical key reads and a collection key-migration command.
 - Disabled destructive garbage collection in production engines.
@@ -22,6 +24,15 @@ versioning once its public API is declared stable.
   verification, passkeys, and MFA to Entra or another OIDC provider.
 - Added an external-auth migration that preserves internal user IDs while
   removing legacy password material, local identity indexes, and sessions.
+- Added dual-proof identity linking, provider-role administration, internal
+  access assignments, and full-session revocation.
+- Added retained deletion, restoration, user/tenant scope erasure, and
+  explicitly quiescent physical collection.
+- Added browser-compatible immutable snapshots, advisory trie/snapshot
+  selection, maintenance-mode migration, and live adaptive deployment.
+- Added reusable Node and Cloudflare authority package exports.
+- Added Apache-2.0 licensing, the ThimbleDB logo, a real
+  `db.thimbledb.com` deployment, and raw three-region R2 browser evidence.
 
 ## 0.1.0
 

@@ -1,12 +1,40 @@
 {
   "name": "thimbledb",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Browser-oriented encrypted object-storage database with Node and Cloudflare authorities.",
+  "private": false,
+  "license": "Apache-2.0",
+  "author": "Jason Doyle",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jason-Doyle/thimble.git"
+  },
+  "homepage": "https://github.com/Jason-Doyle/thimble#readme",
+  "bugs": {
+    "url": "https://github.com/Jason-Doyle/thimble/issues"
+  },
+  "keywords": [
+    "cloudflare",
+    "r2",
+    "database",
+    "indexeddb",
+    "object-storage",
+    "encryption"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "files": [
     "dist/package",
     "README.md",
     "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE",
+    "docs/ADAPTIVE-LAYOUTS.md",
+    "docs/AUTHENTICATION.md",
+    "docs/DELETION-RETENTION.md",
+    "docs/PUBLIC-API.md",
     "docs/PROTOCOL.md",
     "docs/VERSIONING.md"
   ],
@@ -18,6 +46,14 @@
     "./auth": {
       "types": "./dist/package/auth/index.d.ts",
       "import": "./dist/package/auth/index.js"
+    },
+    "./authority/node": {
+      "types": "./dist/package/authority/node.d.ts",
+      "import": "./dist/package/authority/node.js"
+    },
+    "./authority/cloudflare": {
+      "types": "./dist/package/authority/cloudflare.d.ts",
+      "import": "./dist/package/authority/cloudflare.js"
     }
   },
   "type": "module",
@@ -38,6 +74,9 @@
     "benchmark:s3": "tsx src/cli.ts --provider s3 --profile tiny",
     "migrate:keys": "tsx src/key-migrate.ts",
     "migrate:external-auth": "tsx src/remove-local-auth.ts",
+    "advise:layout": "tsx src/layout-advisor-cli.ts",
+    "migrate:layout": "tsx src/layout-migrate.ts",
+    "maintain:retention": "tsx src/retention-maintain.ts",
     "fixtures:generate": "tsx scripts/generate-protocol-fixtures.ts",
     "check": "tsc --noEmit",
     "test": "vitest run",

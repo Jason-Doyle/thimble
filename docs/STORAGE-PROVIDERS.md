@@ -1,8 +1,8 @@
 # Storage providers
 
 Object storage is an implementation layer beneath the ThimbleDB protocol. The
-browser cache, envelope format, trie, key scopes, and write semantics do not
-depend on one cloud.
+browser cache, envelope format, trie/snapshot layouts, key scopes, and write
+semantics do not depend on one cloud.
 
 ## Provider contract
 

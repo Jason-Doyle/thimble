@@ -14,6 +14,10 @@ import type {
   RemoteJsonObject,
 } from "../src/browser/remote-reader.js";
 import {
+  snapshotHeadKey,
+  snapshotPageKey,
+} from "../src/snapshot-protocol.js";
+import {
   trieHeadKey,
   trieNodeKey,
   triePathFromHash,
@@ -43,6 +47,56 @@ describe("ThimbleDB browser client", () => {
       expect(reader.calls).toBe(5);
       expect(client.metrics().notModified).toBe(1);
       expect(client.metrics().cache.memoryHits).toBeGreaterThan(0);
+    } finally {
+      client.close();
+      await cache.clearAll();
+    }
+  });
+
+  it("reads immutable snapshot collections through the same cache", async () => {
+    const collection = "settings";
+    const headKey = snapshotHeadKey(collection);
+    const pageKey = snapshotPageKey(collection, "snapshot-one");
+    const reader = new FakeReader(
+      new Map([
+        [
+          headKey,
+          {
+            etag: "head",
+            value: {
+              revision: 1,
+              snapshotHash: "snapshot-one",
+            },
+          },
+        ],
+        [
+          pageKey,
+          {
+            etag: "page",
+            value: {
+              documents: {
+                one: { id: "one", value: "snapshot" },
+              },
+            },
+          },
+        ],
+      ]),
+    );
+    const cache = cacheFor("content", uniqueName());
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 10_000,
+      channelName: uniqueName(),
+      collectionLayouts: { settings: "snapshot" },
+    });
+
+    try {
+      await expect(
+        client.get(collection, "one"),
+      ).resolves.toMatchObject({ value: "snapshot" });
+      await expect(client.scan(collection)).resolves.toHaveLength(1);
+      expect(reader.calls).toBe(2);
     } finally {
       client.close();
       await cache.clearAll();
@@ -283,6 +337,7 @@ describe("ThimbleDB browser client", () => {
       id: "one",
       value: "late",
     });
+    const rejection = expect(write).rejects.toThrow("logged out");
     await client.logout();
     resolveFetch?.(
       new Response(
@@ -306,7 +361,7 @@ describe("ThimbleDB browser client", () => {
       ),
     );
 
-    await expect(write).rejects.toThrow("logged out");
+    await rejection;
     expect(await cache.get(trieHeadKey("products"))).toBeNull();
   });
 
@@ -382,6 +437,39 @@ describe("ThimbleDB browser client", () => {
     await expect(
       client.get("products", "one"),
     ).rejects.toThrow("logged out");
+  });
+
+  it("rejects stale layout clients before reading retired data", async () => {
+    const fixture = trieFixture("products", "product-layout");
+    const reader = new FakeReader(fixture.objects);
+    const cache = cacheFor("content", uniqueName());
+    let changed = false;
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 10_000,
+      channelName: uniqueName(),
+      layoutGeneration: "old",
+      configurationUrl: "/api/config",
+      collectionLayouts: { products: "trie" },
+      fetchImplementation: (async () =>
+        new Response(
+          JSON.stringify({ layoutGeneration: "new" }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        )) as typeof fetch,
+      onLayoutChange: () => {
+        changed = true;
+      },
+    });
+
+    await expect(
+      client.get("products", fixture.id),
+    ).rejects.toThrow("layout changed");
+    expect(reader.calls).toBe(0);
+    expect(changed).toBe(true);
   });
 });
 

@@ -7,8 +7,11 @@
 | [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
 | [Authentication](AUTHENTICATION.md) | External identity mappings, sessions, and scope grants |
+| [Deletion and retention](DELETION-RETENTION.md) | Tombstones, restore windows, scope erasure, and quiescent collection |
+| [Adaptive layouts](ADAPTIVE-LAYOUTS.md) | Snapshot/trie evidence, recommendations, and migration |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |
 | [Versioning](VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
+| [Public API](PUBLIC-API.md) | Stable package exports and authority integration |
 | [Proof of concept](POC.md) | Browser harness, sample store, and benchmark usage |
 | [Benchmarks](BENCHMARKS.md) | Reproduction, measured results, and evidence gaps |
 | [Tradeoffs](TRADEOFFS.md) | Proven, expected, and unsuitable use cases |

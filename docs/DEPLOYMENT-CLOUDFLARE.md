@@ -2,6 +2,11 @@
 
 Cloudflare Workers and R2 are the reference ThimbleDB deployment.
 
+The maintained reference instance is `https://db.thimbledb.com`. It uses
+private `thimbledb-data` and `thimbledb-auth` R2 buckets, Microsoft Entra,
+snapshot layouts for products and customers, a ten-second HEAD TTL, and the
+documented auth lifecycle rules.
+
 The design uses:
 
 - one Worker for static assets, writes, sessions, and scope-key grants
@@ -21,7 +26,7 @@ npm run build:client
 npm run build:worker
 ```
 
-The current dry-run Worker bundle is about 27.2 KB gzip. Record the compressed
+The current dry-run Worker bundle is about 33.8 KB gzip. Record the compressed
 size during release checks.
 
 ## 2. Authenticate Wrangler
@@ -127,6 +132,10 @@ npx wrangler deploy --config deploy\cloudflare\wrangler.local.jsonc
 7. Confirm a second HEAD request returns 304.
 8. Confirm the browser key is non-extractable.
 9. Confirm logout revokes the session and blocks brokered reads.
+
+The reference conformance run verified all nine checks, plus retained
+delete/restore, administrator user listing, maintenance-mode write blocking,
+and trie-to-snapshot migration.
 
 ## 10. Operations
 
