@@ -23,9 +23,14 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix site ci --no-audit --no-fund
 
       - name: Type-check
         run: npm run check
@@ -33,11 +38,18 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Build public site
+        run: |
+          npm run site:build
+          npm run site:deploy:check
+
       - name: Install browser test runtimes
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Test browsers
-        run: npm run test:e2e
+        run: |
+          npm run test:e2e
+          npm run site:test
 
       - name: Build browser, Node, and Worker
         run: npm run build

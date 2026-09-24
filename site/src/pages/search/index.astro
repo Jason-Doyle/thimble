@@ -1,0 +1,48 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Search ThimbleDB documentation"
+  description="Search ThimbleDB quickstarts, architecture, security, providers, use cases, deployment guides, and reference documentation."
+  pathname="/search/"
+  noIndex={true}
+>
+  <section class="search-page" data-search-page>
+    <div class="section-shell">
+      <nav class="breadcrumbs" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span aria-hidden="true">/</span>
+        <span>Search</span>
+      </nav>
+      <p class="eyebrow">Documentation search</p>
+      <h1>Find the detail you need.</h1>
+      <p class="search-intro">
+        Search architecture, providers, security, deployment, use cases,
+        benchmarks, and public APIs.
+      </p>
+      <form class="search-form" data-search-form>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.75"></circle>
+          <path d="m16 16 4 4"></path>
+        </svg>
+        <label class="visually-hidden" for="site-search">Search documentation</label>
+        <input
+          id="site-search"
+          type="search"
+          name="q"
+          autocomplete="off"
+          placeholder="Try “deletion”, “R2”, or “vibe-coded apps”"
+          data-search-input
+        />
+        <button type="submit">Search</button>
+      </form>
+      <p class="search-status" data-search-status aria-live="polite"></p>
+      <div class="search-results" data-search-results></div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import "../../scripts/search";
+</script>

@@ -99,7 +99,14 @@
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "verify:package": "node scripts/verify-package.mjs"
+    "verify:package": "node scripts/verify-package.mjs",
+    "site:dev": "npm --prefix site run dev",
+    "site:check": "npm --prefix site run check",
+    "site:build": "npm --prefix site run build",
+    "site:preview": "npm --prefix site run preview",
+    "site:test": "playwright test --config site/playwright.config.ts",
+    "site:deploy:check": "wrangler deploy --cwd site --config wrangler.jsonc --dry-run",
+    "site:deploy": "wrangler deploy --cwd site --config wrangler.jsonc"
   },
   "dependencies": {
     "jose": "^6.1.0"

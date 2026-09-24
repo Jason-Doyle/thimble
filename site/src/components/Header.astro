@@ -1,0 +1,96 @@
+---
+import { site } from "../data/site";
+
+type Props = {
+  pathname: string;
+};
+
+const { pathname } = Astro.props;
+
+const navigation = [
+  { href: "/docs/", label: "Docs" },
+  { href: "/use-cases/", label: "Use cases" },
+  { href: "/benchmarks/", label: "Benchmarks" },
+  { href: "/security/", label: "Security" },
+  { href: "/faq/", label: "FAQ" },
+];
+
+const isActive = (href: string) =>
+  href === "/docs/"
+    ? pathname.startsWith("/docs/")
+    : pathname.startsWith(href);
+---
+
+<header class="site-header">
+  <div class="header-shell">
+    <a class="brand-link" href="/">
+      <img
+        class="brand-mark"
+        src="/assets/logo-96.webp"
+        width="48"
+        height="48"
+        alt=""
+      />
+      <span class="brand-name">ThimbleDB</span>
+      <span class="version-badge">v{site.version}</span>
+    </a>
+
+    <nav class="desktop-navigation" aria-label="Primary navigation">
+      {
+        navigation.map((item) => (
+          <a
+            href={item.href}
+            aria-current={isActive(item.href) ? "page" : undefined}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="header-actions">
+      <a class="search-link" href="/search/" aria-label="Search documentation">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.75"></circle>
+          <path d="m16 16 4 4"></path>
+        </svg>
+        <span>Search</span>
+        <kbd>/</kbd>
+      </a>
+      <a
+        class="github-link"
+        href={site.repository}
+        rel="external"
+        aria-label="ThimbleDB on GitHub"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M12 2.6a9.6 9.6 0 0 0-3.04 18.71c.48.09.66-.21.66-.46v-1.87c-2.69.59-3.26-1.14-3.26-1.14-.44-1.12-1.08-1.42-1.08-1.42-.88-.6.07-.59.07-.59.97.07 1.49 1 1.49 1 .87 1.48 2.27 1.05 2.83.8.09-.62.34-1.05.61-1.29-2.14-.24-4.4-1.07-4.4-4.75 0-1.05.38-1.91 1-2.58-.1-.25-.43-1.22.09-2.54 0 0 .81-.26 2.64.98A9.2 9.2 0 0 1 12 7.12a9.2 9.2 0 0 1 2.4.32c1.83-1.24 2.64-.98 2.64-.98.52 1.32.19 2.29.09 2.54.62.67 1 1.53 1 2.58 0 3.69-2.26 4.5-4.41 4.74.35.3.65.89.65 1.79v2.65c0 .25.18.55.66.46A9.6 9.6 0 0 0 12 2.6Z"
+          ></path>
+        </svg>
+      </a>
+    </div>
+
+    <details class="mobile-navigation">
+      <summary aria-label="Open navigation">
+        <span></span>
+        <span></span>
+        <span></span>
+      </summary>
+      <nav aria-label="Mobile navigation">
+        {
+          navigation.map((item) => (
+            <a
+              href={item.href}
+              aria-current={isActive(item.href) ? "page" : undefined}
+            >
+              {item.label}
+            </a>
+          ))
+        }
+        <a href="/search/">Search</a>
+        <a href={site.repository} rel="external">GitHub</a>
+      </nav>
+    </details>
+  </div>
+</header>

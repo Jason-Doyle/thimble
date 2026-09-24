@@ -8,6 +8,17 @@ benchmark-results/
 coverage/
 playwright-report/
 test-results/
+site/.astro/
+site/dist/
+site/node_modules/
+site/public/assets/logo.png
+site/public/assets/favicon.png
+site/public/assets/apple-touch-icon.png
+site/public/assets/social-card.png
+site/public/assets/logo-320.webp
+site/public/assets/logo-384.webp
+site/public/assets/logo-640.webp
+site/public/assets/logo-96.webp
 *.log
 .env
 .env.*

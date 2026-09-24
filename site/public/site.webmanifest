@@ -1,0 +1,21 @@
+{
+  "name": "ThimbleDB",
+  "short_name": "ThimbleDB",
+  "description": "Encrypted browser-first database for small web applications.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fc",
+  "theme_color": "#075ee8",
+  "icons": [
+    {
+      "src": "/assets/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

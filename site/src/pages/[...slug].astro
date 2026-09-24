@@ -1,0 +1,82 @@
+---
+import {
+  getCollection,
+  getEntry,
+  render,
+  type CollectionEntry,
+} from "astro:content";
+import DocsLayout from "../layouts/DocsLayout.astro";
+import { getDocMeta } from "../data/docs";
+import { docRoute } from "../lib/routes.js";
+import { parseFaqMarkdown } from "../lib/faq";
+
+type Props = {
+  collection: "docs" | "project";
+  id: string;
+};
+
+export async function getStaticPaths() {
+  const [docs, project] = await Promise.all([
+    getCollection("docs"),
+    getCollection("project"),
+  ]);
+  return [
+    ...docs.map((entry) => ({
+      params: {
+        slug: docRoute(entry.id).replace(/^\/|\/$/g, ""),
+      },
+      props: {
+        collection: "docs" as const,
+        id: entry.id,
+      },
+    })),
+    ...project.map((entry) => ({
+      params: {
+        slug: docRoute(entry.id).replace(/^\/|\/$/g, ""),
+      },
+      props: {
+        collection: "project" as const,
+        id: entry.id,
+      },
+    })),
+  ];
+}
+
+const { collection, id } = Astro.props;
+let entry: CollectionEntry<"docs"> | CollectionEntry<"project"> | undefined;
+
+if (collection === "docs") {
+  entry = await getEntry("docs", id);
+} else {
+  entry = await getEntry("project", id);
+}
+
+if (!entry) {
+  throw new Error(`Missing content entry: ${collection}/${id}`);
+}
+
+const { Content, headings } = await render(entry);
+const meta = getDocMeta(id);
+const faqItems = id === "faq" ? parseFaqMarkdown(entry.body ?? "") : [];
+const schemas =
+  faqItems.length > 0
+    ? [
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faqItems.map((item) => ({
+            "@type": "Question",
+            name: item.question,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: item.answer,
+            },
+          })),
+        },
+      ]
+    : [];
+---
+
+<DocsLayout meta={meta} headings={headings} schemas={schemas}>
+  <Content />
+</DocsLayout>

@@ -1,0 +1,40 @@
+---
+import { site } from "../data/site";
+---
+
+<footer class="site-footer">
+  <div class="footer-shell">
+    <div class="footer-brand">
+      <img src="/assets/logo-96.webp" width="52" height="52" alt="" />
+      <div>
+        <strong>ThimbleDB</strong>
+        <p>A small database for small web apps.</p>
+      </div>
+    </div>
+
+    <div class="footer-links">
+      <div>
+        <h2>Start</h2>
+        <a href="/docs/quickstart/">Quickstart</a>
+        <a href="/use-cases/">Use cases</a>
+        <a href="/faq/">FAQ</a>
+      </div>
+      <div>
+        <h2>Understand</h2>
+        <a href="/docs/architecture/">Architecture</a>
+        <a href="/security/">Security</a>
+        <a href="/benchmarks/">Benchmarks</a>
+      </div>
+      <div>
+        <h2>Project</h2>
+        <a href={site.repository}>GitHub</a>
+        <a href={site.npm}>npm</a>
+        <a href="/changelog/">Changelog</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>Documentation and evidence are sourced from the public repository.</span>
+  </div>
+</footer>
