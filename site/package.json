@@ -8,7 +8,8 @@
     "dev": "npm run prepare:assets && astro dev",
     "check": "npm run prepare:assets && astro check",
     "build": "npm run prepare:assets && astro check && astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test:worker": "node --test tests/worker.test.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",
