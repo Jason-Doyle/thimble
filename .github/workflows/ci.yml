@@ -39,7 +39,9 @@ jobs:
         run: npm test
 
       - name: Build public site
-        run: npm run site:build
+        run: |
+          npm run site:build
+          npm run site:deploy:check
 
       - name: Install browser test runtimes
         run: npx playwright install --with-deps chromium firefox webkit

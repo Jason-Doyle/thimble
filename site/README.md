@@ -21,5 +21,20 @@ npm run site:build
 npm run site:preview
 ```
 
-No deployment command or Cloudflare configuration is included yet. Deployment
-will be added only after the local site is approved.
+## Cloudflare deployment
+
+Deployment uses the existing `thimbledb-redirect` Worker so the current
+custom-domain bindings remain in place while its redirect response is replaced
+by static Workers Assets.
+
+Validate the Cloudflare package without uploading:
+
+```powershell
+npm run site:deploy:check
+```
+
+Deploy after the protected branch and site review are approved:
+
+```powershell
+npm run site:deploy
+```
