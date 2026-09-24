@@ -1,5 +1,4 @@
-import path from "node:path";
-import type { JsonValue, ObjectStore } from "./core.js";
+import type { JsonValue } from "./core.js";
 import { ContentAddressedTrieEngine } from "./engines/content-trie.js";
 import { ImmutableSnapshotEngine } from "./engines/immutable-snapshot.js";
 import { EnvelopeObjectStore } from "./envelope-store.js";
@@ -8,10 +7,9 @@ import { loadScopeMaterial } from "./server-keys.js";
 import { stableStringify } from "./shared-utils.js";
 import type { CollectionLayout } from "./snapshot-protocol.js";
 import {
-  AzureBlobObjectStore,
-  LocalObjectStore,
-  S3ObjectStore,
-} from "./stores.js";
+  createConfiguredProviderStore,
+  parseProvider,
+} from "./providers/configured.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
 
 if (process.env.THIMBLE_MIGRATION_QUIESCENT !== "true") {
@@ -50,7 +48,10 @@ const decryptionKeys = new Map(
 const scopePrefix = scopeStoragePrefix(scopeId);
 const store = new EnvelopeObjectStore(
   new PrefixObjectStore(
-    new PrefixObjectStore(createProviderStore(provider), prefix),
+    new PrefixObjectStore(
+      await createConfiguredProviderStore(parseProvider(provider), "data"),
+      prefix,
+    ),
     scopePrefix,
   ),
   {
@@ -97,43 +98,6 @@ function layout(value: string): CollectionLayout {
     return value;
   }
   throw new Error(`Unsupported layout: ${value}`);
-}
-
-function createProviderStore(name: string): ObjectStore {
-  if (name === "local") {
-    return new LocalObjectStore(path.resolve(".thimble-data"));
-  }
-  if (name === "azure") {
-    return new AzureBlobObjectStore(
-      required("AZURE_STORAGE_CONNECTION_STRING"),
-      process.env.AZURE_STORAGE_CONTAINER ?? "thimbledb",
-    );
-  }
-  if (name === "s3") {
-    return new S3ObjectStore({
-      bucket: required("S3_BUCKET"),
-      clientConfig: {
-        region: process.env.AWS_REGION ?? "us-east-1",
-        ...(process.env.S3_ENDPOINT
-          ? { endpoint: process.env.S3_ENDPOINT }
-          : {}),
-      },
-    });
-  }
-  if (name === "r2") {
-    return new S3ObjectStore({
-      bucket: required("R2_BUCKET"),
-      clientConfig: {
-        region: "auto",
-        endpoint: `https://${required("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com`,
-        credentials: {
-          accessKeyId: required("R2_ACCESS_KEY_ID"),
-          secretAccessKey: required("R2_SECRET_ACCESS_KEY"),
-        },
-      },
-    });
-  }
-  throw new Error(`Unsupported THIMBLE_PROVIDER: ${name}`);
 }
 
 function configuredVersions(): number[] {

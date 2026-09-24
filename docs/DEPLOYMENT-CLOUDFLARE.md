@@ -21,7 +21,7 @@ npm run build:client
 npm run build:worker
 ```
 
-The version 1.0 Worker bundle is about 33.8 KB gzip. Track bundle growth before
+The Worker bundle is about 33.8 KB gzip. Track bundle growth before
 deploying an upgrade.
 
 ## 2. Authenticate Wrangler

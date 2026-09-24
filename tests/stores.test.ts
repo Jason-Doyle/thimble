@@ -13,7 +13,7 @@ import {
   LocalObjectStore,
   MeteredObjectStore,
   PrefixObjectStore,
-} from "../src/stores.js";
+} from "../src/providers/local.js";
 
 describe("local object store", () => {
   it("models conditional object writes", async () => {

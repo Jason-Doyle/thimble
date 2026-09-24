@@ -6,6 +6,17 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 2.0.0 - 2026-09-24
+
+- Split local, Azure Blob, and S3 adapters into explicit provider exports.
+- Changed Azure and AWS SDKs from mandatory dependencies to optional peer
+  dependencies.
+- Made the Node authority load cloud adapters only when their provider is
+  selected.
+- Added package verification for the lightweight base install and provider
+  installs.
+- Kept the supplied generic and AWS container images self-contained by
+  installing their required runtime adapters explicitly.
 - Corrected the npm publishing guide to describe signed provenance for the
   public repository.
 

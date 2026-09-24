@@ -60,6 +60,41 @@ The Cloudflare authority uses caller-owned R2 and asset bindings. Routes,
 custom domains, buckets, OIDC applications, and secrets belong to the
 consumer's account.
 
+### `thimbledb/providers/local`
+
+```ts
+import { LocalObjectStore } from "thimbledb/providers/local";
+```
+
+The local entry point also exports `PrefixObjectStore`, `CachedObjectStore`,
+and `MeteredObjectStore`. It has no cloud SDK dependency.
+
+### `thimbledb/providers/azure`
+
+```powershell
+npm install @azure/storage-blob
+```
+
+```ts
+import { AzureBlobObjectStore } from "thimbledb/providers/azure";
+```
+
+The Azure SDK is an optional peer dependency and is loaded only when this
+adapter or the Node authority's `azure` provider is used.
+
+### `thimbledb/providers/s3`
+
+```powershell
+npm install @aws-sdk/client-s3
+```
+
+```ts
+import { S3ObjectStore } from "thimbledb/providers/s3";
+```
+
+The AWS SDK is an optional peer dependency. The same adapter supports Amazon
+S3 and R2 through the S3 API.
+
 ## Compatibility commitments
 
 - Semantic versioning applies from package version `1.0.0`.
@@ -70,6 +105,10 @@ consumer's account.
   or required configuration value is a major-version change.
 - Security fixes may reject malformed or legacy data that was never valid
   under the documented protocol.
+
+Version 2 separates provider SDK installation from the base package. Azure,
+S3, and S3-compatible Node deployments must install their documented optional
+peer dependency.
 
 ## Supported runtimes
 

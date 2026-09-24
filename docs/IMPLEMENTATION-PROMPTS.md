@@ -80,15 +80,16 @@ Target:
 
 Requirements:
 1. Import `startNodeAuthority` from `thimbledb/authority/node`.
-2. Configure separate data and auth stores.
-3. Use secure cookies outside local development.
-4. Configure the exact allowed origin and trusted proxy boundary.
-5. Ignore caller-supplied forwarding headers unless the immediate proxy is explicitly trusted.
-6. If source IP cannot be verified, disable IP limits and retain subject limits.
-7. Keep the master key and provider credentials in the platform secret store.
-8. Expose only the authority HTTP port.
-9. Add health, authentication, write, deletion, and logout smoke tests.
-10. Document backup, key rotation, retention maintenance, and layout migration.
+2. Install `@azure/storage-blob` for Azure or `@aws-sdk/client-s3` for S3/R2.
+3. Configure separate data and auth stores.
+4. Use secure cookies outside local development.
+5. Configure the exact allowed origin and trusted proxy boundary.
+6. Ignore caller-supplied forwarding headers unless the immediate proxy is explicitly trusted.
+7. If source IP cannot be verified, disable IP limits and retain subject limits.
+8. Keep the master key and provider credentials in the platform secret store.
+9. Expose only the authority HTTP port.
+10. Add health, authentication, write, deletion, and logout smoke tests.
+11. Document backup, key rotation, retention maintenance, and layout migration.
 
 Do not create a second authentication system. Do not store passwords or provider access tokens.
 ```

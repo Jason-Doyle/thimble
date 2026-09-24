@@ -6,11 +6,11 @@ import { ContentAddressedTrieEngine } from "./engines/content-trie.js";
 import { LogSnapshotEngine } from "./engines/log-snapshot.js";
 import { MonolithEngine } from "./engines/monolith.js";
 import {
-  AzureBlobObjectStore,
   LocalObjectStore,
   PrefixObjectStore,
-  S3ObjectStore,
 } from "./stores.js";
+import { AzureBlobObjectStore } from "./providers/azure.js";
+import { S3ObjectStore } from "./providers/s3.js";
 import { round } from "./utils.js";
 import { workloadProfiles } from "./workload.js";
 

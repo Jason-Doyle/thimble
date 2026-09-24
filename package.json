@@ -1,6 +1,6 @@
 {
   "name": "thimbledb",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "description": "Browser-oriented encrypted object-storage database with Node and Cloudflare authorities.",
   "private": false,
   "license": "Apache-2.0",
@@ -60,6 +60,18 @@
     "./authority/cloudflare": {
       "types": "./dist/package/authority/cloudflare.d.ts",
       "import": "./dist/package/authority/cloudflare.js"
+    },
+    "./providers/local": {
+      "types": "./dist/package/providers/local.d.ts",
+      "import": "./dist/package/providers/local.js"
+    },
+    "./providers/azure": {
+      "types": "./dist/package/providers/azure.d.ts",
+      "import": "./dist/package/providers/azure.js"
+    },
+    "./providers/s3": {
+      "types": "./dist/package/providers/s3.d.ts",
+      "import": "./dist/package/providers/s3.js"
     }
   },
   "type": "module",
@@ -86,14 +98,27 @@
     "fixtures:generate": "tsx scripts/generate-protocol-fixtures.ts",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.896.0",
-    "@azure/storage-blob": "^12.28.0",
     "jose": "^6.1.0"
   },
+  "peerDependencies": {
+    "@aws-sdk/client-s3": "^3.896.0",
+    "@azure/storage-blob": "^12.28.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    },
+    "@azure/storage-blob": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.896.0",
+    "@azure/storage-blob": "^12.28.0",
     "@cloudflare/workers-types": "^5.20260923.1",
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.18.6",

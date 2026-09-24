@@ -17,6 +17,22 @@ npm install thimbledb
 ```
 
 ThimbleDB is ESM-only and requires Node.js 22 or newer for Node deployments.
+The base package does not install Azure or AWS SDKs.
+
+For a Node authority backed by Azure Blob:
+
+```powershell
+npm install @azure/storage-blob
+```
+
+For a Node authority backed by Amazon S3 or R2 through the S3 API:
+
+```powershell
+npm install @aws-sdk/client-s3
+```
+
+Cloudflare Worker, browser-only, and local Node deployments do not need either
+provider SDK.
 
 ## Cloudflare Worker and R2
 
@@ -121,8 +137,9 @@ node server.mjs
 The local adapter stores application objects under `.thimble-data` and auth
 records under `.thimble-auth`. It is intended for one Node process.
 
-For Azure, S3, R2, trusted proxy, and secure-cookie configuration, use the
-provider deployment guides.
+Before selecting `azure`, install `@azure/storage-blob`. Before selecting `s3`
+or `r2`, install `@aws-sdk/client-s3`. For provider environment variables,
+trusted proxy, and secure-cookie configuration, use the deployment guides.
 
 ## Browser client
 

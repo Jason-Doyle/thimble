@@ -42,6 +42,21 @@ multi-writer backend.
 | Amazon S3 | Supported secondary provider | AWS SDK and IAM role | Authenticated authority broker |
 | S3-compatible storage | Requires conformance testing | S3 endpoint adapter | Provider-specific |
 
+The base `thimbledb` install does not include cloud provider SDKs. Install only
+the adapter required by a Node deployment:
+
+```powershell
+# Azure Blob
+npm install thimbledb @azure/storage-blob
+
+# Amazon S3 or R2 through the S3 API
+npm install thimbledb @aws-sdk/client-s3
+```
+
+The Cloudflare authority uses its native R2 binding and needs neither package.
+The Node authority loads Azure and S3 adapters only when the corresponding
+`THIMBLE_PROVIDER` value is selected.
+
 ## Cloudflare R2
 
 R2 is the preferred provider because:

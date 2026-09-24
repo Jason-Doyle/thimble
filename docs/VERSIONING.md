@@ -12,7 +12,21 @@ The npm package follows semantic versioning after 1.0:
 
 Package version `1.0.0` freezes the documented exports in
 [Public package API](PUBLIC-API.md). Semantic versioning applies to the root,
-auth, and authority subpaths.
+auth, authority, and provider subpaths.
+
+## Version 2.0
+
+Version 2 separates cloud storage SDKs from the base package:
+
+- local, browser, and Cloudflare consumers no longer install Azure and AWS
+  SDKs
+- Azure deployments install `@azure/storage-blob`
+- S3 and R2-over-S3 deployments install `@aws-sdk/client-s3`
+- provider classes are available from explicit `thimbledb/providers/*`
+  subpaths
+
+This is a major release because existing Azure and S3 installations must add a
+direct provider dependency before upgrading.
 
 ## Object protocol version
 

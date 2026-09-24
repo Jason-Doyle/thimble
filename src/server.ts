@@ -43,11 +43,13 @@ import {
   type ScopeMaterial,
 } from "./server-keys.js";
 import {
-  AzureBlobObjectStore,
-  LocalObjectStore,
   PrefixObjectStore,
-  S3ObjectStore,
 } from "./stores.js";
+import {
+  createConfiguredProviderStores,
+  parseProvider,
+  type Provider,
+} from "./providers/configured.js";
 import {
   generateStoreDataset,
   workloadProfiles,
@@ -58,8 +60,6 @@ import {
   validateName,
 } from "./shared-utils.js";
 import type { CollectionLayout } from "./snapshot-protocol.js";
-
-export type Provider = "local" | "azure" | "s3" | "r2";
 
 type ScopeRuntime = {
   material: ScopeMaterial;
@@ -120,7 +120,7 @@ if (isDirectExecution()) {
 async function createContext(): Promise<ServerContext> {
   const provider = providerName();
   const prefix = process.env.THIMBLE_PREFIX ?? "demo";
-  const stores = createProviderStores(provider);
+  const stores = await createConfiguredProviderStores(provider);
   const dataRootStore = new PrefixObjectStore(stores.data, prefix);
   const authMaterial = await loadScopeMaterial({
     scopeId: "system-auth",
@@ -814,94 +814,6 @@ async function handleRequest(
   sendJson(response, 404, { error: "not_found" });
 }
 
-function createProviderStores(provider: Provider): {
-  data: ObjectStore;
-  auth: ObjectStore;
-} {
-  if (provider === "local") {
-    return {
-      data: new LocalObjectStore(
-        path.resolve(
-          process.env.THIMBLE_LOCAL_DATA_ROOT ??
-            ".thimble-data",
-        ),
-      ),
-      auth: new LocalObjectStore(
-        path.resolve(
-          process.env.THIMBLE_LOCAL_AUTH_ROOT ??
-            ".thimble-auth",
-        ),
-      ),
-    };
-  }
-  if (provider === "azure") {
-    const connectionString = requiredEnvironment(
-      "AZURE_STORAGE_CONNECTION_STRING",
-    );
-    const dataContainer =
-      process.env.AZURE_STORAGE_CONTAINER ?? "thimbledb";
-    const authContainer =
-      process.env.AZURE_AUTH_STORAGE_CONTAINER ??
-      `${dataContainer}-auth`;
-    return {
-      data: new AzureBlobObjectStore(
-        connectionString,
-        dataContainer,
-      ),
-      auth: new AzureBlobObjectStore(
-        connectionString,
-        authContainer,
-      ),
-    };
-  }
-  if (provider === "s3") {
-    const clientConfig: {
-      region: string;
-      endpoint?: string;
-      forcePathStyle?: boolean;
-    } = {
-      region: process.env.AWS_REGION ?? "us-east-1",
-    };
-    if (process.env.S3_ENDPOINT) {
-      clientConfig.endpoint = process.env.S3_ENDPOINT;
-    }
-    if (process.env.S3_FORCE_PATH_STYLE) {
-      clientConfig.forcePathStyle =
-        process.env.S3_FORCE_PATH_STYLE === "true";
-    }
-    return {
-      data: new S3ObjectStore({
-        bucket: requiredEnvironment("S3_BUCKET"),
-        clientConfig,
-      }),
-      auth: new S3ObjectStore({
-        bucket: requiredEnvironment("S3_AUTH_BUCKET"),
-        clientConfig,
-      }),
-    };
-  }
-
-  const accountId = requiredEnvironment("R2_ACCOUNT_ID");
-  const clientConfig = {
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: requiredEnvironment("R2_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnvironment("R2_SECRET_ACCESS_KEY"),
-    },
-  };
-  return {
-    data: new S3ObjectStore({
-      bucket: requiredEnvironment("R2_BUCKET"),
-      clientConfig,
-    }),
-    auth: new S3ObjectStore({
-      bucket: requiredEnvironment("R2_AUTH_BUCKET"),
-      clientConfig,
-    }),
-  };
-}
-
 async function sendObject(
   store: ObjectStore,
   key: string,
@@ -1385,20 +1297,12 @@ function configuredIdentityAdapters(): Map<string, IdentityAdapter> {
 }
 
 function providerName(): Provider {
-  const provider =
+  return parseProvider(
     process.env.THIMBLE_PROVIDER ??
-    (process.env.AZURE_STORAGE_CONNECTION_STRING
-      ? "azure"
-      : "local");
-  if (
-    provider === "local" ||
-    provider === "azure" ||
-    provider === "s3" ||
-    provider === "r2"
-  ) {
-    return provider;
-  }
-  throw new Error(`Unsupported THIMBLE_PROVIDER: ${provider}`);
+      (process.env.AZURE_STORAGE_CONNECTION_STRING
+        ? "azure"
+        : "local"),
+  );
 }
 
 function sendJson(
