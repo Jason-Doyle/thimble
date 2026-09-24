@@ -52,14 +52,14 @@ jobs:
 
       - name: Pack release artifact
         run: |
-          mkdir .release
-          npm pack --pack-destination .release
+          mkdir release-package
+          npm pack --pack-destination release-package
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
           name: npm-package
-          path: .release/*.tgz
+          path: release-package/*.tgz
           if-no-files-found: error
           retention-days: 1
 
@@ -89,7 +89,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: npm-package
-          path: .release
+          path: release-package
 
       - name: Check registry version
         id: registry
@@ -105,7 +105,7 @@ jobs:
       - name: Publish with npm trusted publishing
         if: steps.registry.outputs.published != 'true'
         shell: bash
-        run: npm publish "$(find .release -maxdepth 1 -name '*.tgz' -print -quit)" --access public
+        run: npm publish "$(find release-package -maxdepth 1 -name '*.tgz' -print -quit)" --access public
 
       - name: Report existing version
         if: steps.registry.outputs.published == 'true'
