@@ -1,0 +1,430 @@
+---
+import { getEntry } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getDocHref, getFeaturedDocs } from "../data/docs";
+import { site } from "../data/site";
+import { parseFaqMarkdown } from "../lib/faq";
+
+const faqEntry = await getEntry("docs", "faq");
+const faqItems = parseFaqMarkdown(faqEntry?.body ?? "").slice(0, 6);
+const featuredDocs = getFeaturedDocs().slice(0, 6);
+
+const softwareSchema = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: site.name,
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Web, Node.js, Cloudflare Workers",
+  description: site.description,
+  url: site.url,
+  downloadUrl: site.npm,
+  codeRepository: site.repository,
+  softwareVersion: site.version,
+  license: `${site.repository}/blob/main/LICENSE`,
+  author: {
+    "@type": "Person",
+    name: site.author,
+  },
+};
+
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: site.name,
+  url: site.url,
+  description: site.description,
+  potentialAction: {
+    "@type": "SearchAction",
+    target: `${site.url}/search/?q={search_term_string}`,
+    "query-input": "required name=search_term_string",
+  },
+};
+---
+
+<BaseLayout
+  title="ThimbleDB: An encrypted database for small web apps"
+  description="ThimbleDB is an encrypted, browser-first database for small web apps, backed by Cloudflare R2, S3, Azure Blob Storage, or local files."
+  pathname="/"
+  schemas={[softwareSchema, websiteSchema]}
+>
+  <section class="hero">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="hero-shell">
+      <div class="hero-copy">
+        <p class="eyebrow light">Cloudflare-first. Open source. Application-owned.</p>
+        <h1>A small database for small web apps.</h1>
+        <p class="hero-lede">
+          ThimbleDB keeps encrypted application data in object storage and a
+          fast browser cache. It gives focused web apps a durable data layer
+          without operating a separate database engine.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="/docs/quickstart/">
+            Start the quickstart
+            <span aria-hidden="true">→</span>
+          </a>
+          <a class="button secondary" href={site.repository}>
+            View on GitHub
+          </a>
+        </div>
+        <div class="install-command" aria-label="Install ThimbleDB from npm">
+          <span aria-hidden="true">$</span>
+          <code>npm install thimbledb</code>
+          <button type="button" data-copy-install aria-label="Copy install command">
+            Copy
+          </button>
+        </div>
+        <ul class="hero-proof" aria-label="Project facts">
+          <li>Apache-2.0</li>
+          <li>10.1 KB gzip browser bundle</li>
+          <li>2-package base install</li>
+          <li>Node.js 22+</li>
+        </ul>
+      </div>
+
+      <div class="hero-visual" aria-label="ThimbleDB architecture summary">
+        <div class="visual-glow"></div>
+        <div class="visual-logo">
+          <img
+            src="/assets/logo-320.webp"
+            srcset="/assets/logo-320.webp 320w, /assets/logo-384.webp 384w, /assets/logo-640.webp 640w"
+            sizes="(max-width: 720px) 192px, 310px"
+            width="310"
+            height="310"
+            alt="ThimbleDB"
+          />
+        </div>
+        <div class="orbit orbit-browser">
+          <span>Browser cache</span>
+        </div>
+        <div class="orbit orbit-authority">
+          <span>Application authority</span>
+        </div>
+        <div class="orbit orbit-storage">
+          <span>Object storage</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="audience-strip" aria-label="ThimbleDB audience">
+    <div class="section-shell audience-grid">
+      <div>
+        <p class="eyebrow">For experienced developers</p>
+        <h2>Inspect the boundaries before adopting it.</h2>
+        <p>
+          The protocol, threat model, deletion semantics, benchmarks, and
+          provider contracts are documented with their limitations.
+        </p>
+        <a class="text-link" href="/docs/architecture/">Review the architecture <span>→</span></a>
+      </div>
+      <div>
+        <p class="eyebrow">For AI-assisted builders</p>
+        <h2>Start with a fit check and copyable prompts.</h2>
+        <p>
+          Use the workload checklist, guided examples, and implementation
+          prompts before asking a coding tool to wire the database.
+        </p>
+        <a class="text-link" href="/docs/implementation-prompts/">Use the implementation prompts <span>→</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block code-section">
+    <div class="section-shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Small integration surface</p>
+          <h2>Own the deployment. Keep application code direct.</h2>
+        </div>
+        <p>
+          The authority owns credentials, identity, keys, and conditional
+          writes. Application code works with documents and collections.
+        </p>
+      </div>
+
+      <div class="code-showcase">
+        <article>
+          <header>
+            <div>
+              <span class="code-dot cyan"></span>
+              <strong>Cloudflare authority</strong>
+            </div>
+            <span>src/worker.ts</span>
+          </header>
+          <pre><code><span class="token-keyword">export</span> &#123; <span class="token-keyword">default</span> &#125; <span class="token-keyword">from</span> <span class="token-string">"thimbledb/authority/cloudflare"</span>;</code></pre>
+          <p>
+            Bind private R2 data and auth buckets, then connect the
+            application-owned OIDC provider.
+          </p>
+        </article>
+
+        <article>
+          <header>
+            <div>
+              <span class="code-dot blue"></span>
+              <strong>Document API</strong>
+            </div>
+            <span>application.ts</span>
+          </header>
+          <pre><code><span class="token-keyword">await</span> db.<span class="token-function">write</span>(<span class="token-string">"notes"</span>, <span class="token-string">"note-1"</span>, &#123;
+  id: <span class="token-string">"note-1"</span>,
+  title: <span class="token-string">"First note"</span>,
+&#125;);
+
+<span class="token-keyword">const</span> note = <span class="token-keyword">await</span> db.<span class="token-function">get</span>(
+  <span class="token-string">"notes"</span>,
+  <span class="token-string">"note-1"</span>,
+);</code></pre>
+          <p>
+            Reads use the browser cache and authenticated object broker.
+            Mutations return through the authority.
+          </p>
+        </article>
+      </div>
+
+      <div class="code-section-footer">
+        <span>Need Node, Azure, or S3?</span>
+        <a class="text-link" href="/docs/public-api/">Review every public package export <span>→</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Know the fit</p>
+          <h2>Designed for bounded, read-heavy application data.</h2>
+        </div>
+        <p>
+          ThimbleDB serves a deliberate workload. The limits are part of the
+          product, not fine print.
+        </p>
+      </div>
+
+      <div class="fit-grid">
+        <article class="fit-card suitable">
+          <div class="fit-icon" aria-hidden="true">✓</div>
+          <h3>A reasonable candidate</h3>
+          <ul>
+            <li>Records belong to one user, tenant, role, or public scope</li>
+            <li>Reads by ID and bounded collection scans cover the workflow</li>
+            <li>Writes are modest compared with reads</li>
+            <li>The hot working set fits in browser storage</li>
+            <li>External OIDC already handles account security</li>
+          </ul>
+          <a href="/use-cases/">Explore complete use cases <span>→</span></a>
+        </article>
+
+        <article class="fit-card unsuitable">
+          <div class="fit-icon" aria-hidden="true">×</div>
+          <h3>Choose another database</h3>
+          <ul>
+            <li>Multi-record transactions or relational joins are central</li>
+            <li>Shared records receive high-frequency concurrent writes</li>
+            <li>The application needs full-text, vector, or analytical queries</li>
+            <li>Offline writes and automatic conflict resolution are required</li>
+            <li>The dataset is not meaningfully bounded</li>
+          </ul>
+          <a href="/docs/tradeoffs/">Read the tradeoffs <span>→</span></a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block architecture-section">
+    <div class="section-shell">
+      <div class="section-heading inverse">
+        <div>
+          <p class="eyebrow light">How it works</p>
+          <h2>Three boundaries, one application-owned data path.</h2>
+        </div>
+        <p>
+          The browser gets speed. The authority keeps control. Object storage
+          provides durable encrypted bytes.
+        </p>
+      </div>
+
+      <div class="architecture-flow">
+        <article>
+          <span class="flow-number">01</span>
+          <div class="flow-icon browser-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32">
+              <rect x="3" y="5" width="26" height="19" rx="3"></rect>
+              <path d="M10 28h12M16 24v4"></path>
+            </svg>
+          </div>
+          <h3>Browser</h3>
+          <p>
+            Memory and encrypted IndexedDB keep the active working set close to
+            the user.
+          </p>
+        </article>
+        <div class="flow-connector" aria-hidden="true">
+          <span></span>
+          <svg viewBox="0 0 28 12"><path d="M1 6h24m-5-5 5 5-5 5"></path></svg>
+        </div>
+        <article>
+          <span class="flow-number">02</span>
+          <div class="flow-icon authority-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32">
+              <path d="M16 3 27 8v7c0 7-4.3 11.6-11 14-6.7-2.4-11-7-11-14V8l11-5Z"></path>
+              <path d="m11 16 3 3 7-8"></path>
+            </svg>
+          </div>
+          <h3>Authority</h3>
+          <p>
+            External identity, scope checks, key grants, validation, writes,
+            deletion, and administration stay server-side.
+          </p>
+        </article>
+        <div class="flow-connector" aria-hidden="true">
+          <span></span>
+          <svg viewBox="0 0 28 12"><path d="M1 6h24m-5-5 5 5-5 5"></path></svg>
+        </div>
+        <article>
+          <span class="flow-number">03</span>
+          <div class="flow-icon storage-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32">
+              <ellipse cx="16" cy="7" rx="11" ry="4"></ellipse>
+              <path d="M5 7v9c0 2.2 5 4 11 4s11-1.8 11-4V7M5 16v9c0 2.2 5 4 11 4s11-1.8 11-4v-9"></path>
+            </svg>
+          </div>
+          <h3>Object storage</h3>
+          <p>
+            Canonical JSON becomes compressed AES-GCM envelopes stored in R2,
+            S3, Azure Blob, or local files.
+          </p>
+        </article>
+      </div>
+
+      <div class="provider-row" aria-label="Supported storage providers">
+        <span>Cloudflare R2</span>
+        <span>Amazon S3</span>
+        <span>Azure Blob Storage</span>
+        <span>Local filesystem</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Start from evidence</p>
+          <h2>Documentation for the decision, not just the installation.</h2>
+        </div>
+        <a class="button quiet" href="/docs/">Browse all documentation <span>→</span></a>
+      </div>
+      <div class="doc-card-grid">
+        {
+          featuredDocs.map((doc) => (
+            <a class="doc-card" href={getDocHref(doc.id)}>
+              <span class="card-label">{doc.group}</span>
+              <h3>{doc.title}</h3>
+              <p>{doc.description}</p>
+              <span class="card-arrow" aria-hidden="true">→</span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block benchmark-section">
+    <div class="section-shell benchmark-grid">
+      <div>
+        <p class="eyebrow">Published R2 evidence</p>
+        <h2>Fast when warm. Honest about cold reads.</h2>
+        <p>
+          In the regional browser run, final warm p95 reads ranged from 1.6 to
+          8.3 ms. Cold product reads ranged from 1.25 to 3.44 seconds after the
+          snapshot change. External session creation remained slower.
+        </p>
+        <p class="evidence-note">
+          These measurements describe one tested workload. They do not claim
+          database-wide latency superiority.
+        </p>
+        <a class="button dark" href="/benchmarks/">Read the benchmark and limitations <span>→</span></a>
+      </div>
+      <div class="benchmark-card" aria-label="Regional benchmark summary">
+        <div class="benchmark-header">
+          <span>Final warm p95</span>
+          <strong>1.6-8.3 ms</strong>
+        </div>
+        <div class="benchmark-bars">
+          <div>
+            <span>North Europe</span>
+            <i style="--value: 83%"></i>
+            <strong>8.3 ms</strong>
+          </div>
+          <div>
+            <span>US East</span>
+            <i style="--value: 52%"></i>
+            <strong>5.2 ms</strong>
+          </div>
+          <div>
+            <span>Southeast Asia</span>
+            <i style="--value: 16%"></i>
+            <strong>1.6 ms</strong>
+          </div>
+        </div>
+        <div class="benchmark-footer">
+          Chromium containers, private R2, authenticated broker
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block faq-preview">
+    <div class="section-shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Direct answers</p>
+          <h2>Questions to settle before implementation.</h2>
+        </div>
+        <a class="text-link" href="/faq/">Read every answer <span>→</span></a>
+      </div>
+      <div class="faq-grid">
+        {
+          faqItems.map((item, index) => (
+            <details open={index === 0}>
+              <summary>{item.question}</summary>
+              <p>{item.answer}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="final-cta">
+    <div class="section-shell final-cta-inner">
+      <div>
+        <p class="eyebrow light">Evaluate it against your workload</p>
+        <h2>Start local. Keep the exit criteria visible.</h2>
+        <p>
+          Run the sample application, review the tradeoffs, and compare the
+          result with a managed database before choosing a production data
+          layer.
+        </p>
+      </div>
+      <div class="final-actions">
+        <a class="button primary" href="/docs/quickstart/">Open the quickstart <span>→</span></a>
+        <a class="button ghost" href="/docs/evaluation/">Run the evaluation harness</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>("[data-copy-install]");
+  button?.addEventListener("click", async () => {
+    await navigator.clipboard.writeText("npm install thimbledb");
+    button.textContent = "Copied";
+    window.setTimeout(() => {
+      button.textContent = "Copy";
+    }, 1_500);
+  });
+</script>

@@ -1,0 +1,88 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import {
+  docGroups,
+  getDocHref,
+  getDocsByGroup,
+} from "../../data/docs";
+import { site } from "../../data/site";
+
+const docsSchema = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: "ThimbleDB documentation",
+  description:
+    "Architecture, quickstarts, security, deployment, operations, API reference, benchmarks, and use cases for ThimbleDB.",
+  url: `${site.url}/docs/`,
+  isPartOf: {
+    "@type": "WebSite",
+    name: site.name,
+    url: site.url,
+  },
+};
+---
+
+<BaseLayout
+  title="ThimbleDB documentation"
+  description="Architecture, quickstarts, security, deployment, operations, API reference, benchmarks, and use cases for ThimbleDB."
+  pathname="/docs/"
+  schemas={[docsSchema]}
+>
+  <section class="docs-landing-hero">
+    <div class="section-shell">
+      <nav class="breadcrumbs light-breadcrumbs" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span aria-hidden="true">/</span>
+        <span>Documentation</span>
+      </nav>
+      <p class="eyebrow light">Repository-backed documentation</p>
+      <h1>Build from the model, not from a guess.</h1>
+      <p>
+        Start with workload fit, then move through architecture, security,
+        deployment, and operations. Every page is generated from the public
+        GitHub repository.
+      </p>
+      <div class="docs-paths">
+        <a href="/docs/quickstart/">
+          <span>01</span>
+          <strong>Build a local example</strong>
+          <small>Package, authority, browser client, and verification.</small>
+        </a>
+        <a href="/docs/architecture/">
+          <span>02</span>
+          <strong>Review the architecture</strong>
+          <small>Trust boundaries, storage model, cache, and scopes.</small>
+        </a>
+        <a href="/docs/tradeoffs/">
+          <span>03</span>
+          <strong>Check the rejection criteria</strong>
+          <small>Know when another database is the better choice.</small>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="docs-directory section-block">
+    <div class="section-shell">
+      {
+        docGroups.map((group) => (
+          <section class="directory-group">
+            <div class="directory-heading">
+              <h2>{group}</h2>
+              <span>{getDocsByGroup(group).length} guides</span>
+            </div>
+            <div class="directory-grid">
+              {getDocsByGroup(group).map((doc) => (
+                <a href={getDocHref(doc.id)}>
+                  <h3>{doc.title}</h3>
+                  <p>{doc.description}</p>
+                  <span aria-hidden="true">→</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>

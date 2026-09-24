@@ -5,6 +5,7 @@ export default defineConfig({
     exclude: [
       "tests/e2e/**",
       "node_modules/**",
+      "site/**",
       "dist/**",
     ],
   },

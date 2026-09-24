@@ -1,0 +1,25 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Page not found"
+  description="The requested ThimbleDB page could not be found."
+  pathname="/404/"
+  noIndex={true}
+>
+  <section class="not-found">
+    <div class="section-shell">
+      <p class="error-code">404</p>
+      <h1>This object key does not exist.</h1>
+      <p>
+        The page may have moved, or the address may be incorrect. Start from
+        the documentation directory or search the repository-backed guides.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="/docs/">Browse documentation</a>
+        <a class="button quiet" href="/search/">Search the site</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

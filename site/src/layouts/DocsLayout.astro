@@ -1,0 +1,202 @@
+---
+import type { MarkdownHeading } from "astro";
+import BaseLayout from "./BaseLayout.astro";
+import {
+  docGroups,
+  getDocHref,
+  getDocsByGroup,
+  getRelatedDocs,
+  type DocMeta,
+} from "../data/docs";
+import { repositoryUrl, sourcePathForId } from "../lib/routes.js";
+import { site } from "../data/site";
+
+type Schema = Record<string, unknown>;
+
+type Props = {
+  meta: DocMeta;
+  headings: MarkdownHeading[];
+  schemas?: Schema[];
+};
+
+const { meta, headings, schemas = [] } = Astro.props;
+const pathname = getDocHref(meta.id);
+const sourcePath = sourcePathForId(meta.id);
+const related = getRelatedDocs(meta.id);
+const tableOfContents = headings.filter(
+  (heading) => heading.depth === 2 || heading.depth === 3,
+);
+const isUseCase = meta.id === "use-cases" || meta.id.startsWith("use-cases/");
+const sectionLabel = isUseCase ? "Use cases" : "Documentation";
+const sectionHref = isUseCase ? "/use-cases/" : "/docs/";
+const articleSchema = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  headline: meta.title,
+  description: meta.description,
+  mainEntityOfPage: new URL(pathname, site.url).toString(),
+  author: {
+    "@type": "Person",
+    name: site.author,
+  },
+  publisher: {
+    "@type": "Organization",
+    name: site.name,
+    url: site.url,
+    logo: {
+      "@type": "ImageObject",
+      url: `${site.url}/assets/logo.png`,
+    },
+  },
+  isPartOf: {
+    "@type": "WebSite",
+    name: site.name,
+    url: site.url,
+  },
+};
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: site.url,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: sectionLabel,
+      item: new URL(sectionHref, site.url).toString(),
+    },
+    {
+      "@type": "ListItem",
+      position: 3,
+      name: meta.title,
+      item: new URL(pathname, site.url).toString(),
+    },
+  ],
+};
+---
+
+<BaseLayout
+  title={meta.title}
+  description={meta.description}
+  pathname={pathname}
+  pageType="article"
+  schemas={[articleSchema, breadcrumbSchema, ...schemas]}
+>
+  <div class="docs-shell">
+    <aside class="docs-navigation" aria-label="Documentation navigation">
+      <a class="docs-home-link" href="/docs/">
+        <span>Documentation</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m9 18 6-6-6-6"></path>
+        </svg>
+      </a>
+      {
+        docGroups.map((group) => (
+          <section>
+            <h2>{group}</h2>
+            <nav aria-label={`${group} documentation`}>
+              {getDocsByGroup(group).map((doc) => (
+                <a
+                  href={getDocHref(doc.id)}
+                  aria-current={doc.id === meta.id ? "page" : undefined}
+                >
+                  {doc.title}
+                </a>
+              ))}
+            </nav>
+          </section>
+        ))
+      }
+    </aside>
+
+    <div class="docs-main">
+      <nav class="breadcrumbs" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span aria-hidden="true">/</span>
+        <a href={sectionHref}>{sectionLabel}</a>
+        <span aria-hidden="true">/</span>
+        <span>{meta.title}</span>
+      </nav>
+
+      <div class="docs-mobile-navigation">
+        <details>
+          <summary>Browse documentation</summary>
+          {
+            docGroups.map((group) => (
+              <section>
+                <h2>{group}</h2>
+                {getDocsByGroup(group).map((doc) => (
+                  <a
+                    href={getDocHref(doc.id)}
+                    aria-current={doc.id === meta.id ? "page" : undefined}
+                  >
+                    {doc.title}
+                  </a>
+                ))}
+              </section>
+            ))
+          }
+        </details>
+      </div>
+
+      <article class="prose">
+        <p class="document-kicker">{meta.group}</p>
+        <slot />
+      </article>
+
+      <div class="document-source">
+        <p>
+          This page is built from the repository source.
+        </p>
+        <a href={`${repositoryUrl}/blob/main/${sourcePath}`}>
+          View or improve this page on GitHub
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+
+      {
+        related.length > 0 && (
+          <section class="related-docs" aria-labelledby="related-heading">
+            <div class="section-heading compact">
+              <p class="eyebrow">Continue reading</p>
+              <h2 id="related-heading">Related documentation</h2>
+            </div>
+            <div class="related-grid">
+              {related.map((doc) => (
+                <a class="related-card" href={getDocHref(doc.id)}>
+                  <strong>{doc.title}</strong>
+                  <span>{doc.description}</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        )
+      }
+    </div>
+
+    <aside class="table-of-contents" aria-label="On this page">
+      {
+        tableOfContents.length > 0 && (
+          <>
+            <h2>On this page</h2>
+            <nav>
+              {tableOfContents.map((heading) => (
+                <a
+                  class:list={{ nested: heading.depth === 3 }}
+                  href={`#${heading.slug}`}
+                >
+                  {heading.text}
+                </a>
+              ))}
+            </nav>
+          </>
+        )
+      }
+    </aside>
+  </div>
+</BaseLayout>
