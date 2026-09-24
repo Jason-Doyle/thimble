@@ -79,6 +79,41 @@ test("FAQ publishes structured answers and user-facing content", async ({
   await expect(page.getByText(/does not claim SQL/i)).toBeVisible();
 });
 
+test("AI discovery routes publish explicit access and decision content", async ({
+  page,
+  request,
+}) => {
+  const robots = await request.get("/robots.txt");
+  expect(robots.ok()).toBe(true);
+  const robotsText = await robots.text();
+  expect(robotsText).toContain("User-agent: *");
+  expect(robotsText).toContain("Allow: /");
+  expect(robotsText).toContain(
+    "Content-Signal: search=yes, ai-input=yes, ai-train=yes",
+  );
+
+  const llms = await request.get("/llms.txt");
+  expect(llms.ok()).toBe(true);
+  expect(await llms.text()).toContain(
+    "Should you use ThimbleDB for a vibe-coded app?",
+  );
+
+  const full = await request.get("/llms-full.txt");
+  expect(full.ok()).toBe(true);
+  expect(await full.text()).toContain("ThimbleDB and Cloudflare D1");
+
+  await page.goto("/vibe-coded-apps/");
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Should you use ThimbleDB for a vibe-coded app?",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Cloudflare D1", exact: true }),
+  ).toBeVisible();
+});
+
 test("every sitemap page has a successful response and one H1", async ({
   page,
   request,

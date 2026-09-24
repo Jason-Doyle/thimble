@@ -6,6 +6,7 @@ export default defineConfig({
       "tests/e2e/**",
       "node_modules/**",
       "site/**",
+      "examples/**",
       "dist/**",
     ],
   },

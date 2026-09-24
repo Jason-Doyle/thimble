@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "thimbledb-notes-example",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-24",
+  "workers_dev": true,
+
+  // Copy this file to wrangler.jsonc before configuring a deployment.
+  // Keep resource names and identity values disabled until real resources
+  // exist in the target Cloudflare account.
+
+  // "vars": {
+  //   "THIMBLE_PREFIX": "notes-example",
+  //   "THIMBLE_KEY_VERSION": "1",
+  //   "THIMBLE_COLLECTION_LAYOUTS": "notes=snapshot",
+  //   "THIMBLE_ALLOWED_ORIGIN": "https://notes.example.com",
+  //   "ENTRA_TENANT_ID": "<tenant-id>",
+  //   "ENTRA_AUDIENCE": "<api-client-id>",
+  //   "ENTRA_REQUIRED_SCOPE": "thimble.access"
+  // },
+
+  // "r2_buckets": [
+  //   {
+  //     "binding": "DB",
+  //     "bucket_name": "<data-bucket>"
+  //   },
+  //   {
+  //     "binding": "AUTH_DB",
+  //     "bucket_name": "<auth-bucket>"
+  //   }
+  // ]
+}

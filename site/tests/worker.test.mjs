@@ -16,6 +16,19 @@ test("redirects www requests to the canonical apex URL", async () => {
   assert.equal(response.headers.get("x-frame-options"), "DENY");
 });
 
+test("redirects HTTP requests to HTTPS", async () => {
+  const response = await worker.fetch(
+    new Request("http://thimbledb.com/faq/?source=http"),
+    failingAssets(),
+  );
+
+  assert.equal(response.status, 308);
+  assert.equal(
+    response.headers.get("location"),
+    "https://thimbledb.com/faq/?source=http",
+  );
+});
+
 test("serves apex assets with security and HTML cache headers", async () => {
   const response = await worker.fetch(
     new Request("https://thimbledb.com/docs/"),

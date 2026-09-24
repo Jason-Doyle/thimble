@@ -4,6 +4,7 @@ dist/
 .thimble-data/
 .thimble-auth/
 .thimble-e2e/
+examples/local-notes/.data/
 benchmark-results/
 coverage/
 playwright-report/

@@ -3,6 +3,7 @@ import { docRoute } from "../lib/routes.js";
 export type DocGroup =
   | "Start here"
   | "Use cases"
+  | "Compare"
   | "Understand"
   | "Deploy and operate"
   | "Reference";
@@ -37,6 +38,15 @@ export const docs: DocMeta[] = [
     featured: true,
   },
   {
+    id: "vibe-coded-apps",
+    title: "Should you use ThimbleDB?",
+    description:
+      "Use an exact fit check to decide whether a vibe-coded or AI-assisted small app matches ThimbleDB.",
+    group: "Start here",
+    order: 15,
+    featured: true,
+  },
+  {
     id: "tradeoffs",
     title: "Tradeoffs",
     description:
@@ -52,6 +62,15 @@ export const docs: DocMeta[] = [
       "Copy practical integration, deployment, migration, and security-review prompts into a coding tool.",
     group: "Start here",
     order: 40,
+  },
+  {
+    id: "examples",
+    title: "Starter examples",
+    description:
+      "Run the local notes example or compile the Cloudflare authority starter from public package exports.",
+    group: "Start here",
+    order: 45,
+    featured: true,
   },
   {
     id: "use-cases/per-user-workspace",
@@ -99,6 +118,55 @@ export const docs: DocMeta[] = [
     description:
       "Keep bounded preferences and task context separate from model prompts and provider tokens.",
     group: "Use cases",
+    order: 60,
+  },
+  {
+    id: "comparisons",
+    title: "Database comparisons",
+    description:
+      "Compare ThimbleDB with D1, SQLite, Firestore, lowdb, and direct object storage by workload.",
+    group: "Compare",
+    order: 10,
+    featured: true,
+  },
+  {
+    id: "compare/cloudflare-d1",
+    title: "ThimbleDB and Cloudflare D1",
+    description:
+      "Choose between an object-storage protocol and Cloudflare's managed SQLite-compatible database.",
+    group: "Compare",
+    order: 20,
+  },
+  {
+    id: "compare/sqlite",
+    title: "ThimbleDB and SQLite",
+    description:
+      "Compare browser-cached object storage with a mature embedded transactional SQL engine.",
+    group: "Compare",
+    order: 30,
+  },
+  {
+    id: "compare/firestore",
+    title: "ThimbleDB and Firestore",
+    description:
+      "Compare application-owned object storage with managed document queries, listeners, and offline writes.",
+    group: "Compare",
+    order: 40,
+  },
+  {
+    id: "compare/lowdb",
+    title: "ThimbleDB and lowdb",
+    description:
+      "Compare a hosted browser-and-authority protocol with a lightweight local JSON database.",
+    group: "Compare",
+    order: 50,
+  },
+  {
+    id: "compare/object-storage",
+    title: "ThimbleDB and direct object storage",
+    description:
+      "Decide whether direct JSON objects are enough or a versioned storage protocol is justified.",
+    group: "Compare",
     order: 60,
   },
   {
@@ -254,6 +322,7 @@ export const docs: DocMeta[] = [
 export const docGroups: DocGroup[] = [
   "Start here",
   "Use cases",
+  "Compare",
   "Understand",
   "Deploy and operate",
   "Reference",

@@ -1,0 +1,14 @@
+{
+  "name": "thimbledb-local-notes-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "node index.mjs demo",
+    "start": "node index.mjs",
+    "test": "node --test test.mjs"
+  },
+  "dependencies": {
+    "thimbledb": "^2.0.0"
+  }
+}

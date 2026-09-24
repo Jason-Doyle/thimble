@@ -106,7 +106,9 @@
     "site:preview": "npm --prefix site run preview",
     "site:test": "npm --prefix site run test:worker && playwright test --config site/playwright.config.ts",
     "site:deploy:check": "wrangler deploy --cwd site --config wrangler.jsonc --dry-run",
-    "site:deploy": "wrangler deploy --cwd site --config wrangler.jsonc"
+    "site:deploy": "wrangler deploy --cwd site --config wrangler.jsonc",
+    "site:validate:production": "npm --prefix site run validate:production",
+    "examples:check": "npm --prefix examples/local-notes test && npm --prefix examples/cloudflare-notes run check"
   },
   "dependencies": {
     "jose": "^6.1.0"
