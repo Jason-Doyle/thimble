@@ -22,41 +22,6 @@ describe("content trie deletion retention", () => {
         value: "visible",
       });
 
-      describe("immutable snapshot deletion retention", () => {
-        it("uses the same tombstone and restore policy", async () => {
-          const directory = await mkdtemp(
-            path.join(os.tmpdir(), "thimbledb-snapshot-delete-"),
-          );
-          try {
-            const engine = new ImmutableSnapshotEngine(
-              new PrefixObjectStore(
-                new LocalObjectStore(directory),
-                "scope",
-              ),
-            );
-            await engine.put("products", "one", {
-              id: "one",
-              value: "snapshot",
-            });
-            await expect(
-              engine.delete("products", "one", policy),
-            ).resolves.toBe(true);
-            await expect(
-              engine.get("products", "one"),
-            ).resolves.toBeNull();
-            await expect(
-              engine.restore(
-                "products",
-                "one",
-                new Date("2026-01-02T00:00:00.000Z"),
-              ),
-            ).resolves.toMatchObject({ value: "snapshot" });
-          } finally {
-            await rm(directory, { recursive: true, force: true });
-          }
-        });
-      });
-
       await expect(
         fixture.engine.delete("products", "one", policy),
       ).resolves.toBe(true);
@@ -156,6 +121,41 @@ describe("content trie deletion retention", () => {
       ).resolves.toEqual([]);
     } finally {
       await fixture.cleanup();
+    }
+  });
+});
+
+describe("immutable snapshot deletion retention", () => {
+  it("uses the same tombstone and restore policy", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimbledb-snapshot-delete-"),
+    );
+    try {
+      const engine = new ImmutableSnapshotEngine(
+        new PrefixObjectStore(
+          new LocalObjectStore(directory),
+          "scope",
+        ),
+      );
+      await engine.put("products", "one", {
+        id: "one",
+        value: "snapshot",
+      });
+      await expect(
+        engine.delete("products", "one", policy),
+      ).resolves.toBe(true);
+      await expect(
+        engine.get("products", "one"),
+      ).resolves.toBeNull();
+      await expect(
+        engine.restore(
+          "products",
+          "one",
+          new Date("2026-01-02T00:00:00.000Z"),
+        ),
+      ).resolves.toMatchObject({ value: "snapshot" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });
