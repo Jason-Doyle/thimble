@@ -204,6 +204,19 @@ OIDC_REQUIRED_SCOPE and/or OIDC_REQUIRED_ROLE
 
 The provider ID becomes the route segment used during session exchange.
 
+Generate the recommended Entra delegated scope and application roles:
+
+```powershell
+npx thimbledb generate-entra-roles `
+  --out ".\entra-authorization.json"
+```
+
+Merge the generated entries with the existing application registration and
+keep their generated IDs stable. The output is not applied automatically.
+
+For non-human callers and live administration tools, see
+[Machine and service access](SERVICE-ACCESS.md).
+
 ## HTTP API
 
 | Route | Authentication | Purpose |
@@ -231,6 +244,30 @@ The identity provider owns:
 - credential breach response
 
 ThimbleDB does not attempt to replace provider-side identity governance.
+
+## Local development identity
+
+The Node authority can enable a development-only identity:
+
+```powershell
+$env:THIMBLE_PROVIDER = "local"
+$env:THIMBLE_HOST = "127.0.0.1"
+$env:THIMBLE_ALLOWED_ORIGIN = "http://127.0.0.1:5173"
+$env:THIMBLE_DEV_IDENTITY = "true"
+```
+
+The authority refuses this configuration when:
+
+- `NODE_ENV=production`
+- the provider is not local
+- the authority host is not loopback
+- the allowed browser origin is not loopback
+
+The development route issues a normal HttpOnly session backed by an encrypted
+user scope. It does not simulate production OIDC claims and is unavailable in
+the Cloudflare authority.
+
+See [Local development](DEVELOPMENT.md).
 
 ## References
 

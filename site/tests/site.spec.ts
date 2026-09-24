@@ -27,6 +27,12 @@ test("homepage presents the product and complete SEO metadata", async ({
   await expect(
     page.getByRole("img", { name: "ThimbleDB" }),
   ).toHaveJSProperty("complete", true);
+  await expect(
+    page.getByText("npx thimbledb@latest create my-app"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Bounded indexed query", { exact: true }),
+  ).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
 
@@ -76,7 +82,9 @@ test("FAQ publishes structured answers and user-facing content", async ({
     .locator('script[type="application/ld+json"]')
     .allTextContents();
   expect(schemas.some((schema) => schema.includes('"FAQPage"'))).toBe(true);
-  await expect(page.getByText(/does not claim SQL/i)).toBeVisible();
+  await expect(
+    page.getByText(/declared secondary indexes/i),
+  ).toBeVisible();
 });
 
 test("AI discovery routes publish explicit access and decision content", async ({
@@ -94,13 +102,24 @@ test("AI discovery routes publish explicit access and decision content", async (
 
   const llms = await request.get("/llms.txt");
   expect(llms.ok()).toBe(true);
-  expect(await llms.text()).toContain(
+  const llmsText = await llms.text();
+  expect(llmsText).toContain(
     "Should you use ThimbleDB for a vibe-coded app?",
   );
+  expect(llmsText).toContain(
+    "npx thimbledb@latest create my-app",
+  );
+  expect(llmsText).toContain("Queries and indexes");
+  expect(llmsText).toContain("Logical migration");
+  expect(llmsText).toContain("Machine and service access");
 
   const full = await request.get("/llms-full.txt");
   expect(full.ok()).toBe(true);
-  expect(await full.text()).toContain("ThimbleDB and Cloudflare D1");
+  const fullText = await full.text();
+  expect(fullText).toContain("ThimbleDB and Cloudflare D1");
+  expect(fullText).toContain("# Queries and secondary indexes");
+  expect(fullText).toContain("# Logical migration");
+  expect(fullText).toContain("# Machine and service access");
 
   await page.goto("/vibe-coded-apps/");
   await expect(

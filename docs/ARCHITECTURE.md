@@ -14,9 +14,9 @@ conformance requirements.
 
 ```text
 Browser
-  decoded memory LRU
-  encrypted IndexedDB cache
-  read-only object requests
+  authority-and-scope-namespaced memory LRU
+  authority-and-scope-namespaced encrypted IndexedDB cache
+  typed point, index, and bounded-scan queries
           |
           v
 Private read broker
@@ -30,6 +30,7 @@ Cloudflare Worker
   external OIDC authentication and identity mapping
   scope authorisation
   validation
+  declared secondary-index maintenance
   gzip then AES-256-GCM
   conditional R2 writes
   cache-update bundle response
@@ -65,10 +66,14 @@ encryption. Private scopes use a versioned AES-256-GCM data key.
 1. The browser reads `HEAD.json` from memory or IndexedDB.
 2. If its TTL expired, the browser revalidates HEAD with `If-None-Match`.
 3. A 304 response keeps the current layout generation.
-4. Trie HEAD points to an immutable root, branch, and leaf path.
-5. Snapshot HEAD points to one immutable collection snapshot.
-6. The browser downloads only missing envelopes for the configured layout.
-7. It decrypts, decompresses, parses, and retains the decoded value in memory.
+4. ID equality resolves directly to one document path.
+5. A matching declared index resolves a bounded set of candidate IDs.
+6. Queries without a usable index use an explicitly bounded scan.
+7. Trie HEAD points to an immutable root, branch, and leaf path.
+8. Snapshot HEAD points to one immutable collection snapshot.
+9. The browser coalesces concurrent reads of the same immutable object.
+10. It re-evaluates the complete predicate, orders, limits, and returns the
+    query plan with the documents.
 
 Immutable pages do not need revalidation. Their object key identifies their
 content within the scope and key version.
@@ -80,11 +85,13 @@ content within the scope and key version.
 3. Application validation runs before storage work.
 4. Changed trie pages or the next immutable snapshot are serialised,
    gzip-compressed when useful, and encrypted.
-5. New immutable objects are created.
-6. HEAD is updated with an ETag compare-and-swap.
-7. The response includes the new HEAD, changed immutable objects, and
+5. Every configured secondary index is updated or rebuilt.
+6. New immutable document and index objects are created.
+7. HEAD publishes the document root and all active index references with one
+   ETag compare-and-swap.
+8. The response includes the new HEAD, changed immutable objects, and
    document.
-8. The writing tab updates its cache and broadcasts the bundle to other tabs.
+9. The writing tab updates its cache and broadcasts the bundle to other tabs.
 
 Conditional HEAD writes are the transaction boundary for one collection and
 scope. Cross-collection transactions are not supported.
@@ -101,6 +108,10 @@ The scope data key remains memory-only. IndexedDB has a separate
 non-extractable device key. Clearing cached objects retains that shared key so
 another tab cannot create entries that a newly generated key cannot decrypt.
 Logout-time key rotation requires cross-tab coordination.
+
+Every cache key is namespaced by authority URL and scope ID, including custom
+cache implementations. Reusing one cache object across users or tenants
+cannot return another scope's decoded values.
 
 ## Provider model
 
@@ -121,6 +132,10 @@ Cloudflare is preferred, not required.
 ## Boundaries
 
 - One HEAD serialises writes within a collection and scope.
+- Document roots and declared secondary indexes become visible through the
+  same HEAD update.
+- Equality indexes contain scalar tuples; range indexes contain one scalar
+  field. Non-scalar predicates use bounded scans.
 - Production engines retain old generations. Destructive garbage collection is
   available only in an explicitly enabled, quiescent maintenance mode.
 - Every deployment uses an external OIDC identity provider. ThimbleDB stores

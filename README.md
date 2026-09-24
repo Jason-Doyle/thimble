@@ -88,6 +88,9 @@ Only bindings, credentials, and browser read authorisation differ.
 - per-user and per-tenant scope grants
 - retained deletion, restoration, and quiescent physical collection
 - immutable snapshot and content-addressed trie collection layouts
+- typed collections, bounded predicates, and declared secondary indexes
+- versioned logical archives and explicit migration adapters
+- local application scaffolding and diagnostics
 - evidence-based layout recommendations and explicit migration
 - write responses that update all open browser tabs
 - Cloudflare Worker and native R2 binding
@@ -98,15 +101,35 @@ Only bindings, credentials, and browser read authorisation differ.
 - reusable Node and Cloudflare authority endpoint exports
 - Docker, Wrangler, Bicep, and CloudFormation deployment paths
 
-The browser bundle is about 35.2 KB uncompressed and 10.1 KB gzip. It ships no
-database runtime or WASM module.
+The reference browser build is about 54.5 KB uncompressed and 15.3 KB gzip.
+It ships no database runtime or WASM module.
 
 ## Quick start
 
-Install the package:
+Create a local web app:
+
+```powershell
+npx thimbledb@latest create my-notes-app
+cd my-notes-app
+npm run dev
+```
+
+Or start from a maintained repository template:
+
+- [Node starter](https://github.com/Jason-Doyle/thimbledb-node-starter)
+- [Cloudflare starter](https://github.com/Jason-Doyle/thimbledb-cloudflare-starter)
+
+Or install the package directly:
 
 ```powershell
 npm install thimbledb
+```
+
+Generate the recommended Microsoft Entra delegated scope and application
+roles:
+
+```powershell
+npx thimbledb generate-entra-roles --out entra-authorization.json
 ```
 
 The base install includes the browser/core APIs, authentication, Cloudflare
@@ -125,6 +148,15 @@ Use the browser/core API from `thimbledb`, external identity primitives from
 `thimbledb/auth`, and the complete endpoint authority from either
 `thimbledb/authority/node` or `thimbledb/authority/cloudflare`. Consumers
 supply their own domain, storage, OIDC application, and secrets.
+
+After the authority session exists:
+
+```ts
+import { createThimbleClient } from "thimbledb";
+
+const db = await createThimbleClient();
+const notes = db.collection<Note>("notes");
+```
 
 Follow the [full quickstart](docs/QUICKSTART.md) for Cloudflare, Node, and
 browser setup. [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) provide

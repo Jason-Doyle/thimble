@@ -6,6 +6,30 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 2.1.0 - 2026-09-24
+
+- Added a ready browser client factory and used it in the reference browser.
+- Added typed collections, schema-compatible parsing, fluent bounded queries,
+  direct ID planning, and explicit local predicates.
+- Added developer-declared equality, range, and composite secondary indexes
+  published atomically through collection HEAD records.
+- Added code-configured Node and Cloudflare authority layouts and indexes.
+- Added a loopback-only, non-production development identity.
+- Added the `thimbledb create` scaffolder and `thimbledb doctor`.
+- Added maintained Node and Cloudflare GitHub template repositories.
+- Added an Entra scope and application-role manifest generator.
+- Documented OIDC service-principal access and the global admin-key boundary.
+- Regenerated system diagrams for queries, indexes, migration, service
+  identities, cache isolation, and key rotation.
+- Namespaced custom caches by authority and scope.
+- Prevented indexed maintenance from silently dropping index references.
+- Added stale-client detection for active scope-key rotation.
+- Added versioned checksummed logical archives with dry-run, create, replace,
+  and merge imports.
+- Added JSON, CSV, lowdb, SQLite, PostgreSQL, and Firestore migration adapters.
+- Added a reproducible comparative application harness without product
+  superiority claims.
+
 ## 2.0.0 - 2026-09-24
 
 - Split local, Azure Blob, and S3 adapters into explicit provider exports.

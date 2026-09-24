@@ -33,7 +33,7 @@ serialise the complete data object.
 | Durable storage | Object storage | JSON file, localStorage, or custom adapter |
 | Process model | Browser plus authority | Usually one local process or browser context |
 | Write model | Conditional immutable pages and mutable heads | Serialise and write the data object |
-| Query model | ID reads and bounded scans | Native JavaScript operations |
+| Query model | ID reads, declared indexes, and bounded scans | Native JavaScript operations |
 | Browser cache | Encrypted memory and IndexedDB | localStorage or sessionStorage adapters |
 | Identity and scopes | Included external OIDC model | Application-defined |
 | Multi-machine use | Through authority and object store | Requires a custom remote adapter and coordination |

@@ -74,6 +74,11 @@ For a non-Entra provider, set `oidcProviderId`, `oidcIssuer`, `oidcAudience`,
 `oidcJwksUri`, and at least one of `oidcRequiredScope` or
 `oidcRequiredRole`. `oidcAllowedTenants` is optional.
 
+Generate the recommended Entra delegated scope and application roles with
+`npx thimbledb generate-entra-roles --out entra-authorization.json`. Merge the
+fragment with the existing application registration rather than replacing
+unrelated entries.
+
 For key rotation, set `keyVersion` to the current write version and
 `readKeyVersions` to the comma-separated historical versions that remain
 readable.

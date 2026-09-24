@@ -86,6 +86,11 @@ an API access token through a reviewed OIDC client and exchanges it at
 
 Also set `ENTRA_REQUIRED_SCOPE` or `ENTRA_REQUIRED_ROLE`.
 
+Generate the recommended Entra entries with
+`npx thimbledb generate-entra-roles --out entra-authorization.json`. See
+[Machine and service access](SERVICE-ACCESS.md) before accepting
+client-credentials tokens.
+
 For another provider, set `OIDC_PROVIDER_ID`, `OIDC_ISSUER`,
 `OIDC_AUDIENCE`, and `OIDC_JWKS_URI`, plus at least one of
 `OIDC_REQUIRED_SCOPE` or `OIDC_REQUIRED_ROLE`. A valid first exchange creates

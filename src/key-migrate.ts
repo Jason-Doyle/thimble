@@ -14,8 +14,12 @@ import {
 import {
   scopeStoragePrefix,
 } from "./trie-protocol.js";
-import { stableStringify } from "./shared-utils.js";
+import {
+  createDictionary,
+  stableStringify,
+} from "./shared-utils.js";
 import type { CollectionLayout } from "./snapshot-protocol.js";
+import { parseIndexConfiguration } from "./secondary-index.js";
 
 if (process.env.THIMBLE_MIGRATION_QUIESCENT !== "true") {
   throw new Error(
@@ -64,15 +68,22 @@ const store = new EnvelopeObjectStore(
     objectKeyPrefix: scopePrefix,
   },
 );
+const indexes = parseIndexConfiguration(
+  process.env.THIMBLE_COLLECTION_INDEXES,
+);
 const trie = new ContentAddressedTrieEngine(
   store,
   40,
   writeMaterial.addressNode,
+  false,
+  indexes,
 );
 const snapshot = new ImmutableSnapshotEngine(
   store,
   40,
   writeMaterial.addressNode,
+  false,
+  indexes,
 );
 const verificationStore = new EnvelopeObjectStore(rawScopeStore, {
     key: writeMaterial.key!,
@@ -84,11 +95,15 @@ const verificationTrie = new ContentAddressedTrieEngine(
   verificationStore,
   40,
   writeMaterial.addressNode,
+  false,
+  indexes,
 );
 const verificationSnapshot = new ImmutableSnapshotEngine(
   verificationStore,
   40,
   writeMaterial.addressNode,
+  false,
+  indexes,
 );
 const layouts = collectionLayouts();
 
@@ -126,7 +141,7 @@ materials.forEach((material: ScopeMaterial) =>
 );
 
 function collectionLayouts(): Record<string, CollectionLayout> {
-  const layouts: Record<string, CollectionLayout> = {};
+  const layouts = createDictionary<CollectionLayout>();
   for (const entry of (
     process.env.THIMBLE_COLLECTION_LAYOUTS ?? ""
   )

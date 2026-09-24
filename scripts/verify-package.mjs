@@ -2,6 +2,7 @@ import {
   access,
   mkdir,
   mkdtemp,
+  readFile,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -10,6 +11,9 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
+const rootPackage = JSON.parse(
+  await readFile(path.join(root, "package.json"), "utf8"),
+);
 const workspace = await mkdtemp(
   path.join(os.tmpdir(), "thimbledb-package-"),
 );
@@ -77,23 +81,73 @@ try {
   await assertMissing(
     path.join(consumer, "node_modules", "@azure", "storage-blob"),
   );
+  await assertMissing(
+    path.join(consumer, "node_modules", "@google-cloud", "firestore"),
+  );
+  await assertMissing(
+    path.join(consumer, "node_modules", "pg"),
+  );
+  await assertPresent(
+    path.join(
+      consumer,
+      "node_modules",
+      "thimbledb",
+      "bin",
+      "thimbledb.mjs",
+    ),
+  );
+  await assertPresent(
+    path.join(
+      consumer,
+      "node_modules",
+      "thimbledb",
+      "templates",
+      "local-web",
+      "gitignore.template",
+    ),
+  );
+  await assertPresent(
+    path.join(
+      consumer,
+      "node_modules",
+      "thimbledb",
+      "dist",
+      "package",
+      "index-migrate.js",
+    ),
+  );
+  await assertPresent(
+    path.join(
+      consumer,
+      "node_modules",
+      "thimbledb",
+      "scripts",
+      "generate-entra-roles.mjs",
+    ),
+  );
+  runCliVersion(consumer, rootPackage.version);
 
   runNode(
     `
-      const [core, auth, nodeAuthority, cloudflareAuthority, local] =
+      const [core, auth, nodeAuthority, cloudflareAuthority, local, migration] =
         await Promise.all([
           import("thimbledb"),
           import("thimbledb/auth"),
           import("thimbledb/authority/node"),
           import("thimbledb/authority/cloudflare"),
           import("thimbledb/providers/local"),
+          import("thimbledb/migration"),
         ]);
       if (
         !core.ThimbleClient ||
+        !core.createThimbleClient ||
+        !core.defineCollection ||
+        !core.defineIndex ||
         !auth.AuthService ||
         !nodeAuthority.createNodeAuthorityServer ||
         !cloudflareAuthority.createCloudflareAuthority ||
-        !local.LocalObjectStore
+        !local.LocalObjectStore ||
+        !migration.createArchiveManifest
       ) {
         process.exit(1);
       }
@@ -104,18 +158,27 @@ try {
     path.join(consumer, "base.ts"),
     `
       import { ThimbleClient } from "thimbledb";
+      import {
+        createThimbleClient,
+        defineCollection,
+        defineIndex,
+      } from "thimbledb";
       import { AuthService } from "thimbledb/auth";
       import { LocalObjectStore } from "thimbledb/providers/local";
+      import { createArchiveManifest } from "thimbledb/migration";
 
       void [
         ThimbleClient,
+        createThimbleClient,
+        defineCollection,
+        defineIndex,
         AuthService,
         LocalObjectStore,
+        createArchiveManifest,
       ];
     `,
   );
   runTypeScript(consumer);
-
   run(
     [
       "install",
@@ -152,6 +215,7 @@ try {
     runNode(
       `
         process.env.THIMBLE_PROVIDER = "${provider}";
+        process.env.THIMBLE_ALLOWED_ORIGIN = "https://example.test";
         const { createNodeAuthorityServer } =
           await import("thimbledb/authority/node");
         try {
@@ -166,7 +230,6 @@ try {
       consumer,
     );
   }
-
   run(
     [
       "install",
@@ -266,4 +329,70 @@ async function assertMissing(target) {
     return;
   }
   throw new Error(`Optional provider dependency was installed: ${target}`);
+}
+
+async function assertPresent(target) {
+  try {
+    await access(target);
+  } catch {
+    throw new Error(`Expected package file is missing: ${target}`);
+  }
+}
+
+function runCliVersion(cwd, expectedVersion) {
+  const cli = path.join(
+    cwd,
+    "node_modules",
+    "thimbledb",
+    "bin",
+    "thimbledb.mjs",
+  );
+  const result = spawnSync(process.execPath, [cli, "--version"], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  if (
+    result.status !== 0 ||
+    result.stdout.trim() !== expectedVersion
+  ) {
+    throw new Error("Package CLI version verification failed");
+  }
+  const migration = spawnSync(
+    process.execPath,
+    [cli, "rebuild-indexes"],
+    {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  if (
+    migration.status === 0 ||
+    !migration.stderr.includes(
+      "THIMBLE_MIGRATION_QUIESCENT=true",
+    )
+  ) {
+    throw new Error("Package CLI index migration verification failed");
+  }
+  const roles = spawnSync(
+    process.execPath,
+    [cli, "generate-entra-roles"],
+    {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
+  if (roles.status !== 0) {
+    throw new Error("Package CLI role generation failed");
+  }
+  const manifest = JSON.parse(roles.stdout);
+  if (
+    manifest.api?.oauth2PermissionScopes?.[0]?.value !==
+      "thimble.access" ||
+    manifest.appRoles?.length !== 4
+  ) {
+    throw new Error("Package CLI role manifest is malformed");
+  }
 }

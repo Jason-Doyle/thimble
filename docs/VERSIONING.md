@@ -28,6 +28,28 @@ Version 2 separates cloud storage SDKs from the base package:
 This is a major release because existing Azure and S3 installations must add a
 direct provider dependency before upgrading.
 
+## Version 2.1
+
+Version 2.1 adds compatible application APIs and tooling:
+
+- ready browser connection factory
+- typed collections and schema-compatible parsing
+- bounded serialisable query expressions
+- explicit equality, range, and composite secondary indexes
+- code-configured authority layouts and indexes
+- loopback-only development identity
+- project scaffolding and diagnostics CLI
+- versioned logical migration archives
+- JSON, CSV, lowdb, SQLite, PostgreSQL, and Firestore migration adapters
+
+No stored TDB1 envelope change is required. Collection HEAD objects gain
+optional secondary index references that older clients ignore.
+
+Upgrade all authority instances before enabling indexes. An older authority
+can publish a new HEAD without index references because it does not maintain
+them. After the rollout, run `npx thimbledb rebuild-indexes` while writes are
+quiescent.
+
 ## Object protocol version
 
 `TDB1` is stored in every object envelope. Protocol compatibility is separate

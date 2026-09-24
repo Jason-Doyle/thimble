@@ -19,6 +19,12 @@ import {
   createEntraAdapter,
   OidcIdentityAdapter,
 } from "./auth/oidc.js";
+import {
+  DEVELOPMENT_IDENTITY_ADAPTER_ID,
+  DEVELOPMENT_IDENTITY_TOKEN,
+  DevelopmentIdentityAdapter,
+  validateDevelopmentIdentity,
+} from "./auth/dev-identity.js";
 import { DefaultScopeAuthorizer } from "./auth/policy.js";
 import { ObjectStoreAuthRateLimiter } from "./auth/rate-limit.js";
 import { AuthRepository } from "./auth/repository.js";
@@ -56,10 +62,16 @@ import {
 } from "./workload.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
 import {
+  createDictionary,
   stableStringify,
   validateName,
 } from "./shared-utils.js";
 import type { CollectionLayout } from "./snapshot-protocol.js";
+import {
+  parseIndexConfiguration,
+  validateIndexConfiguration,
+  type CollectionIndexConfiguration,
+} from "./secondary-index.js";
 
 type ScopeRuntime = {
   material: ScopeMaterial;
@@ -76,8 +88,10 @@ type ServerContext = {
   headTtlMs: number;
   deletionPolicy: DeletionPolicy;
   collectionLayouts: Record<string, CollectionLayout>;
+  collectionIndexes: CollectionIndexConfiguration;
   layoutGeneration: string;
   maintenanceMode: boolean;
+  developmentIdentity: boolean;
   oidcProviders: string[];
   scope(scopeId: string): Promise<ScopeRuntime>;
 };
@@ -89,10 +103,17 @@ export type NodeAuthorityServer = {
   provider: Provider;
 };
 
-export async function createNodeAuthorityServer(): Promise<NodeAuthorityServer> {
+export type NodeAuthorityOptions = {
+  collectionLayouts?: Record<string, CollectionLayout>;
+  collectionIndexes?: CollectionIndexConfiguration;
+};
+
+export async function createNodeAuthorityServer(
+  options: NodeAuthorityOptions = {},
+): Promise<NodeAuthorityServer> {
   const host = process.env.THIMBLE_HOST ?? "127.0.0.1";
   const port = parseInteger(process.env.THIMBLE_PORT, 8787);
-  const context = await createContext();
+  const context = await createContext(options);
   const server = createServer((request, response) => {
     void handleRequest(context, request, response).catch((error) => {
       handleServerError(error, response);
@@ -101,8 +122,10 @@ export async function createNodeAuthorityServer(): Promise<NodeAuthorityServer> 
   return { server, host, port, provider: context.provider };
 }
 
-export async function startNodeAuthority(): Promise<NodeAuthorityServer> {
-  const authority = await createNodeAuthorityServer();
+export async function startNodeAuthority(
+  options: NodeAuthorityOptions = {},
+): Promise<NodeAuthorityServer> {
+  const authority = await createNodeAuthorityServer(options);
   await new Promise<void>((resolve, reject) => {
     authority.server.once("error", reject);
     authority.server.listen(authority.port, authority.host, resolve);
@@ -117,9 +140,25 @@ if (isDirectExecution()) {
   await startNodeAuthority();
 }
 
-async function createContext(): Promise<ServerContext> {
+async function createContext(
+  options: NodeAuthorityOptions,
+): Promise<ServerContext> {
   const provider = providerName();
   const prefix = process.env.THIMBLE_PREFIX ?? "demo";
+  const allowedOrigin =
+    process.env.THIMBLE_ALLOWED_ORIGIN ??
+    (provider === "local"
+      ? "http://127.0.0.1:5173"
+      : requiredEnvironment("THIMBLE_ALLOWED_ORIGIN"));
+  const developmentIdentity = validateDevelopmentIdentity({
+    enabled: process.env.THIMBLE_DEV_IDENTITY === "true",
+    ...(process.env.NODE_ENV
+      ? { nodeEnvironment: process.env.NODE_ENV }
+      : {}),
+    provider,
+    host: process.env.THIMBLE_HOST ?? "127.0.0.1",
+    allowedOrigin,
+  });
   const stores = await createConfiguredProviderStores(provider);
   const dataRootStore = new PrefixObjectStore(stores.data, prefix);
   const authMaterial = await loadScopeMaterial({
@@ -144,7 +183,9 @@ async function createContext(): Promise<ServerContext> {
     authIndex,
     (value) => createHash("sha256").update(value).digest("hex"),
   );
-  const identityAdapters = configuredIdentityAdapters();
+  const identityAdapters = configuredIdentityAdapters(
+    developmentIdentity,
+  );
   const secureCookies =
     process.env.THIMBLE_SECURE_COOKIES === "true" ||
     provider !== "local";
@@ -164,9 +205,19 @@ async function createContext(): Promise<ServerContext> {
     ),
     secureCookies,
   });
-  const collectionLayouts = configuredCollectionLayouts();
+  const collectionLayouts = options.collectionLayouts
+    ? validateCollectionLayouts(options.collectionLayouts)
+    : configuredCollectionLayouts();
+  const collectionIndexes = options.collectionIndexes
+    ? validateIndexConfiguration(options.collectionIndexes)
+    : configuredCollectionIndexes();
   const layoutGeneration = createHash("sha256")
-    .update(JSON.stringify(collectionLayouts))
+    .update(
+      JSON.stringify({
+        collectionLayouts,
+        collectionIndexes,
+      }),
+    )
     .digest("hex")
     .slice(0, 16);
   const scopeCache = new AsyncLruCache<string, ScopeRuntime>({
@@ -189,6 +240,7 @@ async function createContext(): Promise<ServerContext> {
         dataRootStore,
         scopeId,
         provider === "local",
+        collectionIndexes,
       ),
     );
   };
@@ -197,21 +249,21 @@ async function createContext(): Promise<ServerContext> {
     provider,
     dataRootStore,
     auth,
-    allowedOrigin:
-      process.env.THIMBLE_ALLOWED_ORIGIN ??
-      (provider === "local"
-        ? "http://127.0.0.1:5173"
-        : requiredEnvironment("THIMBLE_ALLOWED_ORIGIN")),
+    allowedOrigin,
     headTtlMs: parseInteger(
       process.env.THIMBLE_HEAD_TTL_MS,
       1_000,
     ),
     deletionPolicy: configuredDeletionPolicy(),
     collectionLayouts,
+    collectionIndexes,
     layoutGeneration,
     maintenanceMode:
       process.env.THIMBLE_MAINTENANCE_MODE === "true",
-    oidcProviders: [...identityAdapters.keys()],
+    developmentIdentity,
+    oidcProviders: [...identityAdapters.keys()].filter(
+      (provider) => provider !== DEVELOPMENT_IDENTITY_ADAPTER_ID,
+    ),
     scope,
   };
 }
@@ -220,6 +272,7 @@ async function createScopeRuntime(
   dataRootStore: ObjectStore,
   scopeId: string,
   local: boolean,
+  collectionIndexes: CollectionIndexConfiguration,
 ): Promise<ScopeRuntime> {
   const encrypted = scopeId !== "public";
   const versions = encrypted ? configuredKeyVersions() : [1];
@@ -267,11 +320,15 @@ async function createScopeRuntime(
       store,
       40,
       material.addressNode,
+      false,
+      collectionIndexes,
     ),
     snapshot: new ImmutableSnapshotEngine(
       store,
       40,
       material.addressNode,
+      false,
+      collectionIndexes,
     ),
   };
 }
@@ -292,6 +349,37 @@ async function handleRequest(
   ) {
     sendJson(response, 200, {
       oidcProviders: context.oidcProviders,
+      developmentIdentity: context.developmentIdentity,
+    });
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/auth/dev/session"
+  ) {
+    if (!context.developmentIdentity) {
+      throw new AuthError(
+        404,
+        "development_identity_disabled",
+        "Development identity is disabled",
+      );
+    }
+    requireMutationRequest(context, request);
+    await context.auth.logout(
+      sessionCookie(request, context.auth.cookieName()),
+    );
+    const authenticated = await context.auth.loginExternal(
+      DEVELOPMENT_IDENTITY_ADAPTER_ID,
+      DEVELOPMENT_IDENTITY_TOKEN,
+      clientRateKey(request),
+    );
+    response.setHeader(
+      "set-cookie",
+      context.auth.sessionCookie(authenticated.cookieValue),
+    );
+    sendJson(response, 200, {
+      user: publicUser(authenticated),
     });
     return;
   }
@@ -462,6 +550,7 @@ async function handleRequest(
       headTtlMs: context.headTtlMs,
       cachePolicy: "content",
       collectionLayouts: context.collectionLayouts,
+      collectionIndexes: context.collectionIndexes,
       layoutGeneration: context.layoutGeneration,
       csrfToken: authenticated.session.csrfToken,
       user: publicUser(authenticated),
@@ -1221,8 +1310,23 @@ function clientRateKey(request: IncomingMessage): string | null {
   return nodeClientIp(request);
 }
 
-function configuredIdentityAdapters(): Map<string, IdentityAdapter> {
+function configuredIdentityAdapters(
+  developmentIdentity: boolean,
+): Map<string, IdentityAdapter> {
   const adapters = new Map<string, IdentityAdapter>();
+  if (developmentIdentity) {
+    adapters.set(
+      DEVELOPMENT_IDENTITY_ADAPTER_ID,
+      new DevelopmentIdentityAdapter({
+        subject:
+          process.env.THIMBLE_DEV_SUBJECT ??
+          "local-developer",
+        displayName:
+          process.env.THIMBLE_DEV_DISPLAY_NAME ??
+          "Local developer",
+      }),
+    );
+  }
   if (
     [
       process.env.ENTRA_TENANT_ID,
@@ -1486,7 +1590,7 @@ function configuredCollectionLayouts(): Record<
   string,
   CollectionLayout
 > {
-  const layouts: Record<string, CollectionLayout> = {};
+  const layouts = createDictionary<CollectionLayout>();
   for (const entry of (
     process.env.THIMBLE_COLLECTION_LAYOUTS ?? ""
   )
@@ -1504,9 +1608,31 @@ function configuredCollectionLayouts(): Record<
         `Invalid THIMBLE_COLLECTION_LAYOUTS entry: ${entry}`,
       );
     }
+
     layouts[validateName(collection, "Collection")] = layout;
   }
   return layouts;
+}
+
+function validateCollectionLayouts(
+  configured: Record<string, CollectionLayout>,
+): Record<string, CollectionLayout> {
+  const layouts = createDictionary<CollectionLayout>();
+  for (const [collection, layout] of Object.entries(configured)) {
+    if (layout !== "trie" && layout !== "snapshot") {
+      throw new Error(
+        `Invalid collection layout for ${collection}`,
+      );
+    }
+    layouts[validateName(collection, "Collection")] = layout;
+  }
+  return layouts;
+}
+
+function configuredCollectionIndexes(): CollectionIndexConfiguration {
+  return parseIndexConfiguration(
+    process.env.THIMBLE_COLLECTION_INDEXES,
+  );
 }
 
 function engineFor(

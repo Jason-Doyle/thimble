@@ -49,7 +49,8 @@ yes and every answer in the second group is no.
 ### Expected characteristics
 
 - Can each record belong to one user, tenant, role, or public scope?
-- Can the application use direct ID reads or bounded collection scans?
+- Can the application use direct ID reads, declared indexes, or bounded
+  collection scans?
 - Is the collection size known and reasonably small?
 - Are writes occasional compared with reads?
 - Can writes require an active network connection?

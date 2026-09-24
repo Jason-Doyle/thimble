@@ -1,4 +1,5 @@
 import type { JsonValue } from "./core.js";
+import type { SecondaryIndexReferences } from "./secondary-index.js";
 import type { TrieStoredDocument } from "./trie-protocol.js";
 
 export type CollectionLayout = "trie" | "snapshot";
@@ -6,6 +7,7 @@ export type CollectionLayout = "trie" | "snapshot";
 export type SnapshotHead = {
   revision: number;
   snapshotHash: string | null;
+  indexes?: SecondaryIndexReferences;
 };
 
 export type SnapshotPage = {
@@ -33,4 +35,12 @@ export function snapshotPageKey(
   hash: string,
 ): string {
   return `${snapshotCollectionPrefix(collection)}/snapshots/${hash}.json`;
+}
+
+export function snapshotIndexKey(
+  collection: string,
+  indexName: string,
+  hash: string,
+): string {
+  return `${snapshotCollectionPrefix(collection)}/indexes/${encodeURIComponent(indexName)}/${hash}.json`;
 }

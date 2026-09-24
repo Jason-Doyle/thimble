@@ -66,7 +66,7 @@ applications fit these constraints.
 | Question | A ThimbleDB answer | A reason to choose something else |
 | --- | --- | --- |
 | Who owns a record? | One user, tenant, role, or public scope | Ownership depends on complex relationships |
-| How is data read? | By ID or bounded collection scan | Flexible ad hoc queries and joins |
+| How is data read? | By ID, declared indexes, or bounded collection scan | Flexible ad hoc queries and joins |
 | How often is data written? | Occasionally | Continuously or with high contention |
 | How does offline mode work? | Previously read data remains available | Writes must queue and merge offline |
 | Where are credentials stored? | External OIDC provider | The database must manage passwords |
@@ -137,6 +137,17 @@ npm test
 The example uses the public package exports, a local `ObjectStore`, and the
 immutable snapshot engine. It demonstrates deterministic document writes,
 reads, and scans without an external database process.
+
+For a complete local browser and authority flow:
+
+```powershell
+npx thimbledb@latest create my-notes-app
+cd my-notes-app
+npm run dev
+```
+
+The generated app includes the safe development identity, typed collection,
+declared indexes, indexed title lookup, ordering, deletion, and restore.
 
 Then review:
 

@@ -1,0 +1,21 @@
+{
+  "name": "__PROJECT_NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n authority,web \"npm:dev:authority\" \"npm:dev:web\"",
+    "dev:authority": "node server.mjs",
+    "dev:web": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "doctor": "thimbledb doctor"
+  },
+  "dependencies": {
+    "thimbledb": "^__THIMBLE_VERSION__"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.3.6"
+  }
+}

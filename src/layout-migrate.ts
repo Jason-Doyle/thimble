@@ -4,13 +4,25 @@ import { ImmutableSnapshotEngine } from "./engines/immutable-snapshot.js";
 import { EnvelopeObjectStore } from "./envelope-store.js";
 import { PrefixObjectStore } from "./prefix-store.js";
 import { loadScopeMaterial } from "./server-keys.js";
-import { stableStringify } from "./shared-utils.js";
-import type { CollectionLayout } from "./snapshot-protocol.js";
+import {
+  decodeJson,
+  stableStringify,
+} from "./shared-utils.js";
+import {
+  snapshotHeadKey,
+  type CollectionLayout,
+  type SnapshotHead,
+} from "./snapshot-protocol.js";
+import { parseIndexConfiguration } from "./secondary-index.js";
 import {
   createConfiguredProviderStore,
   parseProvider,
 } from "./providers/configured.js";
-import { scopeStoragePrefix } from "./trie-protocol.js";
+import {
+  scopeStoragePrefix,
+  trieHeadKey,
+  type TrieHead,
+} from "./trie-protocol.js";
 
 if (process.env.THIMBLE_MIGRATION_QUIESCENT !== "true") {
   throw new Error(
@@ -62,18 +74,45 @@ const store = new EnvelopeObjectStore(
     objectKeyPrefix: scopePrefix,
   },
 );
+const indexes = parseIndexConfiguration(
+  process.env.THIMBLE_COLLECTION_INDEXES,
+);
+const sourceHeadObject = await store.get(
+  sourceLayout === "trie"
+    ? trieHeadKey(collection)
+    : snapshotHeadKey(collection),
+);
+if (sourceHeadObject) {
+  const sourceHead =
+    sourceLayout === "trie"
+      ? decodeJson<TrieHead>(sourceHeadObject.bytes)
+      : decodeJson<SnapshotHead>(sourceHeadObject.bytes);
+  if (
+    Object.keys(sourceHead.indexes ?? {}).length > 0 &&
+    (indexes[collection]?.length ?? 0) === 0
+  ) {
+    throw new Error(
+      `Collection ${collection} has secondary indexes; THIMBLE_COLLECTION_INDEXES is required for layout migration`,
+    );
+  }
+}
 const trie = new ContentAddressedTrieEngine(
   store,
   40,
   writeMaterial.addressNode,
+  false,
+  indexes,
 );
 const snapshot = new ImmutableSnapshotEngine(
   store,
   40,
   writeMaterial.addressNode,
+  false,
+  indexes,
 );
 const source = sourceLayout === "trie" ? trie : snapshot;
 const target = targetLayout === "trie" ? trie : snapshot;
+await source.assertIndexConfiguration(collection);
 if ((await source.retainedDeletionCount(collection)) > 0) {
   throw new Error(
     "Resolve or purge retained deletions before changing layout",

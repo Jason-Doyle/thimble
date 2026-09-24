@@ -4,11 +4,13 @@ import { EnvelopeObjectStore } from "./envelope-store.js";
 import { PrefixObjectStore } from "./prefix-store.js";
 import { loadScopeMaterial } from "./server-keys.js";
 import type { CollectionLayout } from "./snapshot-protocol.js";
+import { parseIndexConfiguration } from "./secondary-index.js";
 import {
   createConfiguredProviderStore,
   parseProvider,
 } from "./providers/configured.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
+import { createDictionary } from "./shared-utils.js";
 
 if (process.env.THIMBLE_MAINTENANCE_QUIESCENT !== "true") {
   throw new Error(
@@ -56,17 +58,22 @@ const store = new EnvelopeObjectStore(
     objectKeyPrefix: scopePrefix,
   },
 );
+const indexes = parseIndexConfiguration(
+  process.env.THIMBLE_COLLECTION_INDEXES,
+);
 const trie = new ContentAddressedTrieEngine(
   store,
   40,
   writeMaterial.addressNode,
   true,
+  indexes,
 );
 const snapshot = new ImmutableSnapshotEngine(
   store,
   40,
   writeMaterial.addressNode,
   true,
+  indexes,
 );
 const layouts = collectionLayouts();
 const retiredLayouts = collectionLayouts(
@@ -95,7 +102,7 @@ materials.forEach((material) => material.rawKey?.fill(0));
 function collectionLayouts(
   configured = process.env.THIMBLE_COLLECTION_LAYOUTS,
 ): Record<string, CollectionLayout> {
-  const layouts: Record<string, CollectionLayout> = {};
+  const layouts = createDictionary<CollectionLayout>();
   for (const entry of (
     configured ?? ""
   )

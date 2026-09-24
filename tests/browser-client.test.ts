@@ -467,7 +467,39 @@ describe("ThimbleDB browser client", () => {
 
     await expect(
       client.get("products", fixture.id),
-    ).rejects.toThrow("layout changed");
+    ).rejects.toThrow("configuration changed");
+    expect(reader.calls).toBe(0);
+    expect(changed).toBe(true);
+  });
+
+  it("rejects clients after the active scope key changes", async () => {
+    const reader = new FakeReader(new Map());
+    const cache = cacheFor("content", uniqueName());
+    let changed = false;
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 10_000,
+      channelName: uniqueName(),
+      layoutGeneration: "same",
+      configurationUrl: "/api/config",
+      scopeKeyId: "user:u:v1",
+      collectionLayouts: { products: "trie" },
+      fetchImplementation: (async () =>
+        Response.json({
+          layoutGeneration: "same",
+          scope: {
+            keyId: "user:u:v2",
+          },
+        })) as typeof fetch,
+      onLayoutChange: () => {
+        changed = true;
+      },
+    });
+
+    await expect(
+      client.get("products", "one"),
+    ).rejects.toThrow("configuration changed");
     expect(reader.calls).toBe(0);
     expect(changed).toBe(true);
   });
