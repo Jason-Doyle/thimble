@@ -2,9 +2,9 @@ import { chromium } from "playwright";
 
 const token = process.env.THIMBLE_TOKEN;
 const region = process.env.THIMBLE_REGION ?? "unknown";
-const target = process.env.THIMBLE_URL ?? "https://db.thimbledb.com";
-if (!token) {
-  throw new Error("THIMBLE_TOKEN is required");
+const target = process.env.THIMBLE_URL;
+if (!token || !target) {
+  throw new Error("THIMBLE_TOKEN and THIMBLE_URL are required");
 }
 
 const browser = await chromium.launch({ headless: true });

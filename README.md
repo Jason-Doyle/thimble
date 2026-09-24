@@ -1,6 +1,6 @@
 <h1>
   <img
-    src="https://db.thimbledb.com/thimbledb-logo.png"
+    src="public/thimbledb-logo.png"
     alt="ThimbleDB logo"
     width="72"
     align="center"
@@ -111,9 +111,8 @@ npm install thimbledb
 
 Use the browser/core API from `thimbledb`, external identity primitives from
 `thimbledb/auth`, and the complete endpoint authority from either
-`thimbledb/authority/node` or `thimbledb/authority/cloudflare`. There is no
-dependency on `thimbledb.com`; consumers supply their own domain, storage, OIDC
-application, and secrets.
+`thimbledb/authority/node` or `thimbledb/authority/cloudflare`. Consumers
+supply their own domain, storage, OIDC application, and secrets.
 
 Follow the [full quickstart](docs/QUICKSTART.md) for Cloudflare, Node, and
 browser setup. [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) provide
@@ -155,8 +154,8 @@ Start with [Deploy to Cloudflare](docs/DEPLOYMENT-CLOUDFLARE.md).
 
 ## Performance characteristics
 
-Published evidence includes live multi-region R2 browser results against
-`db.thimbledb.com`:
+Published evidence includes live multi-region browser results against a
+private Cloudflare Worker and R2 deployment:
 
 - `evidence/r2-browser-multiregion-trie-2026-09-24.json`
 - `evidence/r2-browser-multiregion-snapshot-2026-09-24.json`

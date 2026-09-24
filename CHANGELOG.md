@@ -6,6 +6,13 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 1.0.4 - 2026-09-24
+
+- Removed the hosted reference domain from tracked documentation, benchmark
+  tooling, and evidence metadata.
+- Switched README branding to the checked-in logo asset.
+- Changed the repository homepage to the GitHub repository.
+
 ## 1.0.3 - 2026-09-24
 
 - Added a workload fit guide for small vibe-coded applications.
@@ -53,8 +60,8 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 - Added browser-compatible immutable snapshots, advisory trie/snapshot
   selection, maintenance-mode migration, and live adaptive deployment.
 - Added reusable Node and Cloudflare authority package exports.
-- Added Apache-2.0 licensing, the ThimbleDB logo, a real
-  `db.thimbledb.com` deployment, and raw three-region R2 browser evidence.
+- Added Apache-2.0 licensing, the ThimbleDB logo, a live Cloudflare/R2
+  deployment, and raw three-region R2 browser evidence.
 
 ## 0.1.0
 

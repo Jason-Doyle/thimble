@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-09-24T01:24:33.6965289Z",
-  "target": "https://db.thimbledb.com",
+  "target": "private-reference-deployment",
   "deployment": {
     "provider": "Cloudflare Workers and R2 Standard",
     "productCollectionLayout": "trie",
@@ -23,7 +23,7 @@
     {
       "generatedAt": "2026-09-24T01:14:56.709Z",
       "region": "northeurope",
-      "target": "https://db.thimbledb.com",
+      "target": "private-reference-deployment",
       "browserVersion": "153.0.8010.12",
       "navigationMs": 483.6936149999999,
       "authenticationMs": 8068.198995999999,
@@ -98,7 +98,7 @@
     {
       "generatedAt": "2026-09-24T01:14:40.776Z",
       "region": "eastus",
-      "target": "https://db.thimbledb.com",
+      "target": "private-reference-deployment",
       "browserVersion": "153.0.8010.12",
       "navigationMs": 448.3288540000001,
       "authenticationMs": 5348.562068,
@@ -173,7 +173,7 @@
     {
       "generatedAt": "2026-09-24T01:22:59.645Z",
       "region": "southeastasia",
-      "target": "https://db.thimbledb.com",
+      "target": "private-reference-deployment",
       "browserVersion": "153.0.8010.12",
       "navigationMs": 1291.1037579999997,
       "authenticationMs": 16137.253072,

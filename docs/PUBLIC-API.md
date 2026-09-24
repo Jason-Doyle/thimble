@@ -1,8 +1,7 @@
 # Public package API
 
 ThimbleDB is deployable on an application's own domain. The package does not
-depend on `thimbledb.com`; that hostname is the maintained reference
-deployment and evidence target.
+depend on a vendor-hosted service.
 
 ## Stable exports
 
