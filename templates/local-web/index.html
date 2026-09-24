@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>ThimbleDB notes</title>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Local ThimbleDB starter</p>
+      <h1>Notes</h1>
+      <p class="lede">
+        The authority, development identity, encrypted storage, browser cache,
+        typed collection, and secondary indexes are already configured.
+      </p>
+      <form id="note-form">
+        <label>
+          Title
+          <input id="title" name="title" required />
+        </label>
+        <label>
+          Body
+          <textarea id="body" name="body" rows="4"></textarea>
+        </label>
+        <button type="submit">Add note</button>
+      </form>
+      <section class="toolbar">
+        <label>
+          Indexed title lookup
+          <input id="title-filter" placeholder="Exact title" />
+        </label>
+        <button id="filter" type="button">Find</button>
+        <button id="show-all" type="button" class="secondary">Show all</button>
+      </section>
+      <p id="status" role="status"></p>
+      <div id="restore" hidden>
+        <button id="restore-button" type="button" class="secondary">
+          Restore last deleted note
+        </button>
+      </div>
+      <section id="notes" class="notes"></section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

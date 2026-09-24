@@ -18,6 +18,7 @@ import {
 import {
   snapshotHeadKey,
   snapshotCollectionPrefix,
+  snapshotIndexKey,
   snapshotPageKey,
   type SnapshotHead,
   type SnapshotPage,
@@ -29,6 +30,14 @@ import {
   type TrieStoredDocument,
   type TrieTombstone,
 } from "../trie-protocol.js";
+import {
+  buildSecondaryIndexPage,
+  secondaryIndexDefinitionsEqual,
+  secondaryIndexPageFromJson,
+  type CollectionIndexConfiguration,
+  type SecondaryIndexReference,
+  type SecondaryIndexReferences,
+} from "../secondary-index.js";
 
 type LoadedHead = {
   object: StoredObject | null;
@@ -49,6 +58,8 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       bytes: Uint8Array,
     ) => Promise<string> | string = hashBytes,
     private readonly allowQuiescentGarbageCollection = false,
+    private readonly indexConfiguration: CollectionIndexConfiguration = {},
+    private readonly allowIndexConfigurationChange = false,
   ) {}
 
   async get(
@@ -264,7 +275,21 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       (key) => key !== currentKey,
     );
     await Promise.all(stale.map((key) => this.store.delete(key)));
-    this.garbageCollected += stale.length;
+    const activeIndexes = new Set(
+      Object.entries(head.state.indexes ?? {}).map(
+        ([name, reference]) =>
+          snapshotIndexKey(normalized, name, reference.hash),
+      ),
+    );
+    const indexPrefix =
+      `${snapshotCollectionPrefix(normalized)}/indexes/`;
+    const staleIndexes = (
+      await this.store.list(indexPrefix)
+    ).filter((key) => !activeIndexes.has(key));
+    await Promise.all(
+      staleIndexes.map((key) => this.store.delete(key)),
+    );
+    this.garbageCollected += stale.length + staleIndexes.length;
   }
 
   diagnostics(): EngineDiagnostics {
@@ -320,6 +345,10 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     const normalized = validateName(collection, "Collection");
     for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
       const loaded = await this.loadCurrent(normalized);
+      await this.requireIndexConfiguration(
+        normalized,
+        loaded.head.state,
+      );
       const documents = createDictionary(
         loaded.page.documents,
       );
@@ -336,9 +365,16 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
               normalized,
               pageBytes,
             );
+      const indexes = await this.writeIndexes(
+        normalized,
+        Object.values(documents),
+      );
       const nextHead: SnapshotHead = {
         revision: loaded.head.state.revision + 1,
         snapshotHash,
+        ...(Object.keys(indexes).length > 0
+          ? { indexes }
+          : {}),
       };
       try {
         await this.store.put(
@@ -418,6 +454,97 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       this.reusedSnapshots += 1;
     }
     return hash;
+  }
+
+  private async writeIndexes(
+    collection: string,
+    documents: TrieStoredDocument[],
+  ): Promise<SecondaryIndexReferences> {
+    const definitions = this.indexConfiguration[collection] ?? [];
+    const references =
+      createDictionary<SecondaryIndexReference>();
+    await Promise.all(
+      definitions.map(async (definition) => {
+        const page = buildSecondaryIndexPage(
+          definition,
+          documents,
+        );
+        const bytes = encodeJson(page as unknown as JsonValue);
+        const hash = await this.addressSnapshot(bytes);
+        try {
+          await this.store.put(
+            snapshotIndexKey(collection, definition.name, hash),
+            bytes,
+            { ifNoneMatch: true },
+          );
+        } catch (error) {
+          if (!isPreconditionFailure(error)) {
+            throw error;
+          }
+        }
+        references[definition.name] = {
+          hash,
+          entries: page.entries.length,
+        };
+      }),
+    );
+    return references;
+  }
+
+  async assertIndexConfiguration(collection: string): Promise<void> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    await this.requireIndexConfiguration(normalized, head.state);
+  }
+
+  private async requireIndexConfiguration(
+    collection: string,
+    head: SnapshotHead,
+  ): Promise<void> {
+    const active = Object.entries(head.indexes ?? {});
+    if (this.allowIndexConfigurationChange) {
+      return;
+    }
+    const configured = new Map(
+      (this.indexConfiguration[collection] ?? []).map(
+        (definition) => [definition.name, definition],
+      ),
+    );
+    if (head.revision === 0 && active.length === 0) {
+      return;
+    }
+    if (active.length !== configured.size) {
+      throw new Error(
+        `Collection ${collection} active secondary indexes do not exactly match the supplied configuration`,
+      );
+    }
+    for (const [name, reference] of active) {
+      const definition = configured.get(name);
+      if (!definition) {
+        throw new Error(
+          `Collection ${collection} has active secondary index ${name} that is missing from the supplied configuration`,
+        );
+      }
+      const object = await this.store.get(
+        snapshotIndexKey(collection, name, reference.hash),
+      );
+      if (!object) {
+        throw new Error(`Secondary index ${name} is missing`);
+      }
+      const page = secondaryIndexPageFromJson(
+        decodeJson<JsonValue>(object.bytes),
+      );
+      if (
+        !secondaryIndexDefinitionsEqual(
+          page.definition,
+          definition,
+        )
+      ) {
+        throw new Error(
+          `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
+        );
+      }
+    }
   }
 }
 

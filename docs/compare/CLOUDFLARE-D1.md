@@ -23,7 +23,7 @@ individual database processes queries one at a time.
 
 - Data is naturally stored as bounded JSON documents.
 - Records have simple user, tenant, role, or public ownership.
-- Reads are by ID or bounded collection scan.
+- Reads are by ID, declared indexes, or bounded collection scan.
 - The active working set benefits from encrypted browser cache.
 - R2 or another object store should remain the durable source of truth.
 - The application accepts connected writes through its authority.
@@ -33,7 +33,7 @@ individual database processes queries one at a time.
 | Capability | ThimbleDB | Cloudflare D1 |
 | --- | --- | --- |
 | Durable model | Encrypted objects in object storage | Managed SQLite-compatible database |
-| Query model | ID reads and bounded scans | SQL with indexes and supported SQLite features |
+| Query model | ID reads, declared indexes, and bounded scans | SQL with indexes and supported SQLite features |
 | Transactions | Conditional collection-head updates | SQL transactions and batched statements |
 | Browser cache | Built-in encrypted memory and IndexedDB tiers | Application-defined |
 | Offline reads | Previously cached objects | Application-defined client caching |

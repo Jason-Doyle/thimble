@@ -5,6 +5,7 @@ import type {
 } from "../core.js";
 import {
   trieHeadKey,
+  trieIndexKey,
   trieNodeKey,
   triePathFromHash,
   visibleTrieDocument,
@@ -15,14 +16,36 @@ import {
   type TrieReadBundle,
   type TrieRootNode,
 } from "../trie-protocol.js";
-import { ownValue } from "../shared-utils.js";
+import {
+  createDictionary,
+  ownValue,
+  validateName,
+} from "../shared-utils.js";
 import {
   snapshotHeadKey,
+  snapshotIndexKey,
   snapshotPageKey,
   type CollectionLayout,
   type SnapshotHead,
   type SnapshotPage,
 } from "../snapshot-protocol.js";
+import {
+  evaluateThimbleQuery,
+  pointReadId,
+  validateThimbleQuery,
+  type ThimbleQuery,
+  type ThimbleQueryResult,
+} from "../query.js";
+import {
+  idsFromSecondaryIndex,
+  planSecondaryIndex,
+  secondaryIndexDefinitionsEqual,
+  secondaryIndexPageFromJson,
+  type CollectionIndexConfiguration,
+  type SecondaryIndexPage,
+  type SecondaryIndexReference,
+  type SecondaryIndexReferences,
+} from "../secondary-index.js";
 import {
   type BrowserCacheMetrics,
   type CachedJsonObject,
@@ -32,6 +55,12 @@ import type {
   JsonObjectReader,
   RemoteJsonObject,
 } from "./remote-reader.js";
+import {
+  ThimbleCollection,
+  type CollectionDefinition,
+  type QueryPlan,
+  type ThimbleSchema,
+} from "./collection.js";
 
 export type ThimbleClientMetrics = {
   remoteReads: number;
@@ -52,6 +81,10 @@ export class ThimbleClient {
   private lifecycleGeneration = 0;
   private layoutCheckedAt = 0;
   private layoutCheckPromise: Promise<void> | undefined;
+  private readonly immutableReads = new Map<
+    string,
+    Promise<RemoteJsonObject>
+  >();
   private readonly channel: BroadcastChannel | null;
 
   constructor(
@@ -62,11 +95,13 @@ export class ThimbleClient {
       writeBaseUrl?: string;
       csrfToken?: string;
       scopeId?: string;
+      scopeKeyId?: string | null;
       keyExpiresAt?: string;
       channelName?: string;
       fetchImplementation?: typeof fetch;
       onLogout?: (error?: unknown) => void;
       collectionLayouts?: Record<string, CollectionLayout>;
+      collectionIndexes?: CollectionIndexConfiguration;
       layoutGeneration?: string;
       configurationUrl?: string;
       layoutCheckTtlMs?: number;
@@ -112,6 +147,141 @@ export class ThimbleClient {
     this.options.cache.setPolicy(policy);
   }
 
+  collection<T extends { id: string }>(
+    definition: CollectionDefinition<T>,
+  ): ThimbleCollection<T>;
+  collection<T extends { id: string } = JsonDocument>(
+    name: string,
+    schema?: ThimbleSchema<T>,
+  ): ThimbleCollection<T>;
+  collection<T extends { id: string }>(
+    definitionOrName: CollectionDefinition<T> | string,
+    schema?: ThimbleSchema<T>,
+  ): ThimbleCollection<T> {
+    return new ThimbleCollection(
+      this,
+      typeof definitionOrName === "string"
+        ? defineInlineCollection(definitionOrName, schema)
+        : definitionOrName,
+    );
+  }
+
+  async queryDocuments<T extends { id: string }>(
+    collection: string,
+    query: ThimbleQuery<T>,
+  ): Promise<ThimbleQueryResult<T>> {
+    validateThimbleQuery(query);
+    const pointId = pointReadId(query);
+    if (pointId) {
+      const document = await this.get(collection, pointId);
+      return {
+        documents: document ? [document as unknown as T] : [],
+        plan: "point",
+        indexName: null,
+        scannedDocuments: document ? 1 : 0,
+      };
+    }
+    const definitions =
+      this.options.collectionIndexes?.[collection] ?? [];
+    const indexPlan = planSecondaryIndex(definitions, query);
+    if (indexPlan) {
+      await this.ensureLayoutCurrent(false);
+      const generation = this.currentGeneration();
+      const layout = this.layoutFor(collection);
+      const head =
+        layout === "snapshot"
+          ? await this.readSnapshotHead(collection, generation)
+          : await this.readHead(collection, generation);
+      const reference = head.indexes?.[indexPlan.definition.name];
+      if (reference) {
+        const page = await this.readSecondaryIndexPage(
+          layout,
+          collection,
+          indexPlan.definition.name,
+          reference.hash,
+          generation,
+        );
+        if (
+          !secondaryIndexDefinitionsEqual(
+            page.definition,
+            indexPlan.definition,
+          )
+        ) {
+          return evaluateThimbleQuery(
+            (await this.scan(collection)) as unknown as T[],
+            query,
+          );
+        }
+        if (reference.entries !== page.entries.length) {
+          throw new Error(
+            `Secondary index ${indexPlan.definition.name} entry count does not match its collection head`,
+          );
+        }
+        const ids = idsFromSecondaryIndex(page, indexPlan);
+        const maximum = query.maxScanDocuments ?? 1_000;
+        if (ids.length > maximum) {
+          throw new Error(
+            `Secondary index ${indexPlan.definition.name} matched ${ids.length} documents, above the configured maximum of ${maximum}`,
+          );
+        }
+        const documents = (
+          await Promise.all(
+            ids.map((id) => this.get(collection, id)),
+          )
+        ).filter(
+          (document): document is JsonDocument =>
+            document !== null,
+        ) as unknown as T[];
+        const result = evaluateThimbleQuery(documents, {
+          ...query,
+          maxScanDocuments: maximum,
+        });
+        return {
+          ...result,
+          plan: "index",
+          indexName: indexPlan.definition.name,
+          scannedDocuments: ids.length,
+        };
+      }
+    }
+    return evaluateThimbleQuery(
+      (await this.scan(collection)) as unknown as T[],
+      query,
+    );
+  }
+
+  explainQuery<T extends { id: string }>(
+    collection: string,
+    query: ThimbleQuery<T>,
+  ): QueryPlan {
+    validateThimbleQuery(query);
+    if (pointReadId(query)) {
+      return {
+        plan: "point",
+        indexName: null,
+        reason: "ID equality resolves to a direct document read",
+      };
+    }
+    const indexPlan = planSecondaryIndex(
+      this.options.collectionIndexes?.[collection] ?? [],
+      query,
+    );
+    if (indexPlan) {
+      return {
+        plan: "index",
+        indexName: indexPlan.definition.name,
+        reason:
+          `Query fields match configured ${indexPlan.definition.mode} index ${indexPlan.definition.name}`,
+      };
+    }
+    return {
+      plan: "scan",
+      indexName: null,
+      reason:
+        "No configured secondary index matches the bounded query",
+    };
+  }
+
   async get(
     collection: string,
     id: string,
@@ -121,6 +291,7 @@ export class ThimbleClient {
     if (this.layoutFor(collection) === "snapshot") {
       return this.getSnapshot(collection, id, generation);
     }
+
     const head = await this.readHead(collection, generation);
     if (head.rootHash === null) {
       return null;
@@ -533,7 +704,7 @@ export class ThimbleClient {
     if (cached) {
       return asSnapshotPage(cached.value);
     }
-    const remote = await this.readRemote(key);
+    const remote = await this.readImmutableRemote(key);
     this.assertGeneration(generation);
     if (remote.status !== "found") {
       throw new Error(`Immutable snapshot ${key} is unavailable`);
@@ -543,6 +714,34 @@ export class ThimbleClient {
       generation,
     );
     return asSnapshotPage(remote.value);
+  }
+
+  private async readSecondaryIndexPage(
+    layout: CollectionLayout,
+    collection: string,
+    indexName: string,
+    hash: string,
+    generation: number,
+  ): Promise<SecondaryIndexPage> {
+    const key =
+      layout === "snapshot"
+        ? snapshotIndexKey(collection, indexName, hash)
+        : trieIndexKey(collection, indexName, hash);
+    const cached = await this.options.cache.get(key);
+    this.assertGeneration(generation);
+    if (cached) {
+      return secondaryIndexPageFromJson(cached.value);
+    }
+    const remote = await this.readImmutableRemote(key);
+    this.assertGeneration(generation);
+    if (remote.status !== "found") {
+      throw new Error(`Secondary index ${key} is unavailable`);
+    }
+    await this.cacheSetIfActive(
+      cacheEntryFromRemote(remote, true),
+      generation,
+    );
+    return secondaryIndexPageFromJson(remote.value);
   }
 
   private async readNode<T extends TrieNode>(
@@ -559,7 +758,7 @@ export class ThimbleClient {
       return asNode<T>(cached.value, expectedKind);
     }
 
-    const remote = await this.readRemote(key);
+    const remote = await this.readImmutableRemote(key);
     this.assertGeneration(generation);
     if (remote.status !== "found") {
       throw new Error(`Immutable node ${key} is unavailable`);
@@ -653,6 +852,22 @@ export class ThimbleClient {
     return result;
   }
 
+  private readImmutableRemote(
+    key: string,
+  ): Promise<RemoteJsonObject> {
+    const current = this.immutableReads.get(key);
+    if (current) {
+      return current;
+    }
+    const pending = this.readRemote(key).finally(() => {
+      if (this.immutableReads.get(key) === pending) {
+        this.immutableReads.delete(key);
+      }
+    });
+    this.immutableReads.set(key, pending);
+    return pending;
+  }
+
   private async mutateDocument(
     method: "DELETE" | "POST",
     collection: string,
@@ -740,12 +955,18 @@ export class ThimbleClient {
     }
     const config = (await response.json()) as {
       layoutGeneration?: unknown;
+      scope?: {
+        keyId?: unknown;
+      };
     };
     if (
-      config.layoutGeneration !== this.options.layoutGeneration
+      config.layoutGeneration !== this.options.layoutGeneration ||
+      config.scope?.keyId !== this.options.scopeKeyId
     ) {
       await this.handleLayoutChange();
-      throw new Error("Collection layout changed; reload required");
+      throw new Error(
+        "Authority configuration changed; reload required",
+      );
     }
     this.layoutCheckedAt = Date.now();
   }
@@ -794,6 +1015,7 @@ function asSnapshotHead(value: JsonValue): SnapshotHead {
   return {
     revision: value.revision,
     snapshotHash: value.snapshotHash,
+    ...indexesFromValue(value.indexes),
   };
 }
 
@@ -852,7 +1074,47 @@ function asHead(value: JsonValue): TrieHead {
   return {
     revision: value.revision,
     rootHash: value.rootHash,
+    ...indexesFromValue(value.indexes),
   };
+}
+
+function indexesFromValue(
+  value: JsonValue | undefined,
+): { indexes?: SecondaryIndexReferences } {
+  if (value === undefined) {
+    return {};
+  }
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new Error("Invalid secondary index references");
+  }
+  const indexes =
+    createDictionary<SecondaryIndexReference>();
+  for (const [name, reference] of Object.entries(value)) {
+    if (
+      !/^[A-Za-z0-9_-]{1,64}$/.test(name) ||
+      typeof reference !== "object" ||
+      reference === null ||
+      Array.isArray(reference) ||
+      typeof reference.hash !== "string" ||
+      !/^[a-f0-9]{64}$/.test(reference.hash) ||
+      typeof reference.entries !== "number" ||
+      !Number.isInteger(reference.entries) ||
+      reference.entries < 0
+    ) {
+      throw new Error(
+        `Invalid secondary index reference: ${name}`,
+      );
+    }
+    indexes[name] = {
+      hash: reference.hash,
+      entries: reference.entries,
+    };
+  }
+  return { indexes };
 }
 
 function asNode<T extends TrieNode>(
@@ -868,6 +1130,16 @@ function asNode<T extends TrieNode>(
     throw new Error(`Invalid ${expectedKind} trie node`);
   }
   return value as T;
+}
+
+function defineInlineCollection<T extends { id: string }>(
+  name: string,
+  schema?: ThimbleSchema<T>,
+): CollectionDefinition<T> {
+  return {
+    name: validateName(name, "Collection"),
+    ...(schema ? { schema } : {}),
+  };
 }
 
 function isReadBundle(value: unknown): value is TrieReadBundle {

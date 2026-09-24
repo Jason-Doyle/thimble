@@ -23,7 +23,7 @@ sessions, which matters for sensitive applications.
 - The application wants encrypted cache entries under its own device key.
 - Writes must pass through an application-owned authority.
 - User and tenant scope separation should influence stored object paths.
-- Queries are limited to ID reads and bounded scans.
+- Queries fit declared indexes or bounded collection scans.
 - The app does not need offline writes or real-time subscriptions.
 
 ## Capability comparison
@@ -31,7 +31,7 @@ sessions, which matters for sensitive applications.
 | Capability | ThimbleDB | Firestore |
 | --- | --- | --- |
 | Service model | Self-hosted authority and caller-owned storage | Managed database service |
-| Query model | ID reads and bounded scans | Indexed document queries |
+| Query model | ID reads, declared indexes, and bounded scans | Indexed document queries |
 | Real-time listeners | No | Yes |
 | Offline reads | Previously cached encrypted objects | Cached documents and queries |
 | Offline writes | No | Client changes synchronise when online |

@@ -1,6 +1,6 @@
 {
   "name": "thimbledb",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Browser-oriented encrypted object-storage database with Node and Cloudflare authorities.",
   "private": false,
   "license": "Apache-2.0",
@@ -17,24 +17,40 @@
     "cloudflare",
     "r2",
     "database",
+    "browser-database",
     "indexeddb",
     "object-storage",
-    "encryption"
+    "encryption",
+    "serverless",
+    "typescript",
+    "vibe-coding"
   ],
   "publishConfig": {
     "access": "public"
   },
+  "bin": {
+    "thimbledb": "bin/thimbledb.mjs"
+  },
   "sideEffects": false,
   "files": [
     "dist/package",
+    "bin",
+    "scripts/generate-entra-roles.mjs",
+    "scripts/generate-entra-roles.d.mts",
+    "templates/local-web",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
     "NOTICE",
     "public/thimbledb-logo.png",
     "docs/QUICKSTART.md",
+    "docs/DEVELOPMENT.md",
+    "docs/EXAMPLES.md",
     "docs/IMPLEMENTATION-PROMPTS.md",
+    "docs/MIGRATION.md",
     "docs/NPM-PUBLISHING.md",
+    "docs/QUERIES-INDEXES.md",
+    "docs/SERVICE-ACCESS.md",
     "docs/USE-CASES.md",
     "docs/use-cases",
     "docs/ADAPTIVE-LAYOUTS.md",
@@ -72,6 +88,10 @@
     "./providers/s3": {
       "types": "./dist/package/providers/s3.d.ts",
       "import": "./dist/package/providers/s3.js"
+    },
+    "./migration": {
+      "types": "./dist/package/migration/index.d.ts",
+      "import": "./dist/package/migration/index.js"
     }
   },
   "type": "module",
@@ -90,16 +110,20 @@
     "benchmark:local": "tsx src/cli.ts --provider local --profile tiny --latency-ms 8",
     "benchmark:azure": "tsx src/cli.ts --provider azure --profile tiny",
     "benchmark:s3": "tsx src/cli.ts --provider s3 --profile tiny",
+    "benchmark:compare:local": "tsx benchmarks/comparative/run.mjs",
     "migrate:keys": "tsx src/key-migrate.ts",
     "migrate:external-auth": "tsx src/remove-local-auth.ts",
     "advise:layout": "tsx src/layout-advisor-cli.ts",
     "migrate:layout": "tsx src/layout-migrate.ts",
+    "migrate:indexes": "tsx src/index-migrate.ts",
+    "auth:roles:entra": "node scripts/generate-entra-roles.mjs",
     "maintain:retention": "tsx src/retention-maintain.ts",
     "fixtures:generate": "tsx scripts/generate-protocol-fixtures.ts",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "verify:package": "node scripts/verify-package.mjs",
+    "verify:scaffold": "node scripts/verify-scaffold.mjs",
     "site:dev": "npm --prefix site run dev",
     "site:check": "npm --prefix site run check",
     "site:build": "npm --prefix site run build",
@@ -114,14 +138,22 @@
     "jose": "^6.1.0"
   },
   "peerDependencies": {
+    "@google-cloud/firestore": "^9.2.0",
     "@aws-sdk/client-s3": "^3.896.0",
-    "@azure/storage-blob": "^12.28.0"
+    "@azure/storage-blob": "^12.28.0",
+    "pg": "^8.23.0"
   },
   "peerDependenciesMeta": {
+    "@google-cloud/firestore": {
+      "optional": true
+    },
     "@aws-sdk/client-s3": {
       "optional": true
     },
     "@azure/storage-blob": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     }
   },

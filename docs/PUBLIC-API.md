@@ -10,6 +10,8 @@ depend on a vendor-hosted service.
 The root export contains:
 
 - `ThimbleClient` and browser cache/read primitives
+- `createThimbleClient` and `createThimbleConnection`
+- typed collections, fluent bounded queries, and index definitions
 - `ContentAddressedTrieEngine`
 - `ImmutableSnapshotEngine`
 - TDB1 envelope encode/decode helpers
@@ -21,6 +23,32 @@ Clients created from `/api/config` should pass `collectionLayouts`,
 `layoutGeneration`, and `configurationUrl` into `ThimbleClient`. Mutations send
 the generation header automatically, and stale clients clear caches and invoke
 `onLayoutChange` before reading a retired layout.
+
+The supported default is:
+
+```ts
+import { createThimbleClient } from "thimbledb";
+
+const db = await createThimbleClient();
+```
+
+Typed collection:
+
+```ts
+const notes = defineCollection<Note>("notes", {
+  indexes: [
+    defineIndex<Note>("by-title", ["title"]),
+  ],
+});
+
+const result = await db
+  .collection(notes)
+  .where((note) => note.title.eq("abc"))
+  .take(25)
+  .get();
+```
+
+See [Queries and secondary indexes](QUERIES-INDEXES.md).
 
 ### `thimbledb/auth`
 
@@ -40,7 +68,12 @@ the external provider's responsibility.
 ```ts
 import { startNodeAuthority } from "thimbledb/authority/node";
 
-await startNodeAuthority();
+await startNodeAuthority({
+  collectionLayouts: {
+    notes: "snapshot",
+  },
+  collectionIndexes,
+});
 ```
 
 The Node authority reads documented environment variables and serves the same
@@ -51,9 +84,16 @@ reference deployment.
 ### `thimbledb/authority/cloudflare`
 
 ```ts
-import authority from "thimbledb/authority/cloudflare";
+import {
+  createCloudflareAuthority,
+} from "thimbledb/authority/cloudflare";
 
-export default authority;
+export default createCloudflareAuthority({
+  collectionLayouts: {
+    notes: "snapshot",
+  },
+  collectionIndexes,
+});
 ```
 
 The Cloudflare authority uses caller-owned R2 and asset bindings. Routes,
@@ -94,6 +134,33 @@ import { S3ObjectStore } from "thimbledb/providers/s3";
 
 The AWS SDK is an optional peer dependency. The same adapter supports Amazon
 S3 and R2 through the S3 API.
+
+### `thimbledb/migration`
+
+The migration export contains:
+
+- versioned archive manifest and NDJSON helpers
+- JSON, CSV, and lowdb conversion
+- SQLite migration support through Node's built-in SQLite API
+- optional PostgreSQL and Firestore adapters
+- Node migration command implementation
+- programmatic secondary-index rebuild support
+
+PostgreSQL requires optional `pg`. Firestore requires optional
+`@google-cloud/firestore`.
+
+See [Logical migration](MIGRATION.md).
+
+### CLI authentication tooling
+
+Generate a non-destructive Microsoft Entra authorization manifest fragment:
+
+```powershell
+npx thimbledb generate-entra-roles --out entra-authorization.json
+```
+
+The output contains the recommended delegated scope and four application
+roles. See [Machine and service access](SERVICE-ACCESS.md).
 
 ## Compatibility commitments
 

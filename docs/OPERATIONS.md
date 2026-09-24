@@ -73,6 +73,30 @@ Use `npm run advise:layout` to record a recommendation. To apply one:
 The migration verifies full document equality and leaves the old layout in
 place for rollback.
 
+## Secondary index changes
+
+Adding or changing a declared index changes the layout generation. Put every
+authority into maintenance mode, block writes, and rebuild the configured
+indexes:
+
+```powershell
+$env:THIMBLE_MIGRATION_QUIESCENT = "true"
+$env:THIMBLE_SCOPE_ID = "user:<id>"
+$env:THIMBLE_COLLECTIONS = "notes"
+$env:THIMBLE_COLLECTION_LAYOUTS = "notes=snapshot"
+$env:THIMBLE_COLLECTION_INDEXES = '{"notes":[{"name":"by-title","fields":["title"],"mode":"equality"}]}'
+npx thimbledb rebuild-indexes
+```
+
+The operation rewrites the same stored records, publishes index references
+through the collection HEAD, and verifies full document equality.
+
+Other rewrite operations preserve the complete active index definition set
+and fail if `THIMBLE_COLLECTION_INDEXES` is absent, partial, or mismatched.
+Use the explicit index migration when removing or redefining an index.
+
+See [Queries and secondary indexes](QUERIES-INDEXES.md).
+
 ## Retention maintenance
 
 Document and scope erasure use a 30-day restore window and seven-day purge
@@ -99,6 +123,9 @@ Object storage durability is not a logical backup. Enable:
 - periodic exported collection snapshots
 
 Backups require the matching master key version.
+
+Logical exports are portable plaintext migrations, not encrypted backups. See
+[Logical migration](MIGRATION.md).
 
 ## Observability
 

@@ -3,6 +3,9 @@
 | Document | Purpose |
 | --- | --- |
 | [Quickstart](QUICKSTART.md) | Package, authority, browser client, and verification setup |
+| [Local development](DEVELOPMENT.md) | Scaffolding, development identity, and production transition |
+| [Queries and indexes](QUERIES-INDEXES.md) | Typed collections, bounded predicates, query plans, and declared indexes |
+| [Logical migration](MIGRATION.md) | Portable archives and JSON, CSV, lowdb, SQLite, PostgreSQL, and Firestore adapters |
 | [Vibe-coded app fit guide](VIBE-CODED-APPS.md) | Exact workload decision criteria for AI-assisted small apps |
 | [Implementation prompts](IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
 | [npm publishing](NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
@@ -13,6 +16,7 @@
 | [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
 | [Authentication](AUTHENTICATION.md) | External identity mappings, sessions, and scope grants |
+| [Machine and service access](SERVICE-ACCESS.md) | Entra role generation, service principals, live viewers, and the admin-key boundary |
 | [Deletion and retention](DELETION-RETENTION.md) | Tombstones, restore windows, scope erasure, and quiescent collection |
 | [Adaptive layouts](ADAPTIVE-LAYOUTS.md) | Snapshot/trie evidence, recommendations, and migration |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |

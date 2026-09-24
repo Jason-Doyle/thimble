@@ -1,5 +1,7 @@
 export * from "./browser/cache.js";
 export * from "./browser/client.js";
+export * from "./browser/collection.js";
+export * from "./browser/connect.js";
 export * from "./browser/remote-reader.js";
 export * from "./core.js";
 export * from "./engines/content-trie.js";
@@ -8,5 +10,7 @@ export * from "./envelope-store.js";
 export * from "./envelope.js";
 export * from "./layout-advisor.js";
 export * from "./prefix-store.js";
+export * from "./query.js";
+export * from "./secondary-index.js";
 export * from "./snapshot-protocol.js";
 export * from "./trie-protocol.js";

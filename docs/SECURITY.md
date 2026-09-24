@@ -107,6 +107,15 @@ authority reloads current user claims and recalculates scope grants when it
 authenticates a request. Passwords, recovery, verification, passkeys, and MFA
 remain with the identity provider.
 
+The optional development identity is restricted to the Node local provider,
+non-production mode, a loopback authority host, and a loopback allowed origin.
+The authority fails startup rather than accepting the setting outside those
+conditions.
+
+Non-human callers should use short-lived OIDC application tokens and normal
+authority sessions. ThimbleDB does not expose a static global admin key or a
+browser-held write credential.
+
 See [Authentication and identity](AUTHENTICATION.md).
 
 ## Revocation

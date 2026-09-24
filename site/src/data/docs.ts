@@ -29,6 +29,15 @@ export const docs: DocMeta[] = [
     featured: true,
   },
   {
+    id: "development",
+    title: "Local development",
+    description:
+      "Scaffold a local app, use the safe development identity, and move to production OIDC.",
+    group: "Start here",
+    order: 12,
+    featured: true,
+  },
+  {
     id: "use-cases",
     title: "Use cases",
     description:
@@ -67,7 +76,7 @@ export const docs: DocMeta[] = [
     id: "examples",
     title: "Starter examples",
     description:
-      "Run the local notes example or compile the Cloudflare authority starter from public package exports.",
+      "Use maintained Node and Cloudflare repository templates or run the checked-in package examples.",
     group: "Start here",
     order: 45,
     featured: true,
@@ -182,7 +191,7 @@ export const docs: DocMeta[] = [
     id: "diagrams",
     title: "System diagrams",
     description:
-      "Review trust boundaries, read and write sequences, key handling, identity flow, and provider topology.",
+      "Review trust boundaries, query and index flows, key rotation, service access, migration, and provider topology.",
     group: "Understand",
     order: 20,
   },
@@ -201,6 +210,15 @@ export const docs: DocMeta[] = [
       "Use external OIDC identities, stable internal user IDs, revocable sessions, and explicit scope grants.",
     group: "Understand",
     order: 40,
+  },
+  {
+    id: "service-access",
+    title: "Machine and service access",
+    description:
+      "Generate Entra roles, authenticate service principals, and keep live viewers within explicit scope grants.",
+    group: "Understand",
+    order: 45,
+    featured: true,
   },
   {
     id: "security",
@@ -226,6 +244,15 @@ export const docs: DocMeta[] = [
       "Choose snapshots or tries from measured collection size, access patterns, and write concurrency.",
     group: "Understand",
     order: 70,
+  },
+  {
+    id: "queries-indexes",
+    title: "Queries and secondary indexes",
+    description:
+      "Define typed collections, bounded predicates, deterministic query plans, and explicit immutable indexes.",
+    group: "Understand",
+    order: 75,
+    featured: true,
   },
   {
     id: "deletion-retention",
@@ -267,6 +294,15 @@ export const docs: DocMeta[] = [
       "Plan keys, backups, monitoring, incidents, retention maintenance, and provider lifecycle rules.",
     group: "Deploy and operate",
     order: 40,
+  },
+  {
+    id: "migration",
+    title: "Logical migration",
+    description:
+      "Move data through checksummed NDJSON archives and JSON, CSV, lowdb, SQLite, PostgreSQL, or Firestore adapters.",
+    group: "Deploy and operate",
+    order: 50,
+    featured: true,
   },
   {
     id: "public-api",

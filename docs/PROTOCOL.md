@@ -10,9 +10,11 @@ scopes/<scope-id>/
   content-trie/<collection>/
     HEAD.json
     nodes/<opaque-address>.json
+    indexes/<index-name>/<opaque-address>.json
   content-snapshot/<collection>/
     HEAD.json
     snapshots/<opaque-address>.json
+    indexes/<index-name>/<opaque-address>.json
 ```
 
 The `.json` suffix is retained for recognisable object names. The object body
@@ -27,7 +29,13 @@ same object layout.
 ```json
 {
   "revision": 42,
-  "rootHash": "opaque-address"
+  "rootHash": "opaque-address",
+  "indexes": {
+    "by-title": {
+      "hash": "opaque-address",
+      "entries": 12
+    }
+  }
 }
 ```
 
@@ -38,6 +46,32 @@ Snapshot HEAD objects contain a revision and one immutable snapshot address.
 The snapshot stores the collection's current document dictionary. Snapshot
 layout uses two remote objects for a cold read and one immutable content object
 for full scans.
+
+The optional `indexes` object maps each declared index name to one immutable
+encrypted index page and its tuple count. Document and index references are
+published together through the collection HEAD compare-and-swap.
+
+An index page contains its complete definition and sorted scalar tuples:
+
+```json
+{
+  "version": 1,
+  "definition": {
+    "name": "by-title",
+    "fields": ["title"],
+    "mode": "equality"
+  },
+  "entries": [
+    {
+      "values": ["First note"],
+      "ids": ["note-1"]
+    }
+  ]
+}
+```
+
+Only string, finite number, boolean, and null values are indexed. Arrays and
+objects remain available to bounded query evaluation.
 
 Private node addresses use HMAC-SHA-256 with a scope-derived address key.
 Public deployments still use stable opaque addresses, but confidentiality is
@@ -128,6 +162,7 @@ A successful write response contains:
 - root
 - changed branch
 - changed leaf
+- changed snapshot and index pages when applicable
 
 This removes a read-after-write round trip and lets other tabs update through
 BroadcastChannel.

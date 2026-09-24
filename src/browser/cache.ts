@@ -121,6 +121,145 @@ export class MemoryObjectCache {
   }
 }
 
+export class NamespacedMemoryObjectCache extends MemoryObjectCache {
+  private readonly keys = new Set<string>();
+  private readonly prefix: string;
+
+  constructor(
+    namespace: string,
+    private readonly delegate: MemoryObjectCache,
+  ) {
+    super();
+    this.prefix = cacheNamespacePrefix(namespace);
+  }
+
+  override get(key: string): CachedJsonObject | null {
+    const namespacedKey = this.key(key);
+    this.keys.add(namespacedKey);
+    const entry = this.delegate.get(namespacedKey);
+    return entry ? { ...entry, key } : null;
+  }
+
+  override set(entry: CachedJsonObject): void {
+    const key = this.key(entry.key);
+    this.keys.add(key);
+    this.delegate.set({ ...entry, key });
+  }
+
+  override delete(key: string): void {
+    const namespacedKey = this.key(key);
+    this.keys.delete(namespacedKey);
+    this.delegate.delete(namespacedKey);
+  }
+
+  override clear(): void {
+    for (const key of this.keys) {
+      this.delegate.delete(key);
+    }
+    this.keys.clear();
+  }
+
+  override stats(): {
+    entries: number;
+    bytes: number;
+    evictions: number;
+  } {
+    return this.delegate.stats();
+  }
+
+  private key(key: string): string {
+    return `${this.prefix}${key}`;
+  }
+}
+
+export class NamespacedPersistentObjectCache
+implements PersistentObjectCache {
+  private readonly prefix: string;
+  private mutation = Promise.resolve();
+
+  constructor(
+    namespace: string,
+    private readonly delegate: PersistentObjectCache,
+  ) {
+    this.prefix = cacheNamespacePrefix(namespace);
+  }
+
+  async get(key: string): Promise<CachedJsonObject | null> {
+    const entry = await this.delegate.get(this.key(key));
+    return entry ? { ...entry, key } : null;
+  }
+
+  async set(entry: CachedJsonObject): Promise<void> {
+    await this.mutateRegistry((keys) => keys.add(entry.key));
+    await this.delegate.set({
+      ...entry,
+      key: this.key(entry.key),
+    });
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.delegate.delete(this.key(key));
+    await this.mutateRegistry((keys) => keys.delete(key));
+  }
+
+  clear(): Promise<void> {
+    return this.clearNamespace();
+  }
+
+  destroy(): Promise<void> {
+    return this.clearNamespace();
+  }
+
+  private async clearNamespace(): Promise<void> {
+    await this.mutation;
+    const keys = await this.registry();
+    await Promise.all(
+      [...keys].map((key) => this.delegate.delete(this.key(key))),
+    );
+    await this.delegate.delete(this.registryKey());
+  }
+
+  private mutateRegistry(
+    update: (keys: Set<string>) => void,
+  ): Promise<void> {
+    const operation = this.mutation.then(async () => {
+      const keys = await this.registry();
+      update(keys);
+      const now = Date.now();
+      await this.delegate.set({
+        key: this.registryKey(),
+        etag: "",
+        value: [...keys].sort(),
+        cachedAt: now,
+        checkedAt: now,
+        immutable: false,
+      });
+    });
+    this.mutation = operation.catch(() => undefined);
+    return operation;
+  }
+
+  private async registry(): Promise<Set<string>> {
+    const entry = await this.delegate.get(this.registryKey());
+    if (
+      !entry ||
+      !Array.isArray(entry.value) ||
+      !entry.value.every((key) => typeof key === "string")
+    ) {
+      return new Set();
+    }
+    return new Set(entry.value);
+  }
+
+  private key(key: string): string {
+    return `${this.prefix}${key}`;
+  }
+
+  private registryKey(): string {
+    return `${this.prefix}__thimbledb_cache_keys__`;
+  }
+}
+
 export class IndexedDbObjectCache implements PersistentObjectCache {
   private databasePromise: Promise<IDBDatabase> | undefined;
   private deviceKeyPromise: Promise<CryptoKey> | undefined;
@@ -551,6 +690,10 @@ function copyArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(new ArrayBuffer(bytes.byteLength));
   copy.set(bytes);
   return copy.buffer;
+}
+
+function cacheNamespacePrefix(namespace: string): string {
+  return `${namespace.length}:${namespace}:`;
 }
 
 async function withCacheKeyLock<T>(

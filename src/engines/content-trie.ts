@@ -19,6 +19,7 @@ import {
   isTrieTombstone,
   trieCollectionPrefix,
   trieHeadKey,
+  trieIndexKey,
   trieNodeKey,
   triePathFromHash,
   visibleTrieDocument,
@@ -31,6 +32,17 @@ import {
   type TrieStoredDocument,
   type TrieTombstone,
 } from "../trie-protocol.js";
+import {
+  buildSecondaryIndexPage,
+  secondaryIndexDefinitionsEqual,
+  secondaryIndexPageFromJson,
+  updateSecondaryIndexPage,
+  type CollectionIndexConfiguration,
+  type SecondaryIndexChange,
+  type SecondaryIndexPage,
+  type SecondaryIndexReference,
+  type SecondaryIndexReferences,
+} from "../secondary-index.js";
 
 type LoadedHead = {
   object: StoredObject | null;
@@ -58,6 +70,8 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       bytes: Uint8Array,
     ) => Promise<string> | string = hashBytes,
     private readonly allowQuiescentGarbageCollection = false,
+    private readonly indexConfiguration: CollectionIndexConfiguration = {},
+    private readonly allowIndexConfigurationChange = false,
   ) {}
 
   async get(
@@ -421,8 +435,13 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     expectedHeadEtag?: string | null,
   ): Promise<boolean> {
     const normalized = validateName(collection, "Collection");
+    const collapsedChanges = [
+      ...new Map(
+        changes.map((change) => [change.id, change]),
+      ).values(),
+    ];
     const updates = await Promise.all(
-      changes.map(async (change) => {
+      collapsedChanges.map(async (change) => {
         const [first, second] = await this.pathFor(change.id);
         return {
           id: change.id,
@@ -439,6 +458,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       expectedHeadEtag === undefined ? this.maxRetries : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       const head = await this.loadHead(normalized);
+      await this.requireIndexConfiguration(normalized, head.state);
       if (
         expectedHeadEtag !== undefined &&
         (head.object?.etag ?? null) !== expectedHeadEtag
@@ -535,9 +555,17 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         Object.keys(nextRoot.children).length === 0
           ? null
           : await this.writeNode(normalized, nextRoot);
+      const indexes = await this.writeIndexes(
+        normalized,
+        head.state,
+        collapsedChanges,
+      );
       const nextHead: TrieHead = {
         revision: head.state.revision + 1,
         rootHash,
+        ...(Object.keys(indexes).length > 0
+          ? { indexes }
+          : {}),
       };
 
       try {
@@ -609,7 +637,21 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       return !reachable.has(hash);
     });
     await Promise.all(staleKeys.map((key) => this.store.delete(key)));
-    this.garbageCollected += staleKeys.length;
+    const activeIndexes = new Set(
+      Object.entries(head.state.indexes ?? {}).map(
+        ([name, reference]) =>
+          trieIndexKey(normalized, name, reference.hash),
+      ),
+    );
+    const indexPrefix = `${this.collectionPrefix(normalized)}/indexes/`;
+    const staleIndexes = (await this.store.list(indexPrefix)).filter(
+      (key) => !activeIndexes.has(key),
+    );
+    await Promise.all(
+      staleIndexes.map((key) => this.store.delete(key)),
+    );
+    this.garbageCollected +=
+      staleKeys.length + staleIndexes.length;
   }
 
   diagnostics(): EngineDiagnostics {
@@ -720,7 +762,149 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         state: { revision: 0, rootHash: null },
       };
     }
+
     return { object, state: decodeJson<TrieHead>(object.bytes) };
+  }
+
+  private async writeIndexes(
+    collection: string,
+    head: TrieHead,
+    changes: SecondaryIndexChange[],
+  ): Promise<SecondaryIndexReferences> {
+    const definitions = this.indexConfiguration[collection] ?? [];
+    if (definitions.length === 0) {
+      return {};
+    }
+
+    let storedDocuments: TrieStoredDocument[] | undefined;
+    const references =
+      createDictionary<SecondaryIndexReference>();
+    for (const definition of definitions) {
+      const currentReference = head.indexes?.[definition.name];
+      let currentPage: SecondaryIndexPage | null = null;
+      if (currentReference) {
+        const object = await this.store.get(
+          trieIndexKey(
+            collection,
+            definition.name,
+            currentReference.hash,
+          ),
+        );
+        if (!object) {
+          throw new Error(
+            `Secondary index ${definition.name} is missing`,
+          );
+        }
+        const loadedPage = secondaryIndexPageFromJson(
+          decodeJson<JsonValue>(object.bytes),
+        );
+        if (
+          secondaryIndexDefinitionsEqual(
+            loadedPage.definition,
+            definition,
+          )
+        ) {
+          currentPage = loadedPage;
+        } else {
+          storedDocuments ??= await this.scanStoredFromHead(
+            collection,
+            head,
+          );
+          currentPage = buildSecondaryIndexPage(
+            definition,
+            storedDocuments,
+          );
+        }
+      } else {
+        storedDocuments ??= await this.scanStoredFromHead(
+          collection,
+          head,
+        );
+        currentPage = buildSecondaryIndexPage(
+          definition,
+          storedDocuments,
+        );
+      }
+      const page = updateSecondaryIndexPage(
+        currentPage,
+        definition,
+        changes,
+      );
+      const bytes = encodeJson(page as unknown as JsonValue);
+      const hash = await this.addressNode(bytes);
+      try {
+        await this.store.put(
+          trieIndexKey(collection, definition.name, hash),
+          bytes,
+          { ifNoneMatch: true },
+        );
+      } catch (error) {
+        if (!isPreconditionFailure(error)) {
+          throw error;
+        }
+      }
+      references[definition.name] = {
+        hash,
+        entries: page.entries.length,
+      };
+    }
+    return references;
+  }
+
+  async assertIndexConfiguration(collection: string): Promise<void> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    await this.requireIndexConfiguration(normalized, head.state);
+  }
+
+  private async requireIndexConfiguration(
+    collection: string,
+    head: TrieHead,
+  ): Promise<void> {
+    const active = Object.entries(head.indexes ?? {});
+    if (this.allowIndexConfigurationChange) {
+      return;
+    }
+    const configured = new Map(
+      (this.indexConfiguration[collection] ?? []).map(
+        (definition) => [definition.name, definition],
+      ),
+    );
+    if (head.revision === 0 && active.length === 0) {
+      return;
+    }
+    if (active.length !== configured.size) {
+      throw new Error(
+        `Collection ${collection} active secondary indexes do not exactly match the supplied configuration`,
+      );
+    }
+    for (const [name, reference] of active) {
+      const definition = configured.get(name);
+      if (!definition) {
+        throw new Error(
+          `Collection ${collection} has active secondary index ${name} that is missing from the supplied configuration`,
+        );
+      }
+      const object = await this.store.get(
+        trieIndexKey(collection, name, reference.hash),
+      );
+      if (!object) {
+        throw new Error(`Secondary index ${name} is missing`);
+      }
+      const page = secondaryIndexPageFromJson(
+        decodeJson<JsonValue>(object.bytes),
+      );
+      if (
+        !secondaryIndexDefinitionsEqual(
+          page.definition,
+          definition,
+        )
+      ) {
+        throw new Error(
+          `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
+        );
+      }
+    }
   }
 
   private async readStoredAtHead(

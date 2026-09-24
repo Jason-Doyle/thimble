@@ -50,6 +50,11 @@ The template also accepts `OidcProviderId`, `OidcIssuer`, `OidcAudience`,
 `OidcJwksUri`, `OidcAllowedTenants`, `OidcRequiredScope`, and
 `OidcRequiredRole` for a non-Entra provider.
 
+Generate the recommended Entra delegated scope and application roles with
+`npx thimbledb generate-entra-roles --out entra-authorization.json`. For
+machine access, use a service principal and required application role rather
+than a static global key.
+
 For key rotation, deploy `KeyVersion` as the current write version and
 `ReadKeyVersions` as the comma-separated historical versions that remain
 readable.

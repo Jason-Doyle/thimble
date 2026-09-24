@@ -187,6 +187,27 @@ Cloudflare/R2 reference deployment.
 See [Benchmarks](BENCHMARKS.md) for the measured table, interpretation,
 limitations, and layout decision thresholds.
 
+## Comparative application harness
+
+The repository also contains one deterministic bounded-notes scenario:
+
+```powershell
+npm run benchmark:compare:local
+```
+
+The checked-in smoke adapters use:
+
+- the local immutable snapshot engine
+- Node's in-memory SQLite implementation
+
+Raw JSON is written below the ignored `benchmark-results` directory. These
+local timings exercise different architectures and do not establish product
+performance or cost superiority.
+
+Cloudflare D1 and Firestore comparisons require matched deployed resources,
+regions, datasets, warm-up policy, and evidence capture before their results
+can support a public claim.
+
 ## What the harness does not model
 
 The harness does not model:

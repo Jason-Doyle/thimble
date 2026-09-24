@@ -7,7 +7,7 @@ import { parseFaqMarkdown } from "../lib/faq";
 
 const faqEntry = await getEntry("docs", "faq");
 const faqItems = parseFaqMarkdown(faqEntry?.body ?? "").slice(0, 6);
-const featuredDocs = getFeaturedDocs().slice(0, 6);
+const featuredDocs = getFeaturedDocs().slice(0, 8);
 
 const softwareSchema = {
   "@context": "https://schema.org",
@@ -67,16 +67,16 @@ const websiteSchema = {
             View on GitHub
           </a>
         </div>
-        <div class="install-command" aria-label="Install ThimbleDB from npm">
+        <div class="install-command" aria-label="Create a ThimbleDB application">
           <span aria-hidden="true">$</span>
-          <code>npm install thimbledb</code>
+          <code>npx thimbledb@latest create my-app</code>
           <button type="button" data-copy-install aria-label="Copy install command">
             Copy
           </button>
         </div>
         <ul class="hero-proof" aria-label="Project facts">
           <li>Apache-2.0</li>
-          <li>10.1 KB gzip browser bundle</li>
+          <li>15.3 KB gzip browser build</li>
           <li>2-package base install</li>
           <li>Node.js 22+</li>
         </ul>
@@ -148,14 +148,16 @@ const websiteSchema = {
           <header>
             <div>
               <span class="code-dot cyan"></span>
-              <strong>Cloudflare authority</strong>
+              <strong>Ready browser client</strong>
             </div>
-            <span>src/worker.ts</span>
+            <span>src/application.ts</span>
           </header>
-          <pre><code><span class="token-keyword">export</span> &#123; <span class="token-keyword">default</span> &#125; <span class="token-keyword">from</span> <span class="token-string">"thimbledb/authority/cloudflare"</span>;</code></pre>
+          <pre><code><span class="token-keyword">const</span> db = <span class="token-keyword">await</span> <span class="token-function">createThimbleClient</span>();
+
+<span class="token-keyword">const</span> notes = db.<span class="token-function">collection</span>(noteDefinition);</code></pre>
           <p>
-            Bind private R2 data and auth buckets, then connect the
-            application-owned OIDC provider.
+            One factory configures authority URLs, scope keys, memory cache,
+            encrypted IndexedDB, and layout checks.
           </p>
         </article>
 
@@ -163,29 +165,25 @@ const websiteSchema = {
           <header>
             <div>
               <span class="code-dot blue"></span>
-              <strong>Document API</strong>
+              <strong>Bounded indexed query</strong>
             </div>
             <span>application.ts</span>
           </header>
-          <pre><code><span class="token-keyword">await</span> db.<span class="token-function">write</span>(<span class="token-string">"notes"</span>, <span class="token-string">"note-1"</span>, &#123;
-  id: <span class="token-string">"note-1"</span>,
-  title: <span class="token-string">"First note"</span>,
-&#125;);
-
-<span class="token-keyword">const</span> note = <span class="token-keyword">await</span> db.<span class="token-function">get</span>(
-  <span class="token-string">"notes"</span>,
-  <span class="token-string">"note-1"</span>,
-);</code></pre>
+          <pre><code><span class="token-keyword">const</span> result = <span class="token-keyword">await</span> notes
+  .<span class="token-function">where</span>((note) => note.title.<span class="token-function">eq</span>(<span class="token-string">"First note"</span>))
+  .<span class="token-function">orderBy</span>((note) => note.lastModified.<span class="token-function">desc</span>())
+  .<span class="token-function">take</span>(<span class="token-number">25</span>)
+  .<span class="token-function">get</span>();</code></pre>
           <p>
-            Reads use the browser cache and authenticated object broker.
-            Mutations return through the authority.
+            Declared indexes narrow candidates. The client checks the complete
+            predicate and falls back to a bounded scan when needed.
           </p>
         </article>
       </div>
 
       <div class="code-section-footer">
-        <span>Need Node, Azure, or S3?</span>
-        <a class="text-link" href="/docs/public-api/">Review every public package export <span>→</span></a>
+        <span>Need migration or provider configuration?</span>
+        <a class="text-link" href="/docs/migration/">Review the portable migration path <span>→</span></a>
       </div>
     </div>
   </section>
@@ -209,7 +207,7 @@ const websiteSchema = {
           <h3>A reasonable candidate</h3>
           <ul>
             <li>Records belong to one user, tenant, role, or public scope</li>
-            <li>Reads by ID and bounded collection scans cover the workflow</li>
+            <li>ID reads, declared indexes, or bounded scans cover the workflow</li>
             <li>Writes are modest compared with reads</li>
             <li>The hot working set fits in browser storage</li>
             <li>External OIDC already handles account security</li>
@@ -412,7 +410,7 @@ const websiteSchema = {
       </div>
       <div class="final-actions">
         <a class="button primary" href="/docs/quickstart/">Open the quickstart <span>→</span></a>
-        <a class="button ghost" href="/docs/evaluation/">Run the evaluation harness</a>
+        <a class="button ghost" href="/examples/">Choose a starter</a>
       </div>
     </div>
   </section>
@@ -421,7 +419,9 @@ const websiteSchema = {
 <script>
   const button = document.querySelector<HTMLButtonElement>("[data-copy-install]");
   button?.addEventListener("click", async () => {
-    await navigator.clipboard.writeText("npm install thimbledb");
+    await navigator.clipboard.writeText(
+      "npx thimbledb@latest create my-app",
+    );
     button.textContent = "Copied";
     window.setTimeout(() => {
       button.textContent = "Copy";

@@ -2,29 +2,20 @@ import type {
   CachePolicy,
   JsonDocument,
 } from "../core.js";
-import type { CollectionLayout } from "../snapshot-protocol.js";
-import {
-  base64ToBytes,
-  importAesGcmKey,
-} from "../envelope.js";
-import {
-  IndexedDbObjectCache,
-  MemoryObjectCache,
-  TieredObjectCache,
-} from "./cache.js";
 import { ThimbleClient } from "./client.js";
 import {
-  EnvelopeJsonObjectReader,
-  HttpByteObjectReader,
-  ScopedJsonObjectReader,
-} from "./remote-reader.js";
+  createThimbleConnection,
+  ThimbleConnectionError,
+  type ThimbleAuthorityConfig,
+} from "./connect.js";
 
 type AuthConfig = {
   oidcProviders: string[];
+  developmentIdentity?: boolean;
 };
 
 type IdentitySummary = {
-  provider: "entra" | "oidc";
+  provider: string;
   issuer: string;
   subject: string;
 };
@@ -45,29 +36,7 @@ type AdminUser = {
   updatedAt: string;
 };
 
-type BrowserConfig = {
-  name: string;
-  provider: "local" | "azure" | "s3" | "r2";
-  readBaseUrl: string;
-  headTtlMs: number;
-  cachePolicy: CachePolicy;
-  collectionLayouts: Record<string, CollectionLayout>;
-  layoutGeneration: string;
-  csrfToken: string;
-  user: {
-    id: string;
-    provider: string;
-    roles: string[];
-    tenants: string[];
-    identities: IdentitySummary[];
-  };
-  scope: {
-    id: string;
-    encrypted: boolean;
-    keyId: string | null;
-    keyEndpoint: string | null;
-  };
-};
+type BrowserConfig = ThimbleAuthorityConfig;
 
 const status = element<HTMLDivElement>("status");
 const authPanel = element<HTMLElement>("auth-panel");
@@ -77,6 +46,7 @@ const authProvider =
   element<HTMLSelectElement>("auth-provider");
 const authToken = element<HTMLTextAreaElement>("auth-token");
 const authMessage = element<HTMLParagraphElement>("auth-message");
+const devLogin = element<HTMLButtonElement>("dev-login");
 const identityOutput =
   element<HTMLPreElement>("identity-output");
 const linkProvider =
@@ -118,6 +88,10 @@ element<HTMLButtonElement>("oidc-login").addEventListener(
     await authenticateExternal();
   },
 );
+
+devLogin.addEventListener("click", async () => {
+  await authenticateDevelopment();
+});
 
 element<HTMLButtonElement>("link-identity").addEventListener(
   "click",
@@ -517,53 +491,27 @@ element<HTMLButtonElement>("reset-metrics").addEventListener(
 async function bootstrap(): Promise<void> {
   const auth = await fetchJson<AuthConfig>("/api/auth/config");
   authConfig = auth;
-  const response = await fetch("/api/config", {
-    credentials: "same-origin",
-  });
-  if (response.status === 401) {
-    authPanel.hidden = false;
-    renderAuthProviders(auth);
-    setStatus("Sign in required", "ready");
-    return;
+  let connection;
+  try {
+    connection = await createThimbleConnection({
+      onLogout: (error) => showSignedOut(error),
+      onLayoutChange: () => window.location.reload(),
+    });
+  } catch (error) {
+    if (
+      error instanceof ThimbleConnectionError &&
+      error.status === 401
+    ) {
+      authPanel.hidden = false;
+      renderAuthProviders(auth);
+      setStatus("Sign in required", "ready");
+      return;
+    }
+    throw error;
   }
-  if (!response.ok) {
-    throw new Error(`Config request failed with ${response.status}`);
-  }
-
-  config = (await response.json()) as BrowserConfig;
-  const namespace = cacheNamespace(config);
-  const scopeKeys = await loadScopeKeys(config);
-  const envelopeReader = new EnvelopeJsonObjectReader(
-    new HttpByteObjectReader(config.readBaseUrl),
-    scopeKeys
-      ? (keyId) => scopeKeys.keys.get(keyId) ?? null
-      : undefined,
-  );
-  const cache = new TieredObjectCache(
-    new MemoryObjectCache(),
-    new IndexedDbObjectCache(namespace),
-    config.cachePolicy,
-  );
-  client = new ThimbleClient({
-    reader: new ScopedJsonObjectReader(
-      envelopeReader,
-      config.scope.id,
-    ),
-    cache,
-    headTtlMs: config.headTtlMs,
-    csrfToken: config.csrfToken,
-    scopeId: config.scope.id,
-    ...(scopeKeys
-      ? { keyExpiresAt: scopeKeys.expiresAt }
-      : {}),
-    channelName: `thimbledb:${namespace}`,
-    onLogout: (error) => showSignedOut(error),
-    collectionLayouts: config.collectionLayouts,
-    layoutGeneration: config.layoutGeneration,
-    configurationUrl: "/api/config",
-    layoutCheckTtlMs: 1_000,
-    onLayoutChange: () => window.location.reload(),
-  });
+  config = connection.config;
+  client = connection.client;
+  const cache = connection.cache;
   const persistentStorage = await requestPersistentStorage();
   cachePolicy.value = config.cachePolicy;
   for (const section of document.querySelectorAll<HTMLElement>(
@@ -591,12 +539,13 @@ async function authenticateExternal(): Promise<void> {
     if (!provider || !token) {
       throw new Error("Select a provider and supply an access token");
     }
+
     setStatus("Validating external identity...", "working");
     const response = await fetch(
       `/api/auth/oidc/${encodeURIComponent(provider)}/session`,
       {
-      method: "POST",
-      credentials: "same-origin",
+        method: "POST",
+        credentials: "same-origin",
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${token}`,
@@ -617,6 +566,29 @@ async function authenticateExternal(): Promise<void> {
   }
 }
 
+async function authenticateDevelopment(): Promise<void> {
+  try {
+    setStatus("Creating local development session...", "working");
+    const response = await fetch("/api/auth/dev/session", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Development sign in failed with ${response.status}`,
+      );
+    }
+    window.location.reload();
+  } catch (error) {
+    authMessage.textContent = errorMessage(error);
+    setStatus("Development sign in failed", "error");
+  }
+}
+
 function renderIdentityControls(current: BrowserConfig): void {
   identityOutput.textContent = JSON.stringify(
     current.user.identities,
@@ -624,7 +596,7 @@ function renderIdentityControls(current: BrowserConfig): void {
     2,
   );
   linkProvider.replaceChildren(
-    ...(authConfig?.oidcProviders ?? []).map((provider) => {
+    ...externalProviderIds(authConfig).map((provider) => {
       const option = document.createElement("option");
       option.value = provider;
       option.textContent = provider;
@@ -741,65 +713,6 @@ function renderMetrics(): void {
   );
 }
 
-async function loadScopeKeys(
-  current: BrowserConfig,
-): Promise<{
-  writeKeyId: string;
-  keys: Map<string, CryptoKey>;
-  expiresAt: string;
-} | null> {
-  if (!current.scope.encrypted) {
-    return null;
-  }
-  if (!current.scope.keyId || !current.scope.keyEndpoint) {
-    throw new Error("Encrypted scope is missing its key grant endpoint");
-  }
-  const response = await fetch(current.scope.keyEndpoint, {
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    throw new Error(
-      `Scope key request failed with ${response.status}`,
-    );
-  }
-  const grant = (await response.json()) as {
-    scopeId: string;
-    writeKeyId: string;
-    keys: Array<{
-      keyId: string;
-      key: string;
-    }>;
-    algorithm: string;
-    expiresAt: string;
-  };
-  if (
-    grant.scopeId !== current.scope.id ||
-    grant.writeKeyId !== current.scope.keyId ||
-    grant.algorithm !== "A256GCM"
-  ) {
-    throw new Error("Scope key grant does not match browser config");
-  }
-  const keys = new Map<string, CryptoKey>();
-  for (const granted of grant.keys) {
-    const rawKey = base64ToBytes(granted.key);
-    granted.key = "";
-    keys.set(
-      granted.keyId,
-      await importAesGcmKey(rawKey, ["decrypt"], false),
-    );
-    rawKey.fill(0);
-  }
-  if (!keys.has(grant.writeKeyId)) {
-    throw new Error("Scope key grant omitted the write key");
-  }
-  return {
-    writeKeyId: grant.writeKeyId,
-    keys,
-    expiresAt: grant.expiresAt,
-  };
-}
-
 function mutationHeaders(
   current: BrowserConfig,
 ): Record<string, string> {
@@ -809,14 +722,6 @@ function mutationHeaders(
     "x-thimble-scope": current.scope.id,
     "x-thimble-layout-generation": current.layoutGeneration,
   };
-}
-
-function cacheNamespace(current: BrowserConfig): string {
-  const url = new URL(
-    current.readBaseUrl,
-    window.location.href,
-  );
-  return `${current.provider}:${url.origin}${url.pathname}:${current.scope.id}`;
 }
 
 function showSignedOut(error?: unknown): void {
@@ -843,19 +748,31 @@ function showSignedOut(error?: unknown): void {
 }
 
 function renderAuthProviders(auth: AuthConfig): void {
+  const providers = externalProviderIds(auth);
   authProvider.replaceChildren(
-    ...auth.oidcProviders.map((provider) => {
+    ...providers.map((provider) => {
       const option = document.createElement("option");
       option.value = provider;
       option.textContent = provider;
       return option;
     }),
   );
-  const available = auth.oidcProviders.length > 0;
+  const available = providers.length > 0;
   externalAuthControls.hidden = !available;
+  devLogin.hidden = !auth.developmentIdentity;
   authMessage.textContent = available
     ? "Obtain an API access token through the host application's OIDC flow."
-    : "No external identity provider is configured.";
+    : auth.developmentIdentity
+      ? "Use the loopback-only development identity."
+      : "No external identity provider is configured.";
+}
+
+function externalProviderIds(
+  auth: AuthConfig | null,
+): string[] {
+  return (auth?.oidcProviders ?? []).filter(
+    (provider) => provider !== "dev",
+  );
 }
 
 function requireClient(): ThimbleClient {

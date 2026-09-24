@@ -41,6 +41,7 @@ jobs:
         run: |
           npm test
           npm run examples:check
+          npm run benchmark:compare:local
 
       - name: Build public site
         run: |
@@ -59,7 +60,9 @@ jobs:
         run: npm run build
 
       - name: Verify package exports
-        run: npm run verify:package
+        run: |
+          npm run verify:package
+          npm run verify:scaffold
 
       - name: Build container
         run: |

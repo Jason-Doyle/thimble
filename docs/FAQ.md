@@ -67,8 +67,8 @@ quiescent.
 ## Does ThimbleDB support SQL or joins?
 
 No. The current API supports document reads, writes, deletion, restoration,
-and bounded collection scans. It does not claim SQL, joins, aggregation,
-full-text search, or vector query semantics.
+declared secondary indexes, and bounded collection scans. It does not claim
+SQL, joins, aggregation, full-text search, or vector query semantics.
 
 ## How fast is it?
 
@@ -98,6 +98,35 @@ The base package installs ThimbleDB and `jose`, which provides standards-based
 OIDC and JWT verification without transitive runtime dependencies. Azure and
 AWS SDKs are optional and are installed only for the matching Node storage
 adapter.
+
+## Can ThimbleDB query indexed fields?
+
+Yes, for bounded queries inside one scope and collection. Applications declare
+equality, range, or composite indexes. A typed fluent query compiles to a
+serialisable expression and uses a matching immutable index page when
+available. ID equality remains a direct point read.
+
+ThimbleDB does not provide joins, aggregates, cross-scope queries, automatic
+indexing of every field, or a general distributed query engine.
+
+## Can data be migrated into or out of ThimbleDB?
+
+Yes. Versioned logical archives use checksummed NDJSON collections and support
+dry-run, create, replace, and merge imports. Adapters cover JSON, CSV, lowdb,
+SQLite, PostgreSQL, and Firestore.
+
+Logical archives contain plaintext application data and must be protected like
+database exports.
+
+## Does the administrator role read every database scope?
+
+No. `thimble.admin` authorizes identity-administration endpoints. It is not a
+global data bypass.
+
+Human live viewers should use OIDC and receive only the tenant memberships and
+tenant roles they require. Headless callers can use an OIDC service principal
+and exchange a short-lived application token for a normal ThimbleDB session.
+See [Machine and service access](SERVICE-ACCESS.md).
 
 ## What licence does ThimbleDB use?
 

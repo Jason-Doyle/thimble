@@ -29,6 +29,36 @@ configuring an identity provider or cloud resources.
 
 The example is not a complete authenticated web deployment.
 
+## Generated local web application
+
+Create a complete browser and Node authority example:
+
+```powershell
+npx thimbledb@latest create my-notes-app
+cd my-notes-app
+npm run dev
+```
+
+The scaffold includes:
+
+- loopback-only development identity
+- ready browser client factory
+- encrypted local user scope
+- typed notes collection
+- title and modification-time indexes
+- indexed lookup and ordering
+- deletion and restore
+- Vite development server
+
+Standalone templates:
+
+- [Node starter](https://github.com/Jason-Doyle/thimbledb-node-starter)
+  provides the same local-first authenticated flow in a repository that can be
+  generated from GitHub.
+- [Cloudflare starter](https://github.com/Jason-Doyle/thimbledb-cloudflare-starter)
+  provides a Worker, static Vite application, external OIDC session exchange,
+  private R2 bindings, typed notes, and declared indexes.
+
 ## Cloudflare notes authority
 
 Path: `examples/cloudflare-notes`

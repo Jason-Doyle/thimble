@@ -20,7 +20,7 @@ database file.
 - The durable backend must be cloud object storage.
 - Browsers need an encrypted cache of user or tenant scoped documents.
 - The authority and browser run on different machines.
-- Reads are mostly by ID or bounded collection scan.
+- Reads are mostly by ID, declared indexes, or bounded collection scan.
 - Connected writes and external OIDC fit the product.
 
 ## Capability comparison
@@ -29,7 +29,7 @@ database file.
 | --- | --- | --- |
 | Process model | Browser plus application authority | In-process embedded engine |
 | Durable storage | Object storage | Local database file |
-| Query model | ID reads and bounded scans | SQL |
+| Query model | ID reads, declared indexes, and bounded scans | SQL |
 | Transactions | Conditional collection updates | ACID transactions |
 | Multi-machine access | Through the authority and object store | Requires an application server or replication layer |
 | Browser support | Purpose-built browser client and cache | Usually requires WASM or a server API |

@@ -1,4 +1,5 @@
 import type { JsonDocument, JsonValue } from "./core.js";
+import type { SecondaryIndexReferences } from "./secondary-index.js";
 
 export type TrieRootNode = {
   kind: "root";
@@ -37,6 +38,7 @@ export type TrieNode =
 export type TrieHead = {
   revision: number;
   rootHash: string | null;
+  indexes?: SecondaryIndexReferences;
 };
 
 export type TrieBundleObject = {
@@ -66,6 +68,14 @@ export function trieNodeKey(
   hash: string,
 ): string {
   return `${trieCollectionPrefix(collection)}/nodes/${hash}.json`;
+}
+
+export function trieIndexKey(
+  collection: string,
+  indexName: string,
+  hash: string,
+): string {
+  return `${trieCollectionPrefix(collection)}/indexes/${encodeURIComponent(indexName)}/${hash}.json`;
 }
 
 export function triePathFromHash(hash: string): [string, string] {

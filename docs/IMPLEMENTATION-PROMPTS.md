@@ -79,20 +79,34 @@ Target:
 - OIDC provider: [provider]
 
 Requirements:
-1. Import `startNodeAuthority` from `thimbledb/authority/node`.
-2. Install `@azure/storage-blob` for Azure or `@aws-sdk/client-s3` for S3/R2.
-3. Configure separate data and auth stores.
-4. Use secure cookies outside local development.
-5. Configure the exact allowed origin and trusted proxy boundary.
-6. Ignore caller-supplied forwarding headers unless the immediate proxy is explicitly trusted.
-7. If source IP cannot be verified, disable IP limits and retain subject limits.
-8. Keep the master key and provider credentials in the platform secret store.
-9. Expose only the authority HTTP port.
-10. Add health, authentication, write, deletion, and logout smoke tests.
-11. Document backup, key rotation, retention maintenance, and layout migration.
+1. Define typed collections and any required indexes in one shared module.
+2. Import `startNodeAuthority` from `thimbledb/authority/node`.
+3. Install `@azure/storage-blob` for Azure or `@aws-sdk/client-s3` for S3/R2.
+4. Configure separate data and auth stores.
+5. Use secure cookies outside local development.
+6. Configure the exact allowed origin and trusted proxy boundary.
+7. Ignore caller-supplied forwarding headers unless the immediate proxy is explicitly trusted.
+8. If source IP cannot be verified, disable IP limits and retain subject limits.
+9. Keep the master key and provider credentials in the platform secret store.
+10. Expose only the authority HTTP port.
+11. Add health, authentication, indexed query, write, deletion, and logout smoke tests.
+12. Document backup, logical export, key rotation, retention maintenance, index migration, and layout migration.
 
 Do not create a second authentication system. Do not store passwords or provider access tokens.
+For machine access, prefer an OIDC service principal with explicit roles. Do
+not add a static database-wide admin key.
 ```
+
+Repository starting points:
+
+- Node:
+  `https://github.com/Jason-Doyle/thimbledb-node-starter`
+- Cloudflare:
+  `https://github.com/Jason-Doyle/thimbledb-cloudflare-starter`
+
+Use the repository as a template, preserve its security boundaries, and
+replace only the application model, identity configuration, and provider
+resources required by the target deployment.
 
 ## Design collections and choose layouts
 

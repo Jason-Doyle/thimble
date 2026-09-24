@@ -10,7 +10,29 @@ Choose one authority:
 
 The browser API is the same for every authority.
 
-## Install
+## Fast local evaluation
+
+Generate a complete local Node authority and Vite application:
+
+```powershell
+npx thimbledb@latest create my-notes-app
+cd my-notes-app
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. The scaffold uses the loopback-only development
+identity, encrypted local scopes, typed notes, declared indexes, deletion, and
+restore.
+
+See [Local development](DEVELOPMENT.md) before replacing the development
+identity with production OIDC.
+
+Standalone repository templates:
+
+- [ThimbleDB Node starter](https://github.com/Jason-Doyle/thimbledb-node-starter)
+- [ThimbleDB Cloudflare starter](https://github.com/Jason-Doyle/thimbledb-cloudflare-starter)
+
+## Manual installation
 
 ```powershell
 npm install thimbledb
@@ -49,6 +71,16 @@ npx wrangler r2 bucket create <data-bucket>
 npx wrangler r2 bucket create <auth-bucket>
 ```
 
+Generate the Entra delegated scope and application roles once:
+
+```powershell
+npx thimbledb generate-entra-roles `
+  --out ".\entra-authorization.json"
+```
+
+Merge the generated entries with the existing application registration. Keep
+the generated IDs stable after assignments are created.
+
 Use a Wrangler configuration with caller-owned resources:
 
 ```jsonc
@@ -63,6 +95,7 @@ Use a Wrangler configuration with caller-owned resources:
     "THIMBLE_READ_KEY_VERSIONS": "",
     "THIMBLE_HEAD_TTL_MS": "10000",
     "THIMBLE_COLLECTION_LAYOUTS": "",
+    "THIMBLE_COLLECTION_INDEXES": "{}",
     "THIMBLE_RETIRED_COLLECTION_LAYOUTS": "",
     "THIMBLE_DELETE_RETENTION_DAYS": "30",
     "THIMBLE_DELETE_GRACE_DAYS": "7",
@@ -91,6 +124,11 @@ Use a Wrangler configuration with caller-owned resources:
   ]
 }
 ```
+
+Configuring both `ENTRA_REQUIRED_SCOPE` and `ENTRA_REQUIRED_ROLE` requires
+both claims. To accept Entra client-credentials tokens, use a required
+application role without a delegated-scope requirement. See
+[Machine and service access](SERVICE-ACCESS.md).
 
 Generate and store the master key without writing it to source:
 
@@ -160,7 +198,55 @@ await fetch("/api/auth/oidc/entra/session", {
 });
 ```
 
-Create the client from authority configuration:
+Create the ready client:
+
+```ts
+import { createThimbleClient } from "thimbledb";
+
+const db = await createThimbleClient();
+```
+
+Define and query a typed collection:
+
+```ts
+import {
+  defineCollection,
+  defineIndex,
+} from "thimbledb";
+
+type Note = {
+  id: string;
+  title: string;
+  body: string;
+  lastModified: number;
+};
+
+const notes = defineCollection<Note>("notes", {
+  indexes: [
+    defineIndex<Note>("by-title", ["title"]),
+    defineIndex<Note>(
+      "by-last-modified",
+      ["lastModified"],
+      "range",
+    ),
+  ],
+});
+
+const result = await db
+  .collection(notes)
+  .where((note) => note.title.eq("First note"))
+  .orderBy((note) => note.lastModified.desc())
+  .take(25)
+  .get();
+```
+
+The authority must configure the same indexes. See
+[Queries and secondary indexes](QUERIES-INDEXES.md).
+
+## Advanced manual client construction
+
+Applications that need custom readers or caches can construct every component
+directly:
 
 ```ts
 import {
@@ -256,5 +342,8 @@ Confirm:
 9. A stale layout generation receives `409 layout_changed`.
 
 Continue with [Authentication](AUTHENTICATION.md),
+[Local development](DEVELOPMENT.md),
+[Queries and secondary indexes](QUERIES-INDEXES.md),
+[Logical migration](MIGRATION.md),
 [Deletion and retention](DELETION-RETENTION.md), and
 [Adaptive layouts](ADAPTIVE-LAYOUTS.md).

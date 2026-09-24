@@ -11,11 +11,21 @@ ThimbleDB is an encrypted browser-first database for small, read-heavy web
 applications. Object storage is the durable source of truth. The application
 owns its authority, identity provider, keys, storage, retention, and backups.
 
+## Preferred starting path
+
+\`npx thimbledb@latest create my-app\` generates a local Node authority and
+Vite application. After a session exists, use \`createThimbleClient()\`, typed
+collections, and declared secondary indexes. Queries remain bounded to one
+scope and one collection.
+
 ## Start here
 
 - [Should you use ThimbleDB for a vibe-coded app?](${site.url}/vibe-coded-apps/): Exact fit and rejection criteria for AI-assisted small apps.
 - [Quickstart](${site.url}/docs/quickstart/): Install the package and configure Cloudflare, Node, and browser clients.
+- [Local development](${site.url}/docs/development/): Scaffold a complete local app with the safe development identity.
 - [Starter examples](${site.url}/examples/): Local notes and Cloudflare authority examples.
+- [Node starter repository](https://github.com/Jason-Doyle/thimbledb-node-starter): Local-first authenticated notes application.
+- [Cloudflare starter repository](https://github.com/Jason-Doyle/thimbledb-cloudflare-starter): Worker, private R2, external OIDC, and typed notes.
 - [Use cases](${site.url}/use-cases/): Complete workload-specific guides.
 - [Database comparisons](${site.url}/compare/): Fair comparisons with D1, SQLite, Firestore, lowdb, and direct object storage.
 
@@ -24,8 +34,11 @@ owns its authority, identity provider, keys, storage, retention, and backups.
 - [Architecture](${site.url}/docs/architecture/): Browser cache, authority, object storage, and scopes.
 - [Security](${site.url}/security/): Threat model, encryption, key handling, and browser boundaries.
 - [Authentication](${site.url}/docs/authentication/): External OIDC identities and revocable sessions.
+- [Machine and service access](${site.url}/docs/service-access/): Entra roles, service principals, live viewers, and why there is no global admin key.
 - [Object protocol](${site.url}/docs/protocol/): TDB1 envelopes, snapshots, tries, and conditional writes.
+- [Queries and indexes](${site.url}/docs/queries-indexes/): Typed predicates and developer-declared secondary indexes.
 - [Deletion and retention](${site.url}/docs/deletion-retention/): Tombstones, restore windows, and physical collection.
+- [Logical migration](${site.url}/docs/migration/): Portable archives and database adapters.
 
 ## Evidence and limits
 

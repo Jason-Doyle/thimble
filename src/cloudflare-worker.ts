@@ -49,10 +49,16 @@ import {
 } from "./workload.js";
 import { scopeStoragePrefix } from "./trie-protocol.js";
 import {
+  createDictionary,
   stableStringify,
   validateName,
 } from "./shared-utils.js";
 import type { CollectionLayout } from "./snapshot-protocol.js";
+import {
+  parseIndexConfiguration,
+  validateIndexConfiguration,
+  type CollectionIndexConfiguration,
+} from "./secondary-index.js";
 
 type RateLimitBinding = {
   limit(options: { key: string }): Promise<{ success: boolean }>;
@@ -70,6 +76,7 @@ export type CloudflareAuthorityEnv = {
   THIMBLE_READ_KEY_VERSIONS?: string;
   THIMBLE_HEAD_TTL_MS?: string;
   THIMBLE_COLLECTION_LAYOUTS?: string;
+  THIMBLE_COLLECTION_INDEXES?: string;
   THIMBLE_DELETE_RETENTION_DAYS?: string;
   THIMBLE_DELETE_GRACE_DAYS?: string;
   THIMBLE_MAINTENANCE_MODE?: string;
@@ -110,6 +117,7 @@ type Runtime = {
   headTtlMs: number;
   deletionPolicy: DeletionPolicy;
   collectionLayouts: Record<string, CollectionLayout>;
+  collectionIndexes: CollectionIndexConfiguration;
   layoutGeneration: string;
   maintenanceMode: boolean;
   oidcProviders: string[];
@@ -117,42 +125,57 @@ type Runtime = {
   scope(scopeId: string): Promise<ScopeRuntime>;
 };
 
-let runtimePromise: Promise<Runtime> | undefined;
-
-const cloudflareAuthority = {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    try {
-      return await route(await runtimeFor(env), request, env);
-    } catch (error) {
-      if (!(error instanceof AuthError && error.status < 500)) {
-        console.error(error);
-      }
-      const status = error instanceof AuthError ? error.status : 500;
-      const headers = new Headers();
-      if (error instanceof AuthError && error.retryAfterSeconds) {
-        headers.set("retry-after", String(error.retryAfterSeconds));
-      }
-      return json(
-        {
-          error:
-            error instanceof AuthError
-              ? error.code
-              : "internal_error",
-          message:
-            error instanceof AuthError
-              ? error.message
-              : "Request failed",
-        },
-        status,
-        headers,
-      );
-    }
-  },
+export type CloudflareAuthorityOptions = {
+  collectionLayouts?: Record<string, CollectionLayout>;
+  collectionIndexes?: CollectionIndexConfiguration;
 };
 
-export function createCloudflareAuthority(): typeof cloudflareAuthority {
-  return cloudflareAuthority;
+export function createCloudflareAuthority(
+  options: CloudflareAuthorityOptions = {},
+) {
+  let runtimePromise: Promise<Runtime> | undefined;
+  return {
+    async fetch(request: Request, env: Env): Promise<Response> {
+      try {
+        runtimePromise ??= createRuntime(env, options).catch(
+          (error) => {
+            runtimePromise = undefined;
+            throw error;
+          },
+        );
+        return await route(await runtimePromise, request, env);
+      } catch (error) {
+        if (!(error instanceof AuthError && error.status < 500)) {
+          console.error(error);
+        }
+        const status = error instanceof AuthError ? error.status : 500;
+        const headers = new Headers();
+        if (error instanceof AuthError && error.retryAfterSeconds) {
+          headers.set(
+            "retry-after",
+            String(error.retryAfterSeconds),
+          );
+        }
+        return json(
+          {
+            error:
+              error instanceof AuthError
+                ? error.code
+                : "internal_error",
+            message:
+              error instanceof AuthError
+                ? error.message
+                : "Request failed",
+          },
+          status,
+          headers,
+        );
+      }
+    },
+  };
 }
+
+const cloudflareAuthority = createCloudflareAuthority();
 
 export default cloudflareAuthority;
 
@@ -349,6 +372,7 @@ async function route(
       headTtlMs: runtime.headTtlMs,
       cachePolicy: "content",
       collectionLayouts: runtime.collectionLayouts,
+      collectionIndexes: runtime.collectionIndexes,
       layoutGeneration: runtime.layoutGeneration,
       csrfToken: authenticated.session.csrfToken,
       user: publicUser(authenticated),
@@ -685,7 +709,10 @@ async function route(
   return json({ error: "not_found" }, 404);
 }
 
-async function createRuntime(env: Env): Promise<Runtime> {
+async function createRuntime(
+  env: Env,
+  options: CloudflareAuthorityOptions,
+): Promise<Runtime> {
   const masterKey = base64ToBytes(env.THIMBLE_MASTER_KEY);
   if (masterKey.byteLength < 32) {
     throw new Error(
@@ -738,9 +765,19 @@ async function createRuntime(env: Env): Promise<Runtime> {
     sessionTtlSeconds: 3_600,
     secureCookies: true,
   });
-  const collectionLayouts = configuredCollectionLayouts(env);
+  const collectionLayouts = options.collectionLayouts
+    ? validateCollectionLayouts(options.collectionLayouts)
+    : configuredCollectionLayouts(env);
+  const collectionIndexes = options.collectionIndexes
+    ? validateIndexConfiguration(options.collectionIndexes)
+    : configuredCollectionIndexes(env);
   const layoutGeneration = (
-    await hashText(JSON.stringify(collectionLayouts))
+    await hashText(
+      JSON.stringify({
+        collectionLayouts,
+        collectionIndexes,
+      }),
+    )
   ).slice(0, 16);
   const cache = new AsyncLruCache<string, ScopeRuntime>({
     maxEntries: 100,
@@ -757,6 +794,7 @@ async function createRuntime(env: Env): Promise<Runtime> {
         masterKey,
         scopeId,
         configuredKeyVersions(env),
+        collectionIndexes,
       ),
     );
   };
@@ -767,6 +805,7 @@ async function createRuntime(env: Env): Promise<Runtime> {
     headTtlMs: parseInteger(env.THIMBLE_HEAD_TTL_MS, 1_000),
     deletionPolicy: configuredDeletionPolicy(env),
     collectionLayouts,
+    collectionIndexes,
     layoutGeneration,
     maintenanceMode: env.THIMBLE_MAINTENANCE_MODE === "true",
     oidcProviders: [...adapters.keys()],
@@ -780,6 +819,7 @@ async function createScopeRuntime(
   masterKey: Uint8Array,
   scopeId: string,
   versions: number[],
+  collectionIndexes: CollectionIndexConfiguration,
 ): Promise<ScopeRuntime> {
   const materials = await Promise.all(
     versions.map((version) =>
@@ -814,11 +854,15 @@ async function createScopeRuntime(
       store,
       40,
       material.addressNode,
+      false,
+      collectionIndexes,
     ),
     snapshot: new ImmutableSnapshotEngine(
       store,
       40,
       material.addressNode,
+      false,
+      collectionIndexes,
     ),
   };
 }
@@ -962,14 +1006,6 @@ function requiredConfig(
     throw new Error(`${name} is required`);
   }
   return value;
-}
-
-async function runtimeFor(env: Env): Promise<Runtime> {
-  runtimePromise ??= createRuntime(env).catch((error) => {
-    runtimePromise = undefined;
-    throw error;
-  });
-  return runtimePromise;
 }
 
 function requireMutationRequest(
@@ -1472,7 +1508,7 @@ function configuredDeletionPolicy(
 function configuredCollectionLayouts(
   env: Env,
 ): Record<string, CollectionLayout> {
-  const layouts: Record<string, CollectionLayout> = {};
+  const layouts = createDictionary<CollectionLayout>();
   for (const entry of (env.THIMBLE_COLLECTION_LAYOUTS ?? "")
     .split(",")
     .map((value) => value.trim())
@@ -1491,6 +1527,29 @@ function configuredCollectionLayouts(
     layouts[validateName(collection, "Collection")] = layout;
   }
   return layouts;
+}
+
+function validateCollectionLayouts(
+  configured: Record<string, CollectionLayout>,
+): Record<string, CollectionLayout> {
+  const layouts = createDictionary<CollectionLayout>();
+  for (const [collection, layout] of Object.entries(configured)) {
+    if (layout !== "trie" && layout !== "snapshot") {
+      throw new Error(
+        `Invalid collection layout for ${collection}`,
+      );
+    }
+    layouts[validateName(collection, "Collection")] = layout;
+  }
+  return layouts;
+}
+
+function configuredCollectionIndexes(
+  env: Env,
+): CollectionIndexConfiguration {
+  return parseIndexConfiguration(
+    env.THIMBLE_COLLECTION_INDEXES,
+  );
 }
 
 function engineFor(
