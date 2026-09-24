@@ -18,7 +18,6 @@ assert.match(
 );
 const html = await apex.text();
 assert.match(html, /<link rel="canonical" href="https:\/\/thimbledb\.com\/">/);
-assert.match(html, /static\.cloudflareinsights\.com\/beacon\.min\.js/);
 
 const www = await fetch("https://www.thimbledb.com/docs/?source=validation", {
   redirect: "manual",
@@ -85,5 +84,30 @@ assert.equal(
   css.headers.get("cache-control"),
   "public, max-age=31536000, immutable",
 );
+
+const { chromium } = await import("@playwright/test");
+const browser = await chromium.launch();
+try {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  let rumStatus = null;
+  page.on("response", (response) => {
+    if (response.url().includes("/cdn-cgi/rum")) {
+      rumStatus = response.status();
+    }
+  });
+  await page.goto(`${origin}/`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1_000);
+  assert.equal(
+    await page
+      .locator('script[src*="static.cloudflareinsights.com/beacon.min.js"]')
+      .count(),
+    1,
+  );
+  assert.equal(rumStatus, 204);
+  assert.deepEqual(await context.cookies(origin), []);
+} finally {
+  await browser.close();
+}
 
 console.log(`Validated Cloudflare production configuration at ${origin}.`);
