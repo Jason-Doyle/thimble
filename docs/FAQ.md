@@ -128,6 +128,16 @@ tenant roles they require. Headless callers can use an OIDC service principal
 and exchange a short-lived application token for a normal ThimbleDB session.
 See [Machine and service access](SERVICE-ACCESS.md).
 
+## Is there a database management frontend?
+
+Yes. ThimbleDB Studio ships in the npm package and can be hosted by the same
+Node or Cloudflare authority. It browses explicit granted scopes, runs bounded
+queries, reports index health, edits and restores documents, exports NDJSON,
+and exposes guarded maintenance operations.
+
+Studio starts read-only and never receives object-storage credentials. See
+[ThimbleDB Studio](STUDIO.md).
+
 ## What licence does ThimbleDB use?
 
 ThimbleDB is available under the Apache License 2.0.

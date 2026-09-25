@@ -69,6 +69,9 @@ the external provider's responsibility.
 import { startNodeAuthority } from "thimbledb/authority/node";
 
 await startNodeAuthority({
+  studio: true,
+  studioOrigin: "https://database.example.com",
+  collections: ["notes"],
   collectionLayouts: {
     notes: "snapshot",
   },
@@ -89,6 +92,9 @@ import {
 } from "thimbledb/authority/cloudflare";
 
 export default createCloudflareAuthority({
+  studio: true,
+  studioOrigin: "https://database.example.com",
+  collections: ["notes"],
   collectionLayouts: {
     notes: "snapshot",
   },
@@ -150,6 +156,17 @@ PostgreSQL requires optional `pg`. Firestore requires optional
 `@google-cloud/firestore`.
 
 See [Logical migration](MIGRATION.md).
+
+### Packaged Studio assets
+
+Node authorities can serve the packaged Studio directly when `studio: true`.
+Cloudflare and other static hosts can copy the same versioned assets:
+
+```powershell
+npx thimbledb studio-assets .\<asset-directory>\studio
+```
+
+See [ThimbleDB Studio](STUDIO.md).
 
 ### CLI authentication tooling
 

@@ -116,6 +116,10 @@ Non-human callers should use short-lived OIDC application tokens and normal
 authority sessions. ThimbleDB does not expose a static global admin key or a
 browser-held write credential.
 
+Studio is served as static package assets and communicates only with
+authority endpoints. It starts read-only, requires explicit scope selection,
+and cannot use `thimble.admin` to bypass a missing scope grant.
+
 See [Authentication and identity](AUTHENTICATION.md).
 
 ## Revocation

@@ -7,6 +7,7 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:5173`.
+Open `http://127.0.0.1:5173/studio/` for the packaged Studio.
 
 The local authority:
 
@@ -15,6 +16,7 @@ The local authority:
 - enables the development identity only outside production
 - stores encrypted user-scoped data
 - configures a snapshot collection with title and modification-time indexes
+- proxies `/api` and `/studio` so the app and Studio share an origin
 
 Run the project check:
 

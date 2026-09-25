@@ -50,6 +50,27 @@ can publish a new HEAD without index references because it does not maintain
 them. After the rollout, run `npx thimbledb rebuild-indexes` while writes are
 quiescent.
 
+## Version 3.0
+
+Version 3.0 adds the optional ThimbleDB Studio frontend and its
+authority-managed metadata and maintenance endpoints.
+
+- Studio assets ship in the main npm package.
+- Node authorities can serve `/studio/` directly.
+- Cloudflare deployments can copy the same assets into their Worker asset
+  build.
+- Studio APIs remain opt-in.
+- Data access still requires explicit scope grants.
+- Snapshot HEADs gain authenticated record, tombstone, and decoded-byte
+  metadata.
+- Trie branches retain string child hashes and gain an optional sibling
+  metadata map that version 2 readers ignore.
+- Existing collections require `thimbledb migrate-metadata` before bounded
+  Studio export, deleted-item listing, or scan queries.
+
+This is a major release because bounded query behavior now fails closed when
+legacy collections do not yet contain authenticated size metadata.
+
 ## Object protocol version
 
 `TDB1` is stored in every object envelope. Protocol compatibility is separate

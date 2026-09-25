@@ -39,6 +39,10 @@ Cloudflare Worker
 The browser never receives an R2 API token, AWS secret, Azure account key, or
 write-capable storage credential.
 
+The optional Studio frontend is built and versioned with the npm package. It
+uses the same browser client, object broker, sessions, and explicit scope
+grants as application code.
+
 ## Data scopes
 
 Every collection tree belongs to one access scope:

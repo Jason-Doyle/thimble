@@ -145,6 +145,20 @@ export async function createThimbleConnection(
     new URL(readBaseUrl).pathname,
     config.scope.id,
   ].join(":");
+  const sessionNamespace = [
+    config.provider,
+    new URL(readBaseUrl).origin,
+    new URL(readBaseUrl).pathname,
+  ].join(":");
+  const registry =
+    options.persistentCache === undefined &&
+    typeof indexedDB !== "undefined"
+      ? new CacheNamespaceRegistry(
+          sessionNamespace,
+          options.indexedDbName,
+        )
+      : null;
+  registry?.register(namespace);
   const memory = new NamespacedMemoryObjectCache(
     namespace,
     options.memoryCache ?? new MemoryObjectCache(),
@@ -195,6 +209,8 @@ export async function createThimbleConnection(
       : {}),
     channelName:
       options.channelName ?? `thimbledb:${namespace}`,
+    sessionChannelName:
+      `thimbledb-session:${sessionNamespace}`,
     ...(options.onLogout
       ? { onLogout: options.onLogout }
       : {}),
@@ -206,6 +222,13 @@ export async function createThimbleConnection(
     onLayoutChange:
       options.onLayoutChange ??
       (() => globalThis.location?.reload()),
+    ...(registry
+      ? {
+          onCacheDestroyed: () =>
+            registry.unregister(namespace),
+          onAuthorityLogout: () => registry.destroyAll(),
+        }
+      : {}),
   });
 
   return { client, config, cache };
@@ -418,5 +441,87 @@ class NullPersistentObjectCache implements PersistentObjectCache {
 
   destroy(): Promise<void> {
     return Promise.resolve();
+  }
+}
+
+class CacheNamespaceRegistry {
+  private readonly key: string;
+
+  constructor(
+    private readonly authorityNamespace: string,
+    private readonly databaseName?: string,
+  ) {
+    this.key =
+      `thimbledb-cache-registry:${authorityNamespace}` +
+      (databaseName ? `:${databaseName}` : "");
+  }
+
+  register(namespace: string): void {
+    const namespaces = this.namespaces();
+    namespaces.add(namespace);
+    this.write(namespaces);
+  }
+
+  unregister(namespace: string): void {
+    const namespaces = this.namespaces();
+    namespaces.delete(namespace);
+    this.write(namespaces);
+  }
+
+  async destroyAll(): Promise<void> {
+    await IndexedDbObjectCache.destroyNamespaces(
+      `${this.authorityNamespace}:`,
+      this.databaseName,
+    );
+    this.write(new Set());
+  }
+
+  private namespaces(): Set<string> {
+    const storage = safeLocalStorage();
+    if (!storage) {
+      return new Set();
+    }
+    const encoded = storage.getItem(this.key);
+    if (!encoded) {
+      return new Set();
+    }
+    try {
+      const parsed = JSON.parse(encoded) as unknown;
+      return Array.isArray(parsed)
+        ? new Set(
+            parsed.filter(
+              (value): value is string =>
+                typeof value === "string",
+            ),
+          )
+        : new Set();
+    } catch {
+      return new Set();
+    }
+  }
+
+  private write(namespaces: Set<string>): void {
+    const storage = safeLocalStorage();
+    if (!storage) {
+      return;
+    }
+    if (namespaces.size === 0) {
+      storage.removeItem(this.key);
+      return;
+    }
+    storage.setItem(
+      this.key,
+      JSON.stringify([...namespaces].sort()),
+    );
+  }
+}
+
+function safeLocalStorage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined"
+      ? null
+      : localStorage;
+  } catch {
+    return null;
   }
 }

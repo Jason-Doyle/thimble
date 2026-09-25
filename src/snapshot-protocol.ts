@@ -7,6 +7,9 @@ export type CollectionLayout = "trie" | "snapshot";
 export type SnapshotHead = {
   revision: number;
   snapshotHash: string | null;
+  records?: number;
+  tombstones?: number;
+  decodedBytes?: number;
   indexes?: SecondaryIndexReferences;
 };
 

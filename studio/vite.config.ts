@@ -1,17 +1,18 @@
 import { defineConfig } from "vite";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  root: fileURLToPath(new URL(".", import.meta.url)),
+  base: "/studio/",
   build: {
-    outDir: "dist/browser",
+    outDir: "../dist/studio",
     emptyOutDir: true,
   },
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    port: 5174,
     proxy: {
       "/api": "http://127.0.0.1:8787",
-      "/objects": "http://127.0.0.1:8787",
-      "/studio": "http://127.0.0.1:8787",
     },
   },
 });

@@ -16,11 +16,15 @@
     "THIMBLE_READ_KEY_VERSIONS": "",
     "THIMBLE_HEAD_TTL_MS": "1000",
     "THIMBLE_COLLECTION_LAYOUTS": "",
+    "THIMBLE_COLLECTIONS": "",
     "THIMBLE_RETIRED_COLLECTION_LAYOUTS": "",
     "THIMBLE_DELETE_RETENTION_DAYS": "30",
     "THIMBLE_DELETE_GRACE_DAYS": "7",
     "THIMBLE_MAINTENANCE_MODE": "false",
     "THIMBLE_ALLOWED_ORIGIN": "https://db.example.com",
+    // Optional packaged Studio:
+    // "THIMBLE_STUDIO": "true",
+    // "THIMBLE_STUDIO_ORIGIN": "https://db.example.com",
     // Optional Microsoft Entra configuration:
     // "ENTRA_TENANT_ID": "00000000-0000-0000-0000-000000000000",
     // "ENTRA_AUDIENCE": "api://your-application-id",

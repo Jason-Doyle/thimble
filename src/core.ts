@@ -38,6 +38,13 @@ export class PreconditionFailedError extends Error {
   }
 }
 
+export class BoundedReadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BoundedReadError";
+  }
+}
+
 export type EngineDiagnostics = Record<string, number>;
 
 export interface DatabaseEngine {

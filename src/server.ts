@@ -72,10 +72,22 @@ import {
   validateIndexConfiguration,
   type CollectionIndexConfiguration,
 } from "./secondary-index.js";
+import {
+  discoverStudioCollections,
+  inspectStudioIndex,
+  rebuildStudioIndexes,
+  STUDIO_API_VERSION,
+  StudioLimitError,
+  studioCollectionCatalog,
+  studioCollectionExport,
+  studioDeletedDocuments,
+  studioScopes,
+} from "./studio-api.js";
 
 type ScopeRuntime = {
   material: ScopeMaterial;
   materials: ScopeMaterial[];
+  store: ObjectStore;
   trie: ContentAddressedTrieEngine;
   snapshot: ImmutableSnapshotEngine;
 };
@@ -89,8 +101,11 @@ type ServerContext = {
   deletionPolicy: DeletionPolicy;
   collectionLayouts: Record<string, CollectionLayout>;
   collectionIndexes: CollectionIndexConfiguration;
+  collections: string[];
   layoutGeneration: string;
   maintenanceMode: boolean;
+  studioEnabled: boolean;
+  studioOrigin: string | null;
   developmentIdentity: boolean;
   oidcProviders: string[];
   scope(scopeId: string): Promise<ScopeRuntime>;
@@ -106,6 +121,9 @@ export type NodeAuthorityServer = {
 export type NodeAuthorityOptions = {
   collectionLayouts?: Record<string, CollectionLayout>;
   collectionIndexes?: CollectionIndexConfiguration;
+  collections?: string[];
+  studio?: boolean;
+  studioOrigin?: string;
 };
 
 export async function createNodeAuthorityServer(
@@ -144,20 +162,33 @@ async function createContext(
   options: NodeAuthorityOptions,
 ): Promise<ServerContext> {
   const provider = providerName();
+  const host = process.env.THIMBLE_HOST ?? "127.0.0.1";
+  const port = parseInteger(process.env.THIMBLE_PORT, 8787);
   const prefix = process.env.THIMBLE_PREFIX ?? "demo";
   const allowedOrigin =
     process.env.THIMBLE_ALLOWED_ORIGIN ??
     (provider === "local"
       ? "http://127.0.0.1:5173"
       : requiredEnvironment("THIMBLE_ALLOWED_ORIGIN"));
+  const studioEnabled =
+    options.studio ?? process.env.THIMBLE_STUDIO === "true";
+  const studioOrigin =
+    options.studioOrigin ??
+    process.env.THIMBLE_STUDIO_ORIGIN ??
+    (studioEnabled && provider === "local"
+      ? `http://${host}:${port}`
+      : null);
   const developmentIdentity = validateDevelopmentIdentity({
     enabled: process.env.THIMBLE_DEV_IDENTITY === "true",
     ...(process.env.NODE_ENV
       ? { nodeEnvironment: process.env.NODE_ENV }
       : {}),
     provider,
-    host: process.env.THIMBLE_HOST ?? "127.0.0.1",
+    host,
     allowedOrigin,
+    ...(studioOrigin
+      ? { additionalOrigins: [studioOrigin] }
+      : {}),
   });
   const stores = await createConfiguredProviderStores(provider);
   const dataRootStore = new PrefixObjectStore(stores.data, prefix);
@@ -211,6 +242,15 @@ async function createContext(
   const collectionIndexes = options.collectionIndexes
     ? validateIndexConfiguration(options.collectionIndexes)
     : configuredCollectionIndexes();
+  const collections = studioEnabled
+    ? studioCollectionCatalog({
+        collections:
+          options.collections ??
+          commaSeparatedEnvironment("THIMBLE_COLLECTIONS"),
+        collectionLayouts,
+        collectionIndexes,
+      })
+    : [];
   const layoutGeneration = createHash("sha256")
     .update(
       JSON.stringify({
@@ -257,9 +297,12 @@ async function createContext(
     deletionPolicy: configuredDeletionPolicy(),
     collectionLayouts,
     collectionIndexes,
+    collections,
     layoutGeneration,
     maintenanceMode:
       process.env.THIMBLE_MAINTENANCE_MODE === "true",
+    studioEnabled,
+    studioOrigin,
     developmentIdentity,
     oidcProviders: [...identityAdapters.keys()].filter(
       (provider) => provider !== DEVELOPMENT_IDENTITY_ADAPTER_ID,
@@ -316,6 +359,7 @@ async function createScopeRuntime(
   return {
     material,
     materials,
+    store,
     trie: new ContentAddressedTrieEngine(
       store,
       40,
@@ -538,10 +582,256 @@ async function handleRequest(
     return;
   }
 
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/studio"
+  ) {
+    requireStudioEnabled(context);
+    requireAuthenticated(authenticated);
+    sendJson(response, 200, {
+      version: STUDIO_API_VERSION,
+      provider: context.provider,
+      maintenanceMode: context.maintenanceMode,
+      layoutGeneration: context.layoutGeneration,
+      user: publicUser(authenticated),
+      scopes: studioScopes(authenticated.session.grants),
+      isAdministrator:
+        authenticated.principal.roles.includes("thimble.admin"),
+    });
+    return;
+  }
+
+  const studioCollectionsRoute =
+    /^\/api\/studio\/scopes\/([^/]+)\/collections$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "GET" &&
+    studioCollectionsRoute?.[1]
+  ) {
+    requireStudioEnabled(context);
+    requireAuthenticated(authenticated);
+    const scopeId = decodePathSegment(studioCollectionsRoute[1]);
+    requireGrant(authenticated.session.grants, scopeId, "read");
+    const runtime = await context.scope(scopeId);
+    try {
+      const page = await discoverStudioCollections({
+        runtime,
+        collections: context.collections,
+        collectionLayouts: context.collectionLayouts,
+        collectionIndexes: context.collectionIndexes,
+        offset: studioPageInteger(
+          url.searchParams.get("offset"),
+          0,
+        ),
+        limit: studioPageInteger(
+          url.searchParams.get("limit"),
+          20,
+        ),
+      });
+      sendJson(response, 200, {
+        scopeId,
+        ...page,
+      });
+    } catch (error) {
+      throw studioAuthError(error);
+    }
+    return;
+  }
+
+  const studioCollectionRoute =
+    /^\/api\/studio\/scopes\/([^/]+)\/collections\/([^/]+)\/(deleted|export|rebuild-indexes|purge-deleted)$/.exec(
+      url.pathname,
+    );
+    const studioIndexHealthRoute =
+      /^\/api\/studio\/scopes\/([^/]+)\/collections\/([^/]+)\/indexes\/([^/]+)\/health$/.exec(
+        url.pathname,
+      );
+    if (
+      request.method === "GET" &&
+      studioIndexHealthRoute?.[1] &&
+      studioIndexHealthRoute[2] &&
+      studioIndexHealthRoute[3]
+    ) {
+      requireStudioEnabled(context);
+      requireAuthenticated(authenticated);
+      const scopeId = decodePathSegment(studioIndexHealthRoute[1]);
+      requireGrant(authenticated.session.grants, scopeId, "read");
+      const collection = decodePathSegment(
+        studioIndexHealthRoute[2],
+      );
+      const indexName = decodePathSegment(
+        studioIndexHealthRoute[3],
+      );
+      const definition = context.collectionIndexes[
+        collection
+      ]?.find((candidate) => candidate.name === indexName);
+      if (!definition) {
+        throw new AuthError(
+          404,
+          "index_not_found",
+          "Configured secondary index was not found",
+        );
+      }
+      const runtime = await context.scope(scopeId);
+      sendJson(response, 200, {
+        scopeId,
+        collection,
+        index: await inspectStudioIndex({
+          runtime,
+          collection,
+          layout: context.collectionLayouts[collection] ?? "trie",
+          definition,
+        }),
+      });
+      return;
+    }
+    if (
+    request.method === "GET" &&
+    studioCollectionRoute?.[1] &&
+    studioCollectionRoute[2] &&
+    studioCollectionRoute[3] === "deleted"
+  ) {
+    requireStudioEnabled(context);
+    requireAuthenticated(authenticated);
+    const scopeId = decodePathSegment(studioCollectionRoute[1]);
+    requireGrant(authenticated.session.grants, scopeId, "read");
+    const collection = decodePathSegment(studioCollectionRoute[2]);
+    const runtime = await context.scope(scopeId);
+    try {
+      sendJson(response, 200, {
+        scopeId,
+        collection,
+        deleted: await studioDeletedDocuments({
+          engine: engineFor(
+            context,
+            runtime,
+            collection,
+          ),
+          collection,
+        }),
+      });
+    } catch (error) {
+      throw studioAuthError(error);
+    }
+    return;
+  }
+  if (
+    request.method === "GET" &&
+    studioCollectionRoute?.[1] &&
+    studioCollectionRoute[2] &&
+    studioCollectionRoute[3] === "export"
+  ) {
+    requireStudioEnabled(context);
+    requireAuthenticated(authenticated);
+    const scopeId = decodePathSegment(studioCollectionRoute[1]);
+    requireGrant(authenticated.session.grants, scopeId, "read");
+    const collection = decodePathSegment(studioCollectionRoute[2]);
+    const runtime = await context.scope(scopeId);
+    try {
+      const exported = await studioCollectionExport({
+        engine: engineFor(
+          context,
+          runtime,
+          collection,
+        ),
+        scopeId,
+        collection,
+      });
+      sendText(
+        response,
+        200,
+        exported.ndjson,
+        "application/x-ndjson; charset=utf-8",
+        {
+          "content-disposition":
+            `attachment; filename="${safeDownloadName(scopeId)}--${collection}.ndjson"`,
+          "x-thimble-records": String(exported.manifest.records),
+          "x-thimble-sha256": exported.manifest.sha256,
+        },
+      );
+    } catch (error) {
+      throw studioAuthError(error);
+    }
+    return;
+  }
+  if (
+    request.method === "POST" &&
+    studioCollectionRoute?.[1] &&
+    studioCollectionRoute[2] &&
+    studioCollectionRoute[3] === "rebuild-indexes"
+  ) {
+    requireStudioEnabled(context);
+    requireAuthenticated(authenticated);
+    requireAdministratorSession(authenticated);
+    requireMaintenanceMode(context);
+    requireLayoutGeneration(context, request);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const scopeId = decodePathSegment(studioCollectionRoute[1]);
+    requireGrant(authenticated.session.grants, scopeId, "write");
+    const collection = decodePathSegment(studioCollectionRoute[2]);
+    const runtime = await context.scope(scopeId);
+    const result = await rebuildStudioIndexes({
+      runtime,
+      collection,
+      layout: context.collectionLayouts[collection] ?? "trie",
+      collectionIndexes: context.collectionIndexes,
+      addressNode: runtime.material.addressNode,
+    });
+    sendJson(response, 200, {
+      scopeId,
+      collection,
+      ...result,
+    });
+    return;
+  }
+  if (
+    request.method === "POST" &&
+    studioCollectionRoute?.[1] &&
+    studioCollectionRoute[2] &&
+    studioCollectionRoute[3] === "purge-deleted"
+  ) {
+    requireStudioEnabled(context);
+    requireAuthenticated(authenticated);
+    requireAdministratorSession(authenticated);
+    requireWritesEnabled(context);
+    requireLayoutGeneration(context, request);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const scopeId = decodePathSegment(studioCollectionRoute[1]);
+    requireGrant(authenticated.session.grants, scopeId, "write");
+    const collection = decodePathSegment(studioCollectionRoute[2]);
+    const runtime = await context.scope(scopeId);
+    const purged = await engineFor(
+      context,
+      runtime,
+      collection,
+    ).purgeDeleted(collection);
+    sendJson(response, 200, {
+      scopeId,
+      collection,
+      purged,
+    });
+    return;
+  }
 
   if (request.method === "GET" && url.pathname === "/api/config") {
     requireAuthenticated(authenticated);
-    const grant = defaultGrant(authenticated.session.grants);
+    const requestedScope = url.searchParams.get("scope");
+    const grant = requestedScope
+      ? requireGrant(
+          authenticated.session.grants,
+          requestedScope,
+          "read",
+        )
+      : defaultGrant(authenticated.session.grants);
     const runtime = await context.scope(grant.scopeId);
     sendJson(response, 200, {
       name: "ThimbleDB",
@@ -890,6 +1180,28 @@ async function handleRequest(
 
   if (request.method === "GET" || request.method === "HEAD") {
     if (
+      context.studioEnabled &&
+      url.pathname === "/studio"
+    ) {
+      response.writeHead(308, {
+        ...securityHeaders(),
+        location: "/studio/",
+      });
+      response.end();
+      return;
+    }
+    if (
+      context.studioEnabled &&
+      url.pathname.startsWith("/studio/") &&
+      (await serveStudioAsset(
+        url.pathname,
+        request.method,
+        response,
+      ))
+    ) {
+      return;
+    }
+    if (
       await serveBrowserAsset(
         url.pathname,
         request.method,
@@ -936,7 +1248,10 @@ function requireMutationRequest(
   request: IncomingMessage,
   csrfToken?: string,
 ): void {
-  if (request.headers.origin !== context.allowedOrigin) {
+  if (
+    request.headers.origin !== context.allowedOrigin &&
+    request.headers.origin !== context.studioOrigin
+  ) {
     throw new AuthError(403, "origin_rejected", "Request was rejected");
   }
   const contentType = request.headers["content-type"] ?? "";
@@ -1069,6 +1384,42 @@ function requireAdministratorSession(
   if (!authenticated.principal.roles.includes("thimble.admin")) {
     throw new AuthError(403, "administrator_required", "Access denied");
   }
+}
+
+function requireStudioEnabled(context: ServerContext): void {
+  if (!context.studioEnabled) {
+    throw new AuthError(
+      404,
+      "studio_disabled",
+      "ThimbleDB Studio is disabled",
+    );
+  }
+}
+
+function studioAuthError(error: unknown): Error {
+  return error instanceof StudioLimitError
+    ? new AuthError(413, "studio_limit", error.message)
+    : error instanceof Error
+      ? error
+      : new Error(String(error));
+}
+
+function studioPageInteger(
+  value: string | null,
+  fallback: number,
+): number {
+  if (value === null) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new AuthError(
+      400,
+      "invalid_request",
+      "Invalid Studio collection page",
+    );
+  }
+  return parsed;
 }
 
 function requireWritesEnabled(context: ServerContext): void {
@@ -1426,6 +1777,27 @@ function sendJson(
   response.end(body);
 }
 
+function sendText(
+  response: ServerResponse,
+  status: number,
+  body: string,
+  contentType: string,
+  additionalHeaders: Record<string, string> = {},
+): void {
+  response.writeHead(status, {
+    ...securityHeaders(),
+    ...additionalHeaders,
+    "content-type": contentType,
+    "content-length": Buffer.byteLength(body),
+    "cache-control": "no-store",
+  });
+  response.end(body);
+}
+
+function safeDownloadName(value: string): string {
+  return value.replace(/[^A-Za-z0-9._-]+/g, "_");
+}
+
 function securityHeaders(): Record<string, string> {
   return {
     "content-security-policy":
@@ -1451,6 +1823,7 @@ async function serveBrowserAsset(
   if (!filePath.startsWith(`${root}${path.sep}`) && filePath !== root) {
     return false;
   }
+
   try {
     if ((await stat(filePath)).isDirectory()) {
       filePath = path.join(filePath, "index.html");
@@ -1473,6 +1846,76 @@ async function serveBrowserAsset(
   } catch {
     return false;
   }
+}
+
+async function serveStudioAsset(
+  pathname: string,
+  method: string,
+  response: ServerResponse,
+): Promise<boolean> {
+  const root = await studioAssetRoot();
+  if (!root) {
+    return false;
+  }
+  const relativePath =
+    pathname === "/studio/"
+      ? "index.html"
+      : pathname.slice("/studio/".length);
+  let filePath = path.resolve(root, relativePath);
+  if (!filePath.startsWith(`${root}${path.sep}`)) {
+    return false;
+  }
+  try {
+    if ((await stat(filePath)).isDirectory()) {
+      filePath = path.join(filePath, "index.html");
+    }
+  } catch {
+    filePath = path.join(root, "index.html");
+  }
+  try {
+    const bytes = await readFile(filePath);
+    response.writeHead(200, {
+      ...securityHeaders(),
+      "content-type": mimeType(filePath),
+      "content-length": bytes.byteLength,
+      "cache-control": filePath.endsWith("index.html")
+        ? "no-cache"
+        : "public, max-age=31536000, immutable",
+    });
+    response.end(method === "HEAD" ? undefined : bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function studioAssetRoot(): Promise<string | null> {
+  const moduleDirectory = path.dirname(
+    fileURLToPath(import.meta.url),
+  );
+  const candidates =
+    path.basename(moduleDirectory) === "src"
+      ? [
+          path.resolve(
+            moduleDirectory,
+            "..",
+            "dist",
+            "studio",
+          ),
+        ]
+      : [path.resolve(moduleDirectory, "..", "studio")];
+  for (const candidate of candidates) {
+    try {
+      if (
+        (await stat(path.join(candidate, "index.html"))).isFile()
+      ) {
+        return candidate;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 function mimeType(filePath: string): string {
@@ -1633,6 +2076,13 @@ function configuredCollectionIndexes(): CollectionIndexConfiguration {
   return parseIndexConfiguration(
     process.env.THIMBLE_COLLECTION_INDEXES,
   );
+}
+
+function commaSeparatedEnvironment(name: string): string[] {
+  return (process.env[name] ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function engineFor(

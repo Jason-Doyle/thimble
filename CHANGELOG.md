@@ -6,6 +6,24 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 3.0.0 - 2026-09-25
+
+- Added the optional ThimbleDB Studio management frontend to the npm package.
+- Added explicit-scope collection discovery, layout and revision metadata,
+  index-health inspection, retained-deletion listing, and checksummed NDJSON
+  export.
+- Added read-only-first document browsing, bounded query construction, query
+  plan display, guarded editing, deletion, and restore.
+- Added guarded index rebuild and expired-deletion purge actions.
+- Added direct Node hosting at `/studio/` and a CLI command for copying the
+  same assets into Cloudflare or another static host.
+- Required explicit scope write access in addition to `thimble.admin` for
+  scope maintenance operations.
+- Added authenticated snapshot and trie metadata for pre-read record,
+  tombstone, and decoded-byte bounds.
+- Added `thimbledb migrate-metadata` for upgrading existing collections while
+  authorities are quiescent.
+
 ## 2.1.0 - 2026-09-24
 
 - Added a ready browser client factory and used it in the reference browser.

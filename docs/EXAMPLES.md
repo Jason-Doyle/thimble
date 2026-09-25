@@ -49,6 +49,7 @@ The scaffold includes:
 - indexed lookup and ordering
 - deletion and restore
 - Vite development server
+- same-origin packaged Studio at `http://127.0.0.1:5173/studio/`
 
 Standalone templates:
 

@@ -142,6 +142,10 @@ minimal browser panel. Administrators can:
 Administrative changes increment the account security version and revoke
 existing sessions. They do not change credentials or provider-owned MFA.
 
+Administrative maintenance endpoints can act on a named scope without
+returning its documents. The `thimble.admin` role does not grant document
+browsing or mutation access through normal data endpoints.
+
 ## Scope grants
 
 The default authorizer grants:
@@ -217,6 +221,9 @@ keep their generated IDs stable. The output is not applied automatically.
 For non-human callers and live administration tools, see
 [Machine and service access](SERVICE-ACCESS.md).
 
+The optional [ThimbleDB Studio](STUDIO.md) uses these same sessions and
+grants. `thimble.admin` does not make ungranted data scopes visible.
+
 ## HTTP API
 
 | Route | Authentication | Purpose |
@@ -262,6 +269,7 @@ The authority refuses this configuration when:
 - the provider is not local
 - the authority host is not loopback
 - the allowed browser origin is not loopback
+- an additional Studio origin is not loopback
 
 The development route issues a normal HttpOnly session backed by an encrypted
 user scope. It does not simulate production OIDC claims and is unavailable in

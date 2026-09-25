@@ -6,7 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
-RUN npm run build:client && npm run build:server
+RUN npm run build:client && npm run build:studio && npm run build:server
 RUN AWS_SDK_VERSION="$(node -p "require('./node_modules/@aws-sdk/client-s3/package.json').version")" \
   && AZURE_SDK_VERSION="$(node -p "require('./node_modules/@azure/storage-blob/package.json').version")" \
   && npm prune --omit=dev \

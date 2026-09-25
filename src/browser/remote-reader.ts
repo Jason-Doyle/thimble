@@ -54,6 +54,16 @@ export interface ByteObjectReader {
   ): Promise<RemoteByteObject>;
 }
 
+export class HttpObjectReadError extends Error {
+  constructor(
+    readonly status: number,
+    readonly key: string,
+  ) {
+    super(`Object read failed with ${status} for ${key}`);
+    this.name = "HttpObjectReadError";
+  }
+}
+
 export class HttpByteObjectReader implements ByteObjectReader {
   constructor(
     private readonly baseUrl: string,
@@ -98,9 +108,7 @@ export class HttpByteObjectReader implements ByteObjectReader {
       return { status: "missing", key };
     }
     if (!response.ok) {
-      throw new Error(
-        `Object read failed with ${response.status} for ${key}`,
-      );
+      throw new HttpObjectReadError(response.status, key);
     }
 
     const bytes = new Uint8Array(await response.arrayBuffer());

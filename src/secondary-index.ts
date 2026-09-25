@@ -50,6 +50,7 @@ export type CollectionIndexConfiguration = Record<
 export type SecondaryIndexReference = {
   hash: string;
   entries: number;
+  decodedBytes?: number;
 };
 
 export type SecondaryIndexReferences = Record<

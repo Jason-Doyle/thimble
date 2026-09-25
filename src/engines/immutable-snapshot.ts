@@ -1,11 +1,12 @@
-import type {
-  DatabaseEngine,
-  DeletionPolicy,
-  EngineDiagnostics,
-  JsonDocument,
-  JsonValue,
-  ObjectStore,
-  StoredObject,
+import {
+  BoundedReadError,
+  type DatabaseEngine,
+  type DeletionPolicy,
+  type EngineDiagnostics,
+  type JsonDocument,
+  type JsonValue,
+  type ObjectStore,
+  type StoredObject,
 } from "../core.js";
 import {
   createDictionary,
@@ -231,6 +232,70 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     );
   }
 
+  async exportStoredBounded(
+    collection: string,
+    maxRecords: number,
+    maxBytes: number,
+    maxTombstones?: number,
+  ): Promise<TrieStoredDocument[]> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    if (!head.state.snapshotHash) {
+      return [];
+    }
+    if (
+      typeof head.state.records !== "number" ||
+      typeof head.state.tombstones !== "number" ||
+      typeof head.state.decodedBytes !== "number"
+    ) {
+      throw new BoundedReadError(
+        "Snapshot size metadata is unavailable; rewrite the collection before using bounded Studio export",
+      );
+    }
+    if (head.state.records > maxRecords) {
+      throw new BoundedReadError(
+        `Bounded stored-document read exceeded ${maxRecords} records`,
+      );
+    }
+    if (head.state.decodedBytes > maxBytes) {
+      throw new BoundedReadError(
+        `Bounded stored-document read exceeded ${maxBytes} bytes`,
+      );
+    }
+    if (
+      maxTombstones !== undefined &&
+      head.state.tombstones > maxTombstones
+    ) {
+      throw new BoundedReadError(
+        `Bounded stored-document read exceeded ${maxTombstones} tombstones`,
+      );
+    }
+    const object = await this.store.get(
+      snapshotPageKey(
+        normalized,
+        head.state.snapshotHash,
+      ),
+    );
+    if (!object) {
+      throw new Error(
+        `Snapshot ${head.state.snapshotHash} is missing`,
+      );
+    }
+    const page = decodeJson<SnapshotPage>(object.bytes);
+    const documents = Object.values(page.documents);
+    if (
+      documents.length !== head.state.records ||
+      documents.filter(isTrieTombstone).length !==
+        head.state.tombstones ||
+      object.bytes.byteLength !== head.state.decodedBytes
+    ) {
+      throw new Error("Snapshot size metadata does not match its page");
+    }
+    return documents.sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+  }
+
   async replaceStored(
     collection: string,
     documents: TrieStoredDocument[],
@@ -372,6 +437,11 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       const nextHead: SnapshotHead = {
         revision: loaded.head.state.revision + 1,
         snapshotHash,
+        records: Object.keys(documents).length,
+        tombstones:
+          Object.values(documents).filter(isTrieTombstone).length,
+        decodedBytes:
+          snapshotHash === null ? 0 : pageBytes.byteLength,
         ...(Object.keys(indexes).length > 0
           ? { indexes }
           : {}),
@@ -463,31 +533,30 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     const definitions = this.indexConfiguration[collection] ?? [];
     const references =
       createDictionary<SecondaryIndexReference>();
-    await Promise.all(
-      definitions.map(async (definition) => {
-        const page = buildSecondaryIndexPage(
-          definition,
-          documents,
+    for (const definition of definitions) {
+      const page = buildSecondaryIndexPage(
+        definition,
+        documents,
+      );
+      const bytes = encodeJson(page as unknown as JsonValue);
+      const hash = await this.addressSnapshot(bytes);
+      try {
+        await this.store.put(
+          snapshotIndexKey(collection, definition.name, hash),
+          bytes,
+          { ifNoneMatch: true },
         );
-        const bytes = encodeJson(page as unknown as JsonValue);
-        const hash = await this.addressSnapshot(bytes);
-        try {
-          await this.store.put(
-            snapshotIndexKey(collection, definition.name, hash),
-            bytes,
-            { ifNoneMatch: true },
-          );
-        } catch (error) {
-          if (!isPreconditionFailure(error)) {
-            throw error;
-          }
+      } catch (error) {
+        if (!isPreconditionFailure(error)) {
+          throw error;
         }
-        references[definition.name] = {
-          hash,
-          entries: page.entries.length,
-        };
-      }),
-    );
+      }
+      references[definition.name] = {
+        hash,
+        entries: page.entries.length,
+        decodedBytes: bytes.byteLength,
+      };
+    }
     return references;
   }
 

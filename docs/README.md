@@ -17,6 +17,7 @@
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
 | [Authentication](AUTHENTICATION.md) | External identity mappings, sessions, and scope grants |
 | [Machine and service access](SERVICE-ACCESS.md) | Entra role generation, service principals, live viewers, and the admin-key boundary |
+| [ThimbleDB Studio](STUDIO.md) | Packaged management frontend, explicit scope controls, queries, indexes, exports, and maintenance |
 | [Deletion and retention](DELETION-RETENTION.md) | Tombstones, restore windows, scope erasure, and quiescent collection |
 | [Adaptive layouts](ADAPTIVE-LAYOUTS.md) | Snapshot/trie evidence, recommendations, and migration |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |

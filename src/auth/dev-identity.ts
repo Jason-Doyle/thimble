@@ -13,6 +13,7 @@ export function validateDevelopmentIdentity(options: {
   provider: string;
   host: string;
   allowedOrigin: string;
+  additionalOrigins?: string[];
 }): boolean {
   if (!options.enabled) {
     return false;
@@ -32,11 +33,16 @@ export function validateDevelopmentIdentity(options: {
       "THIMBLE_DEV_IDENTITY requires a loopback THIMBLE_HOST",
     );
   }
-  const origin = new URL(options.allowedOrigin);
-  if (!isLoopbackHostname(origin.hostname)) {
-    throw new Error(
-      "THIMBLE_DEV_IDENTITY requires a loopback THIMBLE_ALLOWED_ORIGIN",
-    );
+  for (const configuredOrigin of [
+    options.allowedOrigin,
+    ...(options.additionalOrigins ?? []),
+  ]) {
+    const origin = new URL(configuredOrigin);
+    if (!isLoopbackHostname(origin.hostname)) {
+      throw new Error(
+        "THIMBLE_DEV_IDENTITY requires every allowed origin to be loopback",
+      );
+    }
   }
   return true;
 }

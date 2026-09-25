@@ -97,6 +97,14 @@ Use the explicit index migration when removing or redefining an index.
 
 See [Queries and secondary indexes](QUERIES-INDEXES.md).
 
+Studio can inspect index health and apply the configured index set while the
+authority is in maintenance mode. The caller still needs explicit write
+access to the selected scope. See [ThimbleDB Studio](STUDIO.md).
+
+After upgrading a pre-version-3 deployment, run `npx thimbledb
+migrate-metadata` for each scope while writes are blocked. This adds the
+authenticated bounds required by Studio and bounded scan queries.
+
 ## Retention maintenance
 
 Document and scope erasure use a 30-day restore window and seven-day purge

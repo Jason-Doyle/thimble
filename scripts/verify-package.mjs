@@ -6,6 +6,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -121,8 +122,28 @@ try {
       consumer,
       "node_modules",
       "thimbledb",
+      "dist",
+      "package",
+      "metadata-migrate.js",
+    ),
+  );
+  await assertPresent(
+    path.join(
+      consumer,
+      "node_modules",
+      "thimbledb",
       "scripts",
       "generate-entra-roles.mjs",
+    ),
+  );
+  await assertPresent(
+    path.join(
+      consumer,
+      "node_modules",
+      "thimbledb",
+      "dist",
+      "studio",
+      "index.html",
     ),
   );
   runCliVersion(consumer, rootPackage.version);
@@ -394,5 +415,21 @@ function runCliVersion(cwd, expectedVersion) {
     manifest.appRoles?.length !== 4
   ) {
     throw new Error("Package CLI role manifest is malformed");
+  }
+  const studioDirectory = path.join(cwd, "studio-assets");
+  const studio = spawnSync(
+    process.execPath,
+    [cli, "studio-assets", studioDirectory],
+    {
+      cwd,
+      encoding: "utf8",
+      stdio: "inherit",
+    },
+  );
+  if (
+    studio.status !== 0 ||
+    !existsSync(path.join(studioDirectory, "index.html"))
+  ) {
+    throw new Error("Package CLI Studio asset verification failed");
   }
 }

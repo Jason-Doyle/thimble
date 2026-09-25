@@ -106,6 +106,8 @@ try {
     ), "web"),
   );
   await waitForUrl("http://127.0.0.1:5173/");
+  await waitForUrl("http://127.0.0.1:8787/studio/");
+  await waitForUrl("http://127.0.0.1:5173/studio/");
 
   const browser = await chromium.launch();
   try {
@@ -142,6 +144,14 @@ try {
       })
       .click();
     await page.getByText("Indexed note").waitFor();
+    await page.goto("http://127.0.0.1:5173/studio/", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.locator(".brand").waitFor();
+    await page
+      .locator("#collections")
+      .getByRole("button", { name: "notes", exact: true })
+      .waitFor();
   } finally {
     await browser.close();
   }

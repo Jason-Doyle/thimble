@@ -21,6 +21,8 @@ const [command = "help", ...args] = process.argv.slice(2);
 
 if (command === "create") {
   await createProject(args);
+} else if (command === "studio-assets") {
+  await copyStudioAssets(args);
 } else if (command === "doctor") {
   await doctor();
 } else if (
@@ -54,6 +56,16 @@ if (command === "create") {
     },
   );
   await migration.rebuildIndexesFromEnvironment();
+} else if (command === "migrate-metadata") {
+  const migration = await import(
+    "../dist/package/metadata-migrate.js"
+  ).catch((error) => {
+    throw new Error(
+      "Metadata migration requires the built or published ThimbleDB package",
+      { cause: error },
+    );
+  });
+  await migration.migrateMetadataFromEnvironment();
 } else if (command === "generate-entra-roles") {
   const generator = await import(
     "../scripts/generate-entra-roles.mjs"
@@ -134,6 +146,7 @@ async function doctor() {
       value: "not found",
     });
   }
+
   if (currentPackage) {
     checks.push({
       name: "Project package.json",
@@ -166,6 +179,35 @@ async function doctor() {
   if (failed.length > 0) {
     process.exitCode = 1;
   }
+}
+
+async function copyStudioAssets(args) {
+  const directoryArgument = args.find(
+    (argument) => !argument.startsWith("--"),
+  );
+  if (!directoryArgument) {
+    throw new Error(
+      "Usage: thimbledb studio-assets <directory>",
+    );
+  }
+  const destination = path.resolve(directoryArgument);
+  const source = path.join(packageRoot, "dist", "studio");
+  try {
+    await stat(path.join(source, "index.html"));
+  } catch (error) {
+    throw new Error(
+      "Studio assets require the built or published ThimbleDB package",
+      { cause: error },
+    );
+  }
+  await requireEmptyDestination(destination);
+  await mkdir(destination, { recursive: true });
+  await cp(
+    source,
+    destination,
+    { recursive: true },
+  );
+  console.log(`Copied ThimbleDB Studio assets to ${destination}`);
 }
 
 async function requireEmptyDestination(destination) {
@@ -236,6 +278,7 @@ function printHelp() {
 ThimbleDB ${packageJson.version}
 
   thimbledb create <directory> [--no-install]
+  thimbledb studio-assets <directory>
   thimbledb doctor
   thimbledb export --scope <id> --collections <a,b> --out <directory>
   thimbledb validate --archive <directory>
@@ -243,6 +286,7 @@ ThimbleDB ${packageJson.version}
   thimbledb ingest --from <json|csv|lowdb|sqlite|postgres|firestore> --scope <id> --collection <name> --out <archive>
   thimbledb emit --to <json|csv|lowdb|sqlite|postgres|firestore> --archive <directory> --scope <id> --collection <name>
   thimbledb rebuild-indexes
+  thimbledb migrate-metadata
   thimbledb generate-entra-roles [--out <file>] [--force]
   thimbledb --version
 `);

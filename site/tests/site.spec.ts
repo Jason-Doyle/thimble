@@ -112,6 +112,7 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(llmsText).toContain("Queries and indexes");
   expect(llmsText).toContain("Logical migration");
   expect(llmsText).toContain("Machine and service access");
+  expect(llmsText).toContain("ThimbleDB Studio");
 
   const full = await request.get("/llms-full.txt");
   expect(full.ok()).toBe(true);
@@ -120,6 +121,7 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(fullText).toContain("# Queries and secondary indexes");
   expect(fullText).toContain("# Logical migration");
   expect(fullText).toContain("# Machine and service access");
+  expect(fullText).toContain("# ThimbleDB Studio");
 
   await page.goto("/vibe-coded-apps/");
   await expect(

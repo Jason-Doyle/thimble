@@ -13,6 +13,7 @@ import type {
   JsonObjectReader,
   RemoteJsonObject,
 } from "../src/browser/remote-reader.js";
+import { HttpObjectReadError } from "../src/browser/remote-reader.js";
 import {
   snapshotHeadKey,
   snapshotPageKey,
@@ -103,6 +104,213 @@ describe("ThimbleDB browser client", () => {
     }
   });
 
+  it("rejects oversized snapshot scans from HEAD metadata before page fetch", async () => {
+    const collection = "settings";
+    const reader = new FakeReader(
+      new Map([
+        [
+          snapshotHeadKey(collection),
+          {
+            etag: "head",
+            value: {
+              revision: 1,
+              snapshotHash: "snapshot-large",
+              records: 2,
+              tombstones: 0,
+              decodedBytes: 100,
+            },
+          },
+        ],
+        [
+          snapshotPageKey(collection, "snapshot-large"),
+          {
+            etag: "page",
+            value: {
+              documents: {
+                one: { id: "one" },
+                two: { id: "two" },
+              },
+            },
+          },
+        ],
+      ]),
+    );
+    const cache = cacheFor("content", uniqueName());
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 10_000,
+      channelName: uniqueName(),
+      collectionLayouts: { settings: "snapshot" },
+    });
+
+    try {
+      await expect(
+        client.collection("settings").query({
+          version: 1,
+          maxScanDocuments: 1,
+        }),
+      ).rejects.toThrow("above the configured maximum");
+      expect(reader.calls).toBe(1);
+    } finally {
+      client.close();
+      await cache.clearAll();
+    }
+  });
+
+  it("validates snapshot tombstone metadata before bounded queries", async () => {
+    const collection = "settings";
+    const page = {
+      documents: {
+        one: { id: "one", value: "visible" },
+        two: {
+          id: "two",
+          __thimbleTombstone: {
+            deletedAt: "2026-09-24T00:00:00.000Z",
+            restoreUntil: "2026-10-24T00:00:00.000Z",
+            purgeAfter: "2026-10-31T00:00:00.000Z",
+          },
+          document: { id: "two", value: "deleted" },
+        },
+      },
+    };
+    const reader = new FakeReader(
+      new Map([
+        [
+          snapshotHeadKey(collection),
+          {
+            etag: "head",
+            value: {
+              revision: 2,
+              snapshotHash: "snapshot-deleted",
+              records: 2,
+              tombstones: 1,
+              decodedBytes: Buffer.byteLength(
+                JSON.stringify(page),
+              ),
+            },
+          },
+        ],
+        [
+          snapshotPageKey(collection, "snapshot-deleted"),
+          {
+            etag: "page",
+            value: page,
+          },
+        ],
+      ]),
+    );
+    const cache = cacheFor("content", uniqueName());
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 10_000,
+      channelName: uniqueName(),
+      collectionLayouts: { settings: "snapshot" },
+    });
+
+    try {
+      await expect(
+        client.collection("settings").query({
+          version: 1,
+          maxScanDocuments: 1,
+        }),
+      ).resolves.toMatchObject({
+        documents: [{ id: "one", value: "visible" }],
+        scannedDocuments: 1,
+      });
+    } finally {
+      client.close();
+      await cache.clearAll();
+    }
+  });
+
+  it.each([
+    [
+      "stored records",
+      {
+        records: 1_001,
+        tombstones: 1_000,
+        decodedBytes: 100,
+        maximum: 1,
+      },
+    ],
+    [
+      "tombstones",
+      {
+        records: 1_002,
+        tombstones: 1_001,
+        decodedBytes: 100,
+        maximum: 2_000,
+      },
+    ],
+    [
+      "decoded bytes",
+      {
+        records: 1,
+        tombstones: 0,
+        decodedBytes: 16 * 1024 * 1024 + 1,
+        maximum: 1,
+      },
+    ],
+  ])(
+    "rejects snapshot %s bounds before page fetch",
+    async (_label, metadata) => {
+      const collection = "settings";
+      const reader = new FakeReader(
+        new Map([
+          [
+            snapshotHeadKey(collection),
+            {
+              etag: "head",
+              value: {
+                revision: 1,
+                snapshotHash: "snapshot-oversized",
+                records: metadata.records,
+                tombstones: metadata.tombstones,
+                decodedBytes: metadata.decodedBytes,
+              },
+            },
+          ],
+          [
+            snapshotPageKey(collection, "snapshot-oversized"),
+            {
+              etag: "page",
+              value: {
+                documents: {
+                  one: { id: "one" },
+                },
+              },
+            },
+          ],
+        ]),
+      );
+      const cache = cacheFor("content", uniqueName());
+      const client = new ThimbleClient({
+        reader,
+        cache,
+        headTtlMs: 10_000,
+        channelName: uniqueName(),
+        collectionLayouts: { settings: "snapshot" },
+      });
+
+      try {
+        await expect(
+          client.collection("settings").query({
+            version: 1,
+            maxScanDocuments: metadata.maximum,
+          }),
+        ).rejects.toThrow(
+          "stored-record, tombstone, or byte limits",
+        );
+        expect(reader.calls).toBe(1);
+      } finally {
+        client.close();
+        await cache.clearAll();
+      }
+    },
+  );
+
   it("caches only routing objects under the locations policy", async () => {
     const fixture = trieFixture("products", "product-00002");
     const reader = new FakeReader(fixture.objects);
@@ -176,6 +384,73 @@ describe("ThimbleDB browser client", () => {
       client.close();
       await cache.clearAll();
     }
+  });
+
+  it("does not use offline fallback after authorization rejection", async () => {
+    const firstFixture = trieFixture("products", "product-auth");
+    const secondFixture = trieFixture("customers", "customer-auth");
+    const reader = new FakeReader(
+      new Map([
+        ...firstFixture.objects,
+        ...secondFixture.objects,
+      ]),
+    );
+    const cache = cacheFor("content", uniqueName());
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 0,
+      channelName: uniqueName(),
+    });
+
+    try {
+      await client.get("products", firstFixture.id);
+      await client.get("customers", secondFixture.id);
+      reader.error = new HttpObjectReadError(
+        401,
+        trieHeadKey("products"),
+      );
+
+      await expect(
+        client.get("products", firstFixture.id),
+      ).rejects.toMatchObject({
+        status: 401,
+      });
+      expect(client.metrics().offlineFallbacks).toBe(0);
+      await expect(
+        client.get("customers", secondFixture.id),
+      ).rejects.toThrow("logged out");
+    } finally {
+      client.close();
+      await cache.clearAll();
+    }
+  });
+
+  it("broadcasts logout across scope-specific clients", async () => {
+    const sessionChannelName = uniqueName();
+    const first = new ThimbleClient({
+      reader: new FakeReader(new Map()),
+      cache: cacheFor("content", uniqueName()),
+      headTtlMs: 0,
+      scopeId: "user:first",
+      channelName: uniqueName(),
+      sessionChannelName,
+    });
+    const second = new ThimbleClient({
+      reader: new FakeReader(new Map()),
+      cache: cacheFor("content", uniqueName()),
+      headTtlMs: 0,
+      scopeId: "tenant:second",
+      channelName: uniqueName(),
+      sessionChannelName,
+    });
+
+    await first.logout();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await expect(
+      second.get("products", "one"),
+    ).rejects.toThrow("logged out");
   });
 
   it("clearing cached objects in one tab does not invalidate another tab's device key", async () => {
@@ -270,6 +545,127 @@ describe("ThimbleDB browser client", () => {
       await fresh.get(trieHeadKey("products")),
     ).toBeNull();
     await fresh.clearAll();
+  });
+
+  it("destroys dormant legacy cache namespaces for one authority", async () => {
+    const databaseName = uniqueName();
+    const authority =
+      "local:https://authority.example.test:/api/objects";
+    const legacy = new IndexedDbObjectCache(
+      `${authority}:user:legacy`,
+      databaseName,
+    );
+    const other = new IndexedDbObjectCache(
+      "local:https://other.example.test:/api/objects:user:other",
+      databaseName,
+    );
+    const now = Date.now();
+    await legacy.set({
+      key: "content-snapshot/notes/HEAD.json",
+      etag: "legacy",
+      value: { revision: 1, snapshotHash: null },
+      cachedAt: now,
+      checkedAt: now,
+      immutable: false,
+    });
+    await other.set({
+      key: "content-snapshot/notes/HEAD.json",
+      etag: "other",
+      value: { revision: 1, snapshotHash: null },
+      cachedAt: now,
+      checkedAt: now,
+      immutable: false,
+    });
+
+    await IndexedDbObjectCache.destroyNamespaces(
+      `${authority}:`,
+      databaseName,
+    );
+
+    await expect(
+      new IndexedDbObjectCache(
+        `${authority}:user:legacy`,
+        databaseName,
+      ).get("content-snapshot/notes/HEAD.json"),
+    ).resolves.toBeNull();
+    await expect(
+      new IndexedDbObjectCache(
+        "local:https://other.example.test:/api/objects:user:other",
+        databaseName,
+      ).get("content-snapshot/notes/HEAD.json"),
+    ).resolves.toMatchObject({
+      etag: "other",
+    });
+    await other.destroy();
+  });
+
+  it("keeps read access after a denied write", async () => {
+    const fixture = trieFixture("products", "product-read-only");
+    const cache = cacheFor("content", uniqueName());
+    let authorityCleanup = 0;
+    const client = new ThimbleClient({
+      reader: new FakeReader(fixture.objects),
+      cache,
+      headTtlMs: 10_000,
+      scopeId: "tenant:read-only",
+      channelName: uniqueName(),
+      fetchImplementation: (async () =>
+        Response.json(
+          {
+            error: "scope_denied",
+            message: "Access was denied",
+          },
+          { status: 403 },
+        )) as typeof fetch,
+      onAuthorityLogout: () => {
+        authorityCleanup += 1;
+      },
+    });
+
+    await expect(
+      client.get("products", fixture.id),
+    ).resolves.toEqual(fixture.document);
+    await expect(
+      client.write("products", fixture.id, fixture.document),
+    ).rejects.toThrow("Write failed with 403");
+    await expect(
+      client.get("products", fixture.id),
+    ).resolves.toEqual(fixture.document);
+    expect(authorityCleanup).toBe(0);
+
+    await client.logout();
+    expect(authorityCleanup).toBe(1);
+  });
+
+  it("still performs authority cleanup after a scope read denial", async () => {
+    const fixture = trieFixture("products", "product-revoked");
+    const reader = new FakeReader(fixture.objects);
+    const cache = cacheFor("content", uniqueName());
+    let authorityCleanup = 0;
+    const client = new ThimbleClient({
+      reader,
+      cache,
+      headTtlMs: 0,
+      scopeId: "tenant:revoked",
+      channelName: uniqueName(),
+      sessionChannelName: uniqueName(),
+      onAuthorityLogout: () => {
+        authorityCleanup += 1;
+      },
+    });
+
+    await client.get("products", fixture.id);
+    reader.error = new HttpObjectReadError(
+      403,
+      trieHeadKey("products"),
+    );
+    await expect(
+      client.get("products", fixture.id),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(authorityCleanup).toBe(0);
+
+    await client.logout();
+    expect(authorityCleanup).toBe(1);
   });
 
   it("does not roll cached HEAD backwards when bundles arrive out of order", async () => {
@@ -439,6 +835,41 @@ describe("ThimbleDB browser client", () => {
     ).rejects.toThrow("logged out");
   });
 
+  it("retries failed non-broadcast disposal cleanup", async () => {
+    const failure = new DOMException("blocked", "InvalidStateError");
+    let attempts = 0;
+    let logoutCallbacks = 0;
+    const persistent: PersistentObjectCache = {
+      get: async () => null,
+      set: async () => undefined,
+      delete: async () => undefined,
+      clear: async () => undefined,
+      destroy: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw failure;
+        }
+      },
+    };
+    const client = new ThimbleClient({
+      reader: new FakeReader(new Map()),
+      cache: new TieredObjectCache(
+        new MemoryObjectCache(),
+        persistent,
+      ),
+      headTtlMs: 1_000,
+      channelName: uniqueName(),
+      onLogout: () => {
+        logoutCallbacks += 1;
+      },
+    });
+
+    await expect(client.dispose()).rejects.toBe(failure);
+    await expect(client.dispose()).resolves.toBeUndefined();
+    expect(attempts).toBe(2);
+    expect(logoutCallbacks).toBe(0);
+  });
+
   it("rejects stale layout clients before reading retired data", async () => {
     const fixture = trieFixture("products", "product-layout");
     const reader = new FakeReader(fixture.objects);
@@ -508,6 +939,7 @@ describe("ThimbleDB browser client", () => {
 class FakeReader implements JsonObjectReader {
   calls = 0;
   offline = false;
+  error: Error | null = null;
 
   constructor(
     private readonly objects: Map<
@@ -523,6 +955,9 @@ class FakeReader implements JsonObjectReader {
     this.calls += 1;
     if (this.offline) {
       throw new Error("offline");
+    }
+    if (this.error) {
+      throw this.error;
     }
     const object = this.objects.get(key);
     if (!object) {
