@@ -121,6 +121,150 @@ describe("typed collections", () => {
       ],
       limit: 10,
     });
+
+  });
+
+  it("requests explicit typed projections without full schema parsing", async () => {
+    type DetailedNote = Note & {
+      body: string;
+      lastModified: number;
+    };
+    const queryDocuments = vi.fn().mockResolvedValue({
+      documents: [
+        {
+          id: "note-1",
+          title: "Projected",
+        },
+      ],
+      plan: "index",
+      indexName: "by-title",
+      scannedDocuments: 1,
+    });
+    const collection = new ThimbleCollection<DetailedNote>(
+      client({ queryDocuments }),
+      defineCollection("notes"),
+    );
+    const projectedSchema = {
+      parse(value: unknown) {
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          !("id" in value) ||
+          typeof value.id !== "string" ||
+          !("title" in value) ||
+          typeof value.title !== "string"
+        ) {
+          throw new Error("Invalid projected note");
+        }
+        return value as Pick<DetailedNote, "id" | "title">;
+      },
+    };
+    const builder = collection
+      .where((note) => note.title.eq("Projected"))
+      .select(["title"], projectedSchema);
+
+    await expect(builder.get()).resolves.toMatchObject({
+      documents: [
+        {
+          id: "note-1",
+          title: "Projected",
+        },
+      ],
+    });
+    expect(queryDocuments).toHaveBeenCalledWith(
+      "notes",
+      {
+        version: 1,
+        where: {
+          field: "title",
+          operator: "eq",
+          value: "Projected",
+        },
+      },
+      ["title"],
+    );
+    expect(builder.toJSON()).toEqual({
+      query: {
+        version: 1,
+        where: {
+          field: "title",
+          operator: "eq",
+          value: "Projected",
+        },
+      },
+      select: ["title"],
+    });
+  });
+
+  it("rejects projected values that fail their projection schema", async () => {
+    type DetailedNote = Note & {
+      body: string;
+    };
+    const collection = new ThimbleCollection<DetailedNote>(
+      client({
+        queryDocuments: async () => ({
+          documents: [
+            {
+              id: "note-1",
+              title: 123,
+            } as never,
+          ],
+          plan: "index",
+          indexName: "by-title",
+          scannedDocuments: 1,
+        }),
+      }),
+      defineCollection("notes"),
+    );
+
+    await expect(
+      collection
+        .where((note) => note.title.eq("Projected"))
+        .select(["title"], {
+          parse(value: unknown) {
+            if (
+              typeof value !== "object" ||
+              value === null ||
+              !("id" in value) ||
+              typeof value.id !== "string" ||
+              !("title" in value) ||
+              typeof value.title !== "string"
+            ) {
+              throw new Error("Invalid projected note");
+            }
+            return value as Pick<
+              DetailedNote,
+              "id" | "title"
+            >;
+          },
+        })
+        .get(),
+    ).rejects.toThrow(
+      "Projection validation failed in collection notes",
+    );
+  });
+
+  it("rejects prototype-sensitive projection fields", () => {
+    type FlexibleNote = Note & {
+      __proto__?: string;
+    };
+    const collection = new ThimbleCollection<FlexibleNote>(
+      client({}),
+      defineCollection("notes"),
+    );
+
+    expect(() =>
+      collection
+        .where((note) => note.title.eq("example"))
+        .select(["__proto__"], {
+          parse(value: unknown) {
+            return value as Pick<
+              FlexibleNote,
+              "id" | "__proto__"
+            >;
+          },
+        }),
+    ).toThrow("unique safe non-ID fields");
   });
 
   it("surfaces collection and document context on validation failure", async () => {

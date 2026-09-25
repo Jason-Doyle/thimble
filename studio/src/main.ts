@@ -40,6 +40,7 @@ type StudioIndex = {
     name: string;
     fields: string[];
     mode: "equality" | "range";
+    include?: string[];
   };
   active: boolean;
   entries: number | null;
@@ -1073,7 +1074,7 @@ function renderIndexes(): void {
   }
   const table = document.createElement("table");
   table.innerHTML =
-    "<thead><tr><th>Index</th><th>Mode</th><th>Fields</th><th>Status</th><th>Entries</th></tr></thead>";
+    "<thead><tr><th>Index</th><th>Mode</th><th>Fields</th><th>Covers</th><th>Status</th><th>Entries</th></tr></thead>";
   const body = document.createElement("tbody");
   for (const index of collection.indexes) {
     const row = document.createElement("tr");
@@ -1081,6 +1082,7 @@ function renderIndexes(): void {
       index.definition.name,
       index.definition.mode,
       index.definition.fields.join(", "),
+      index.definition.include?.join(", ") ?? "None",
       index.status,
       index.entries === null ? "—" : String(index.entries),
     ]) {

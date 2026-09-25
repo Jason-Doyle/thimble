@@ -22,6 +22,8 @@ It does not hide:
 - request timing and frequency
 - predictable scope names unless the deployment makes them opaque
 - ciphertext and metadata from the storage provider or an authorised broker
+- decoded document values from the trusted authority while it executes writes,
+  maintenance, or an optional bounded read bundle
 
 ## Key hierarchy
 
@@ -144,6 +146,17 @@ All shipped browser reads use the authenticated object broker. Data and auth
 buckets remain private. This keeps session revocation effective for future
 object retrieval and avoids treating ciphertext exposure as an access-control
 boundary.
+
+Version 3.1 authorities may explicitly enable an authority-assembled bundle
+containing decoded HEAD and immutable cache values over HTTPS. Bundle responses are
+`no-store`, require the same explicit scope read grant, and are limited to four
+objects and 4 MiB decoded. The individual TDB1 object path remains available
+and is used automatically when the bundle is unavailable or rejected.
+
+The authority already holds the deployment master key for writes, index
+maintenance, key rotation, and migration. A deployment that does not trust the
+authority runtime with plaintext is outside the current ThimbleDB threat
+model.
 
 ## Secret handling
 

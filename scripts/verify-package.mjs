@@ -188,6 +188,43 @@ try {
       import { LocalObjectStore } from "thimbledb/providers/local";
       import { createArchiveManifest } from "thimbledb/migration";
 
+      type Note = {
+        id: string;
+        title: string;
+        lastModified: number;
+      };
+
+      const notes = defineCollection<Note>("notes", {
+        indexes: [
+          defineIndex<Note>(
+            "by-title",
+            ["title"],
+            "equality",
+            { include: ["lastModified"] },
+          ),
+        ],
+      });
+      const noteSummarySchema = {
+        parse(value: unknown) {
+          return value as Pick<
+            Note,
+            "id" | "title" | "lastModified"
+          >;
+        },
+      };
+
+      async function projected() {
+        const client = await createThimbleClient();
+        return client
+          .collection(notes)
+          .where((note) => note.title.eq("example"))
+          .select(
+            ["title", "lastModified"],
+            noteSummarySchema,
+          )
+          .get();
+      }
+
       void [
         ThimbleClient,
         createThimbleClient,
@@ -196,6 +233,7 @@ try {
         AuthService,
         LocalObjectStore,
         createArchiveManifest,
+        projected,
       ];
     `,
   );

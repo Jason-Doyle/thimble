@@ -23,6 +23,7 @@ import { ThimbleClient } from "./client.js";
 import {
   EnvelopeJsonObjectReader,
   HttpByteObjectReader,
+  HttpPointReadBundleReader,
   ScopedJsonObjectReader,
 } from "./remote-reader.js";
 
@@ -30,6 +31,7 @@ export type ThimbleAuthorityConfig = {
   name: string;
   provider: "local" | "azure" | "s3" | "r2";
   readBaseUrl: string;
+  readBundleBaseUrl?: string;
   headTtlMs: number;
   cachePolicy: CachePolicy;
   collectionLayouts: Record<string, CollectionLayout>;
@@ -139,6 +141,12 @@ export async function createThimbleConnection(
     config.readBaseUrl,
     configurationUrl,
   ).toString();
+  const readBundleBaseUrl = config.readBundleBaseUrl
+    ? new URL(
+        config.readBundleBaseUrl,
+        configurationUrl,
+      ).toString()
+    : null;
   const namespace = [
     config.provider,
     new URL(readBaseUrl).origin,
@@ -197,6 +205,16 @@ export async function createThimbleConnection(
   );
   const client = new ThimbleClient({
     reader,
+    ...(readBundleBaseUrl
+      ? {
+          bundleReader: new HttpPointReadBundleReader(
+            readBundleBaseUrl,
+            config.scope.id,
+            fetchImplementation,
+            configurationUrl.toString(),
+          ),
+        }
+      : {}),
     cache,
     headTtlMs: config.headTtlMs,
     csrfToken: config.csrfToken,
@@ -218,6 +236,7 @@ export async function createThimbleConnection(
     collectionIndexes: config.collectionIndexes,
     layoutGeneration: config.layoutGeneration,
     configurationUrl: configurationUrl.toString(),
+    configurationCheckedAt: Date.now(),
     layoutCheckTtlMs: options.layoutCheckTtlMs ?? 1_000,
     onLayoutChange:
       options.onLayoutChange ??
@@ -299,6 +318,9 @@ function validateConfig(value: unknown): ThimbleAuthorityConfig {
     typeof value.name !== "string" ||
     !isProvider(value.provider) ||
     typeof value.readBaseUrl !== "string" ||
+    (value.readBundleBaseUrl !== undefined &&
+      (typeof value.readBundleBaseUrl !== "string" ||
+        value.readBundleBaseUrl.length === 0)) ||
     typeof value.headTtlMs !== "number" ||
     !Number.isFinite(value.headTtlMs) ||
     value.headTtlMs < 0 ||

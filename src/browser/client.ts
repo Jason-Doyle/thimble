@@ -35,15 +35,20 @@ import {
 import {
   evaluateThimbleQuery,
   pointReadId,
+  queryFieldNames,
   validateThimbleQuery,
   type ThimbleQuery,
   type ThimbleQueryResult,
 } from "../query.js";
 import {
   idsFromSecondaryIndex,
+  documentsFromCoveringIndex,
+  encodeSecondaryIndexPage,
+  MAX_SECONDARY_INDEX_PAGE_BYTES,
   planSecondaryIndex,
   secondaryIndexDefinitionsEqual,
   secondaryIndexPageFromJson,
+  validateProjectionFields,
   type CollectionIndexConfiguration,
   type SecondaryIndexPage,
   type SecondaryIndexReference,
@@ -56,6 +61,7 @@ import {
 } from "./cache.js";
 import type {
   JsonObjectReader,
+  PointReadBundleReader,
   RemoteJsonObject,
 } from "./remote-reader.js";
 import { HttpObjectReadError } from "./remote-reader.js";
@@ -69,6 +75,9 @@ import {
 export type ThimbleClientMetrics = {
   remoteReads: number;
   remoteBytes: number;
+  bundleReads: number;
+  bundleBytes: number;
+  bundleFallbacks: number;
   notModified: number;
   missing: number;
   offlineFallbacks: number;
@@ -82,6 +91,9 @@ const MAX_BOUNDED_DECODED_BYTES = 16 * 1024 * 1024;
 export class ThimbleClient {
   private remoteReads = 0;
   private remoteBytes = 0;
+  private bundleReads = 0;
+  private bundleBytes = 0;
+  private bundleFallbacks = 0;
   private notModified = 0;
   private missing = 0;
   private offlineFallbacks = 0;
@@ -103,6 +115,7 @@ export class ThimbleClient {
   constructor(
     private readonly options: {
       reader: JsonObjectReader;
+      bundleReader?: PointReadBundleReader;
       cache: TieredObjectCache;
       headTtlMs: number;
       writeBaseUrl?: string;
@@ -120,10 +133,13 @@ export class ThimbleClient {
       collectionIndexes?: CollectionIndexConfiguration;
       layoutGeneration?: string;
       configurationUrl?: string;
+      configurationCheckedAt?: number;
       layoutCheckTtlMs?: number;
       onLayoutChange?: () => void;
     },
   ) {
+    this.layoutCheckedAt =
+      options.configurationCheckedAt ?? 0;
     this.channel =
       typeof BroadcastChannel === "undefined"
         ? null
@@ -203,17 +219,21 @@ export class ThimbleClient {
   async queryDocuments<T extends { id: string }>(
     collection: string,
     query: ThimbleQuery<T>,
+    projectionFields?: string[],
   ): Promise<ThimbleQueryResult<T>> {
     validateThimbleQuery(query);
+    if (projectionFields) {
+      validateProjectionFields(projectionFields);
+    }
     const pointId = pointReadId(query);
     if (pointId) {
       const document = await this.get(collection, pointId);
-      return {
+      return projectQueryResult({
         documents: document ? [document as unknown as T] : [],
         plan: "point",
         indexName: null,
         scannedDocuments: document ? 1 : 0,
-      };
+      }, projectionFields);
     }
     const definitions =
       this.options.collectionIndexes?.[collection] ?? [];
@@ -228,6 +248,19 @@ export class ThimbleClient {
           : await this.readHead(collection, generation);
       const reference = head.indexes?.[indexPlan.definition.name];
       if (reference) {
+        if (
+          typeof reference.decodedBytes !== "number" ||
+          reference.decodedBytes >
+            MAX_SECONDARY_INDEX_PAGE_BYTES
+        ) {
+          return projectQueryResult(evaluateThimbleQuery(
+            (await this.scanBounded(
+              collection,
+              query.maxScanDocuments ?? 1_000,
+            )) as unknown as T[],
+            query,
+          ), projectionFields);
+        }
         const page = await this.readSecondaryIndexPage(
           layout,
           collection,
@@ -236,18 +269,26 @@ export class ThimbleClient {
           generation,
         );
         if (
+          encodeSecondaryIndexPage(page).byteLength !==
+          reference.decodedBytes
+        ) {
+          throw new Error(
+            `Secondary index ${indexPlan.definition.name} size does not match its collection head`,
+          );
+        }
+        if (
           !secondaryIndexDefinitionsEqual(
             page.definition,
             indexPlan.definition,
           )
         ) {
-          return evaluateThimbleQuery(
+          return projectQueryResult(evaluateThimbleQuery(
             (await this.scanBounded(
               collection,
               query.maxScanDocuments ?? 1_000,
             )) as unknown as T[],
             query,
-          );
+          ), projectionFields);
         }
         if (reference.entries !== page.entries.length) {
           throw new Error(
@@ -261,33 +302,45 @@ export class ThimbleClient {
             `Secondary index ${indexPlan.definition.name} matched ${ids.length} documents, above the configured maximum of ${maximum}`,
           );
         }
-        const documents = (
-          await Promise.all(
-            ids.map((id) => this.get(collection, id)),
-          )
-        ).filter(
-          (document): document is JsonDocument =>
-            document !== null,
-        ) as unknown as T[];
+        const coveredDocuments = projectionFields
+          ? documentsFromCoveringIndex(
+              page,
+              indexPlan,
+              [
+                ...queryFieldNames(query),
+                ...projectionFields,
+              ],
+            )
+          : null;
+        const documents = coveredDocuments
+          ? (coveredDocuments as unknown as T[])
+          : ((
+              await Promise.all(
+                ids.map((id) => this.get(collection, id)),
+              )
+            ).filter(
+              (document): document is JsonDocument =>
+                document !== null,
+            ) as unknown as T[]);
         const result = evaluateThimbleQuery(documents, {
           ...query,
           maxScanDocuments: maximum,
         });
-        return {
+        return projectQueryResult({
           ...result,
           plan: "index",
           indexName: indexPlan.definition.name,
           scannedDocuments: ids.length,
-        };
+        }, projectionFields);
       }
     }
-    return evaluateThimbleQuery(
+    return projectQueryResult(evaluateThimbleQuery(
       (await this.scanBounded(
         collection,
         query.maxScanDocuments ?? 1_000,
       )) as unknown as T[],
       query,
-    );
+    ), projectionFields);
   }
 
   explainQuery<T extends { id: string }>(
@@ -328,6 +381,14 @@ export class ThimbleClient {
   ): Promise<JsonDocument | null> {
     await this.ensureLayoutCurrent(false);
     const generation = this.currentGeneration();
+    const bundled = await this.readPointBundleIfCold(
+      collection,
+      id,
+      generation,
+    );
+    if (bundled.used) {
+      return bundled.document;
+    }
     if (this.layoutFor(collection) === "snapshot") {
       return this.getSnapshot(collection, id, generation);
     }
@@ -674,11 +735,13 @@ export class ThimbleClient {
     const head = bundle.objects.find((object) =>
       object.key.endsWith("/HEAD.json"),
     );
-    const bundleLayout = bundle.objects.some((object) =>
-      object.key.startsWith("content-snapshot/"),
-    )
-      ? "snapshot"
-      : "trie";
+    const bundleLayout =
+      bundle.layout ??
+      (bundle.objects.some((object) =>
+        object.key.startsWith("content-snapshot/"),
+      )
+        ? "snapshot"
+        : "trie");
     if (bundleLayout !== this.layoutFor(bundle.collection)) {
       await this.handleLayoutChange();
       throw new Error("Collection layout changed; reload required");
@@ -748,6 +811,9 @@ export class ThimbleClient {
   resetMetrics(): void {
     this.remoteReads = 0;
     this.remoteBytes = 0;
+    this.bundleReads = 0;
+    this.bundleBytes = 0;
+    this.bundleFallbacks = 0;
     this.notModified = 0;
     this.missing = 0;
     this.offlineFallbacks = 0;
@@ -758,6 +824,9 @@ export class ThimbleClient {
     return {
       remoteReads: this.remoteReads,
       remoteBytes: this.remoteBytes,
+      bundleReads: this.bundleReads,
+      bundleBytes: this.bundleBytes,
+      bundleFallbacks: this.bundleFallbacks,
       notModified: this.notModified,
       missing: this.missing,
       offlineFallbacks: this.offlineFallbacks,
@@ -1122,6 +1191,69 @@ export class ThimbleClient {
     return result;
   }
 
+  private async readPointBundleIfCold(
+    collection: string,
+    id: string,
+    generation: number,
+  ): Promise<{
+    used: boolean;
+    document: JsonDocument | null;
+  }> {
+    if (!this.options.bundleReader) {
+      return { used: false, document: null };
+    }
+    const layout = this.layoutFor(collection);
+    const headKey =
+      layout === "snapshot"
+        ? snapshotHeadKey(collection)
+        : trieHeadKey(collection);
+    const cachedHead = await this.options.cache.get(headKey);
+    this.assertGeneration(generation);
+    if (cachedHead) {
+      return { used: false, document: null };
+    }
+    this.remoteReads += 1;
+    this.bundleReads += 1;
+    let result;
+    try {
+      result = await this.options.bundleReader.get(
+        collection,
+        id,
+      );
+    } catch (error) {
+      if (
+        error instanceof HttpObjectReadError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        await this.handleAuthorizationFailure(error.status);
+      }
+      throw error;
+    }
+    this.assertGeneration(generation);
+    if (result.status === "fallback") {
+      this.bundleFallbacks += 1;
+      return { used: false, document: null };
+    }
+    this.remoteBytes += result.bytes;
+    this.bundleBytes += result.bytes;
+    if (
+      result.bundle.layout &&
+      result.bundle.layout !== layout
+    ) {
+      await this.handleLayoutChange();
+      throw new Error("Collection layout changed; reload required");
+    }
+    await this.applyBundle(
+      result.bundle,
+      false,
+      generation,
+    );
+    return {
+      used: true,
+      document: result.bundle.document,
+    };
+  }
+
   private async handleAuthorizationFailure(
     status: number,
   ): Promise<void> {
@@ -1372,6 +1504,28 @@ function cacheEntryFromRemote(
     cachedAt: now,
     checkedAt: now,
     immutable,
+  };
+}
+
+function projectQueryResult<T extends { id: string }>(
+  result: ThimbleQueryResult<T>,
+  projectionFields?: string[],
+): ThimbleQueryResult<T> {
+  if (!projectionFields) {
+    return result;
+  }
+  return {
+    ...result,
+    documents: result.documents.map((document) => {
+      const projection: JsonDocument = { id: document.id };
+      for (const field of projectionFields) {
+        const value = (document as Record<string, JsonValue>)[field];
+        if (value !== undefined) {
+          projection[field] = structuredClone(value);
+        }
+      }
+      return projection as unknown as T;
+    }),
   };
 }
 

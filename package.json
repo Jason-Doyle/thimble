@@ -1,6 +1,6 @@
 {
   "name": "thimbledb",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Browser-oriented encrypted object-storage database with Node and Cloudflare authorities.",
   "private": false,
   "license": "Apache-2.0",
@@ -57,6 +57,7 @@
     "docs/USE-CASES.md",
     "docs/use-cases",
     "docs/ADAPTIVE-LAYOUTS.md",
+    "docs/AUTHORITY-DEPLOYMENT.md",
     "docs/AUTHENTICATION.md",
     "docs/DELETION-RETENTION.md",
     "docs/PUBLIC-API.md",

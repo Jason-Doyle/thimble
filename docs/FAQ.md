@@ -36,6 +36,19 @@ includes a Node authority with local filesystem, Azure Blob Storage, Amazon
 S3, and S3-compatible adapters. The stored protocol remains the same across
 providers.
 
+## Does the authority run inside the application?
+
+It can. The authority can share the application deployment or run as a
+separate Worker, container, function, or Node service. A separate process
+should normally remain behind the same public browser origin through
+path-based routing so Strict cookies, CSRF, Studio, browser caches, and logout
+coordination retain the documented behaviour.
+
+Use an embedded authority for the smallest operational surface. Use a separate
+authority when storage-secret isolation, independent release control, failure
+isolation, or independent scaling justifies another service. See
+[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+
 ## Does ThimbleDB store passwords?
 
 No. Applications use Microsoft Entra or another OpenID Connect provider.
@@ -78,6 +91,10 @@ the tested regions. The benchmark supports browser caching and adaptive
 snapshot selection for that workload. It does not establish general
 superiority over another database.
 
+Version 3.1 can reduce an eligible cold point read to one bounded browser
+request. The request-count reduction is tested, but updated live regional
+latency evidence has not yet been published.
+
 ## Is it suitable for vibe-coded applications?
 
 It can fit focused applications that use a small number of JSON record types,
@@ -105,6 +122,10 @@ Yes, for bounded queries inside one scope and collection. Applications declare
 equality, range, or composite indexes. A typed fluent query compiles to a
 serialisable expression and uses a matching immutable index page when
 available. ID equality remains a direct point read.
+
+Indexes may declare bounded covering fields. An explicit `.select(...)` query
+can return those fields without full-document reads when every predicate,
+ordering, and selected field is covered.
 
 ThimbleDB does not provide joins, aggregates, cross-scope queries, automatic
 indexing of every field, or a general distributed query engine.

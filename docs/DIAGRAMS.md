@@ -1,6 +1,6 @@
 # System diagrams
 
-These Mermaid diagrams describe the ThimbleDB 2.1 data, identity, query,
+These Mermaid diagrams describe the ThimbleDB 3.1 data, identity, query,
 index, migration, and deployment paths.
 
 ## Trust boundaries
@@ -68,6 +68,73 @@ flowchart LR
 The browser receives decrypt-only scope keys. It never receives a storage
 credential, an authority write key, or a database-wide administrator key.
 
+## Embedded authority deployment
+
+```mermaid
+flowchart LR
+  Browser["Browser application"]
+  OIDC["External OIDC provider"]
+
+  subgraph Deployment["One application deployment"]
+    Assets["Application and Studio assets"]
+    Authority["ThimbleDB authority<br/>sessions + broker + writes"]
+    App["Application server or Worker logic"]
+  end
+
+  Data["Private application object storage"]
+  Auth["Separate private auth storage"]
+  Secrets["Master key and provider credentials"]
+
+  Browser --> Assets
+  Browser --> OIDC --> Browser
+  Browser --> App
+  Browser --> Authority
+  Authority --> Data
+  Authority --> Auth
+  Secrets --> Authority
+```
+
+Embedded mode keeps one deployment, release cadence, public origin, and
+scaling policy. Application server code and authority secrets share one
+runtime trust boundary.
+
+## Separate authority deployment
+
+```mermaid
+flowchart LR
+  Browser["Browser application"]
+  OIDC["External OIDC provider"]
+
+  subgraph Origin["One public browser origin"]
+    Gateway["Path router or application gateway"]
+  end
+
+  App["Application assets or application service"]
+
+  subgraph AuthorityService["Separate authority deployment"]
+    Authority["ThimbleDB authority"]
+    Broker["Object broker and read bundles"]
+    Mutation["Validation and conditional writes"]
+  end
+
+  Data["Private application object storage"]
+  Auth["Separate private auth storage"]
+  Secrets["Authority-only secrets"]
+
+  Browser --> OIDC --> Browser
+  Browser --> Gateway
+  Gateway -- "/" --> App
+  Gateway -- "/api/* and /studio/*" --> Authority
+  Authority --> Broker --> Data
+  Authority --> Mutation --> Data
+  Authority --> Auth
+  Secrets --> Authority
+```
+
+Separate mode isolates secrets, failures, releases, and scaling while the path
+router preserves Strict cookies, CSRF, cache namespaces, and logout
+coordination under one browser origin.
+
 ## Connection and key-grant sequence
 
 ```mermaid
@@ -105,10 +172,14 @@ flowchart TD
   Query["Typed query expression"]
   Validate["Validate version, values, limits, depth, and scan bound"]
   Point{"ID equality?"}
+  Bundle{"Cold cache and bundle endpoint available?"}
+  BundleRead["One bounded authority read bundle"]
   Index{"Matching declared index with indexable values?"}
   Head["Read collection HEAD"]
   IndexPage["Read immutable encrypted index page"]
   Candidates["Resolve bounded candidate IDs"]
+  Covered{"Explicit selected fields and all query fields covered?"}
+  Projection["Read declared projections from index page"]
   ReadDocs["Read candidate documents<br/>coalesce shared immutable reads"]
   Predicate["Re-evaluate complete predicate"]
   Scan["Read bounded collection"]
@@ -116,9 +187,13 @@ flowchart TD
   Result["Return documents and plan metadata"]
 
   Query --> Validate --> Point
-  Point -- Yes --> ReadDocs
+  Point -- Yes --> Bundle
+  Bundle -- Yes --> BundleRead --> Result
+  Bundle -- No or fallback --> ReadDocs
   Point -- No --> Index
-  Index -- Yes --> Head --> IndexPage --> Candidates --> ReadDocs
+  Index -- Yes --> Head --> IndexPage --> Candidates --> Covered
+  Covered -- Yes --> Projection --> Predicate
+  Covered -- No --> ReadDocs
   Index -- No --> Scan
   ReadDocs --> Predicate --> Order --> Result
   Scan --> Predicate
@@ -141,7 +216,12 @@ sequenceDiagram
   Client->>Client: Validate query and choose point, index, or scan plan
   Client->>Cache: Read collection HEAD
 
-  alt HEAD missing or stale
+  alt Cold point read and bundle endpoint advertised
+    Client->>Broker: GET bounded point-read bundle
+    Broker->>Broker: Require current read grant and enforce object/byte limits
+    Broker-->>Client: Decoded HEAD and immutable cache values over HTTPS
+    Client->>Cache: Store returned objects
+  else HEAD missing or stale
     Client->>Broker: GET encrypted HEAD with session
     Broker->>Store: Read object with ETag condition
     Store-->>Broker: Encrypted HEAD
@@ -153,12 +233,17 @@ sequenceDiagram
     Client->>Cache: Read referenced immutable index page
     Client->>Broker: Fetch index page on cache miss
     Client->>Client: Resolve candidate IDs within maxScan
+    alt Explicit projection is covered
+      Client->>Client: Validate predicate and order from declared projections
+      Client->>Client: Build projected documents without full-document reads
+    else Full documents required
+      Client->>Cache: Resolve snapshot once or shared trie nodes
+      Client->>Broker: Fetch only missing immutable objects
+    end
   else Scan plan
     Client->>Client: Enforce bounded collection scan
   end
 
-  Client->>Cache: Resolve snapshot once or shared trie nodes
-  Client->>Broker: Fetch only missing immutable objects
   Client->>Client: Decrypt, validate candidates, order, and limit
   Client-->>App: Documents plus point/index/scan plan
 ```

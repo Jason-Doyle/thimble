@@ -97,6 +97,7 @@ for (const name of [
   "THIMBLE_DISABLE_IP_RATE_LIMIT",
   "THIMBLE_MASTER_KEY",
   "THIMBLE_STUDIO",
+  "THIMBLE_READ_BUNDLES",
   "THIMBLE_STUDIO_ORIGIN",
   "THIMBLE_TRUSTED_PROXY_IPS",
 ]) {
@@ -115,11 +116,12 @@ Object.assign(childEnvironment, {
   THIMBLE_COLLECTION_LAYOUTS: "customers=snapshot",
   THIMBLE_COLLECTIONS: "products,customers,orders",
   THIMBLE_COLLECTION_INDEXES:
-    '{"products":[{"name":"by-sku","fields":["sku"],"mode":"equality"},{"name":"by-price","fields":["priceCents"],"mode":"range"}]}',
+    '{"products":[{"name":"by-sku","fields":["sku"],"mode":"equality","include":["name","priceCents"]},{"name":"by-price","fields":["priceCents"],"mode":"range","include":["sku","name"]}]}',
   THIMBLE_DELETE_RETENTION_DAYS: "30",
   THIMBLE_DELETE_GRACE_DAYS: "7",
   THIMBLE_MAINTENANCE_MODE: "false",
   THIMBLE_STUDIO: "true",
+  THIMBLE_READ_BUNDLES: "true",
   THIMBLE_STUDIO_ORIGIN: "http://127.0.0.1:8787",
   THIMBLE_AUTH_RATE_LIMIT: "100",
   THIMBLE_AUTH_RATE_WINDOW_MS: "60000",

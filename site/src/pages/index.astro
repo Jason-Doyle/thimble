@@ -79,7 +79,7 @@ const websiteSchema = {
         </div>
         <ul class="hero-proof" aria-label="Project facts">
           <li>Apache-2.0</li>
-          <li>16.3 KB gzip browser build</li>
+          <li>18.7 KB gzip browser build</li>
           <li>2-package base install</li>
           <li>Node.js 22+</li>
         </ul>
@@ -220,11 +220,12 @@ const websiteSchema = {
   .<span class="token-function">where</span>((note) => note.title.<span class="token-function">eq</span>(<span class="token-string">"First note"</span>))
   .<span class="token-function">orderBy</span>((note) => note.lastModified.<span class="token-function">desc</span>())
   .<span class="token-function">take</span>(<span class="token-number">25</span>)
-  .<span class="token-function">get</span>();</code></pre>
-          <p>
-            Declared indexes narrow candidates. The client checks the complete
-            predicate and falls back to a bounded scan when needed.
-          </p>
+            .<span class="token-function">select</span>([<span class="token-string">"title"</span>, <span class="token-string">"lastModified"</span>], noteCardSchema)
+            .<span class="token-function">get</span>();</code></pre>
+                    <p>
+                      Declared indexes narrow candidates. Explicit covering fields can
+                      satisfy a typed projection without loading complete documents.
+                    </p>
         </article>
       </div>
 

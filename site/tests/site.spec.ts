@@ -72,6 +72,27 @@ test("repository documentation renders with rewritten internal links", async ({
     true,
   );
   await assertNoHorizontalOverflow(page);
+
+  await page.goto("/docs/authority-deployment/");
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Authority deployment modes",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 2,
+      name: "Embedded authority",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 2,
+      name: "Separate authority service",
+    }),
+  ).toBeVisible();
+  await assertNoHorizontalOverflow(page);
 });
 
 test("documentation search returns relevant repository pages", async ({

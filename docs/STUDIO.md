@@ -197,6 +197,10 @@ Studio displays each configured index as:
 - `missing`
 - `mismatch`
 
+The index table also shows explicitly declared covering fields. Studio queries
+continue returning full documents; application code opts into covered
+projections through typed `.select(...)`.
+
 Applying configured indexes is an explicit maintenance operation. It may add,
 remove, or redefine index pages while preserving and verifying every stored
 record. Ordinary writes and other maintenance paths refuse index-set drift.

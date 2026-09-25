@@ -61,7 +61,8 @@ The optional `indexes` object maps each declared index name to one immutable
 encrypted index page and its tuple count. Document and index references are
 published together through the collection HEAD compare-and-swap.
 
-An index page contains its complete definition and sorted scalar tuples:
+An index page contains its complete definition and sorted scalar tuples.
+Version 3.1 pages may also contain explicit covering projections:
 
 ```json
 {
@@ -69,19 +70,35 @@ An index page contains its complete definition and sorted scalar tuples:
   "definition": {
     "name": "by-title",
     "fields": ["title"],
-    "mode": "equality"
+    "mode": "equality",
+    "include": ["lastModified"]
   },
   "entries": [
     {
       "values": ["First note"],
       "ids": ["note-1"]
     }
-  ]
+  ],
+  "projections": {
+    "note-1": {
+      "id": "note-1",
+      "title": "First note",
+      "lastModified": 1790300000000
+    }
+  }
 }
 ```
 
 Only string, finite number, boolean, and null values are indexed. Arrays and
-objects remain available to bounded query evaluation.
+objects remain available to bounded query evaluation. Covering projections
+contain only `id`, index key fields, and up to eight explicitly declared
+included fields. Each projection is limited to 64 KiB decoded. Ordinary
+queries ignore projections and still load complete documents.
+
+Every complete index page is limited to 4 MiB decoded. The authority validates
+the page before writing changed document objects, and browser clients use the
+authenticated HEAD `decodedBytes` value to avoid downloading oversized or
+legacy index pages.
 
 Private node addresses use HMAC-SHA-256 with a scope-derived address key.
 Public deployments still use stable opaque addresses, but confidentiality is
@@ -176,6 +193,31 @@ A successful write response contains:
 
 This removes a read-after-write round trip and lets other tabs update through
 BroadcastChannel.
+
+## Bounded point-read bundle
+
+Version 3.1 authorities with `readBundles: true` or
+`THIMBLE_READ_BUNDLES=true` advertise `/api/read-bundles` through
+`/api/config`. On a cold point read, the browser can request:
+
+```text
+GET /api/read-bundles/<scope>/<collection>/<document-id>
+```
+
+The authority:
+
+1. authenticates the current session
+2. requires an explicit read grant for the path scope
+3. resolves the current snapshot or trie document path
+4. rejects bundles above four decoded objects or 4 MiB
+5. returns the same HEAD and immutable values used by browser caches
+
+The response uses `cache-control: no-store`. It is a transport optimization,
+not a new source of truth or storage layout.
+
+Clients automatically use the individual encrypted-object broker when the
+endpoint is absent, the collection lacks authenticated size metadata, or the
+bundle exceeds its limits. Older clients ignore the advertised endpoint.
 
 ## Compatibility fixtures
 

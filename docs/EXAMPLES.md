@@ -46,6 +46,8 @@ The scaffold includes:
 - encrypted local user scope
 - typed notes collection
 - title and modification-time indexes
+- explicit covering fields for the indexed title result
+- bounded point-read bundles on cold cache misses
 - indexed lookup and ordering
 - deletion and restore
 - Vite development server

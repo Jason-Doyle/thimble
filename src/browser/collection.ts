@@ -15,6 +15,7 @@ import {
 } from "../shared-utils.js";
 import {
   validateIndexConfiguration,
+  validateProjectionFields,
   type CollectionIndexConfiguration,
   type SecondaryIndexDefinition,
 } from "../secondary-index.js";
@@ -28,6 +29,11 @@ export type CollectionDefinition<T extends { id: string }> = {
   schema?: ThimbleSchema<T>;
   indexes?: SecondaryIndexDefinition[];
 };
+
+export type ProjectedDocument<
+  T extends { id: string },
+  K extends Extract<keyof T, string>,
+> = Pick<T, K | "id">;
 
 export type QueryFieldExpression<
   T extends { id: string },
@@ -74,6 +80,7 @@ export interface CollectionClient {
   queryDocuments?<T extends { id: string }>(
     collection: string,
     query: ThimbleQuery<T>,
+    projectionFields?: string[],
   ): Promise<ThimbleQueryResult<T>>;
   explainQuery?<T extends { id: string }>(
     collection: string,
@@ -206,6 +213,7 @@ export class ThimbleCollection<T extends { id: string }> {
         ),
       };
     }
+
     const pointId = pointReadId(query);
     if (pointId) {
       const document = await this.get(pointId);
@@ -217,6 +225,47 @@ export class ThimbleCollection<T extends { id: string }> {
       };
     }
     return evaluateThimbleQuery(await this.scan(), query);
+  }
+
+  async queryProjection<
+    K extends Exclude<Extract<keyof T, string>, "id">,
+  >(
+    query: ThimbleQuery<T>,
+    fields: K[],
+    schema: ThimbleSchema<ProjectedDocument<T, K>>,
+  ): Promise<ThimbleQueryResult<ProjectedDocument<T, K>>> {
+    validateProjectionFields(fields);
+    if (this.client.queryDocuments) {
+      const result = await this.client.queryDocuments(
+        this.definition.name,
+        query,
+        fields,
+      );
+      return {
+        ...result,
+        documents: result.documents.map((document) =>
+          parseProjection(
+            this.definition.name,
+            schema,
+            document,
+          ),
+        ),
+      };
+    }
+    const result = evaluateThimbleQuery(
+      await this.scan(),
+      query,
+    );
+    return {
+      ...result,
+      documents: result.documents.map((document) =>
+        parseProjection(
+          this.definition.name,
+          schema,
+          projectDocument(document, fields),
+        ),
+      ),
+    };
   }
 
   where(
@@ -360,6 +409,21 @@ export class ThimbleQueryBuilder<T extends { id: string }> {
     return this;
   }
 
+  select<
+    K extends Exclude<Extract<keyof T, string>, "id">,
+  >(
+    fields: K[],
+    schema: ThimbleSchema<ProjectedDocument<T, K>>,
+  ): ThimbleProjectionQueryBuilder<T, K> {
+    validateProjectionFields(fields);
+    return new ThimbleProjectionQueryBuilder(
+      this.collection,
+      this.queryValue,
+      fields,
+      schema,
+    );
+  }
+
   get(): Promise<ThimbleQueryResult<T>> {
     return this.collection.query(this.queryValue);
   }
@@ -370,6 +434,44 @@ export class ThimbleQueryBuilder<T extends { id: string }> {
 
   toJSON(): ThimbleQuery<T> {
     return structuredClone(this.queryValue);
+  }
+}
+
+export class ThimbleProjectionQueryBuilder<
+  T extends { id: string },
+  K extends Exclude<Extract<keyof T, string>, "id">,
+> {
+  constructor(
+    private readonly collection: ThimbleCollection<T>,
+    private readonly query: ThimbleQuery<T>,
+    private readonly fields: K[],
+    private readonly schema: ThimbleSchema<
+      ProjectedDocument<T, K>
+    >,
+  ) {}
+
+  get(): Promise<
+    ThimbleQueryResult<ProjectedDocument<T, K>>
+  > {
+    return this.collection.queryProjection(
+      this.query,
+      this.fields,
+      this.schema,
+    );
+  }
+
+  explain(): QueryPlan {
+    return this.collection.explain(this.query);
+  }
+
+  toJSON(): {
+    query: ThimbleQuery<T>;
+    select: K[];
+  } {
+    return {
+      query: structuredClone(this.query),
+      select: [...this.fields],
+    };
   }
 }
 
@@ -424,3 +526,38 @@ type QueryExpressionOperator =
       ? Operator
       : never
     : never;
+
+function parseProjection<
+  T extends { id: string },
+  K extends Extract<keyof T, string>,
+>(
+  collection: string,
+  schema: ThimbleSchema<ProjectedDocument<T, K>>,
+  value: unknown,
+): ProjectedDocument<T, K> {
+  try {
+    return schema.parse(value);
+  } catch (error) {
+    throw new Error(
+      `Projection validation failed in collection ${collection}`,
+      { cause: error },
+    );
+  }
+}
+
+function projectDocument<
+  T extends { id: string },
+  K extends Exclude<Extract<keyof T, string>, "id">,
+>(
+  document: T,
+  fields: K[],
+): ProjectedDocument<T, K> {
+  const projection = { id: document.id } as
+    ProjectedDocument<T, K>;
+  for (const field of fields) {
+    if (document[field] !== undefined) {
+      projection[field] = structuredClone(document[field]);
+    }
+  }
+  return projection;
+}

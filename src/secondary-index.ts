@@ -10,6 +10,7 @@ import type {
 } from "./query.js";
 import {
   createDictionary,
+  encodeJson,
   validateName,
 } from "./shared-utils.js";
 import {
@@ -18,17 +19,50 @@ import {
 } from "./trie-protocol.js";
 
 export type SecondaryIndexMode = "equality" | "range";
+export const MAX_COVERING_FIELDS = 8;
+export const MAX_COVERING_DOCUMENT_BYTES = 64 * 1024;
+export const MAX_SECONDARY_INDEX_PAGE_BYTES =
+  4 * 1024 * 1024;
+
+export class SecondaryIndexLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SecondaryIndexLimitError";
+  }
+}
+
+export function validateProjectionFields(
+  fields: string[],
+): string[] {
+  if (
+    fields.length < 1 ||
+    fields.length > MAX_COVERING_FIELDS ||
+    new Set(fields).size !== fields.length ||
+    !fields.every(
+      (field) => isIndexFieldName(field) && field !== "id",
+    )
+  ) {
+    throw new Error(
+      "Query projection requires 1-8 unique safe non-ID fields",
+    );
+  }
+  return [...fields];
+}
 
 export type SecondaryIndexDefinition = {
   name: string;
   fields: string[];
   mode: SecondaryIndexMode;
+  include?: string[];
 };
 
 export function defineIndex<T extends { id: string }>(
   name: string,
   fields: Array<Extract<keyof T, string>>,
   mode: SecondaryIndexMode = "equality",
+  options: {
+    include?: Array<Extract<keyof T, string>>;
+  } = {},
 ): SecondaryIndexDefinition {
   const configuration = validateIndexConfiguration({
     collection: [
@@ -36,6 +70,9 @@ export function defineIndex<T extends { id: string }>(
         name,
         fields,
         mode,
+        ...(options.include
+          ? { include: options.include }
+          : {}),
       },
     ],
   });
@@ -67,6 +104,7 @@ export type SecondaryIndexPage = {
   version: 1;
   definition: SecondaryIndexDefinition;
   entries: SecondaryIndexEntry[];
+  projections?: Record<string, JsonDocument>;
 };
 
 export type SecondaryIndexChange = {
@@ -104,15 +142,23 @@ export function validateIndexConfiguration(
         definition.fields.length > 4 ||
         new Set(definition.fields).size !==
           definition.fields.length ||
-        !definition.fields.every(
-          (field) =>
-            typeof field === "string" &&
-            /^[A-Za-z0-9_-]{1,64}$/.test(field),
-        ) ||
+        !definition.fields.every(isIndexFieldName) ||
         (definition.mode !== "equality" &&
           definition.mode !== "range") ||
         (definition.mode === "range" &&
-          definition.fields.length !== 1)
+          definition.fields.length !== 1) ||
+        (definition.include !== undefined &&
+          (!Array.isArray(definition.include) ||
+            definition.include.length < 1 ||
+            definition.include.length > MAX_COVERING_FIELDS ||
+            new Set(definition.include).size !==
+              definition.include.length ||
+            !definition.include.every(
+              (field) =>
+                isIndexFieldName(field) &&
+                field !== "id" &&
+                !definition.fields.includes(field),
+            )))
       ) {
         throw new Error(
           `Invalid secondary index configuration for ${collection}`,
@@ -123,6 +169,9 @@ export function validateIndexConfiguration(
         name: definition.name,
         fields: [...definition.fields],
         mode: definition.mode,
+        ...(definition.include
+          ? { include: [...definition.include] }
+          : {}),
       };
     });
   }
@@ -163,16 +212,20 @@ export function buildSecondaryIndexPage(
   documents: Iterable<TrieStoredDocument>,
 ): SecondaryIndexPage {
   const entries = new Map<string, SecondaryIndexEntry>();
+  const projections = definition.include
+    ? createDictionary<JsonDocument>()
+    : undefined;
   for (const stored of documents) {
     if (isTrieTombstone(stored)) {
       continue;
     }
-    addDocument(entries, definition, stored);
+    addDocument(entries, projections, definition, stored);
   }
   return {
     version: 1,
     definition,
     entries: sortEntries([...entries.values()]),
+    ...(projections ? { projections } : {}),
   };
 }
 
@@ -182,6 +235,11 @@ export function updateSecondaryIndexPage(
   changes: SecondaryIndexChange[],
 ): SecondaryIndexPage {
   const entries = new Map<string, SecondaryIndexEntry>();
+  const projections = definition.include
+    ? createDictionary<JsonDocument>(
+        current?.projections,
+      )
+    : undefined;
   for (const entry of current?.entries ?? []) {
     entries.set(indexKey(entry.values), {
       values: [...entry.values],
@@ -196,14 +254,23 @@ export function updateSecondaryIndexPage(
     }
   }
   for (const change of changes) {
+    if (projections) {
+      delete projections[change.id];
+    }
     if (change.document && !isTrieTombstone(change.document)) {
-      addDocument(entries, definition, change.document);
+      addDocument(
+        entries,
+        projections,
+        definition,
+        change.document,
+      );
     }
   }
   return {
     version: 1,
     definition,
     entries: sortEntries([...entries.values()]),
+    ...(projections ? { projections } : {}),
   };
 }
 
@@ -316,6 +383,7 @@ export function secondaryIndexPageFromJson(
   }).collection![0]!;
   const keys = new Set<string>();
   const documentIds = new Set<string>();
+  const indexedValues = new Map<string, JsonPrimitive[]>();
   const entries = value.entries.map((entry) => {
     if (
       typeof entry !== "object" ||
@@ -346,16 +414,24 @@ export function secondaryIndexPageFromJson(
         );
       }
       documentIds.add(id);
+      indexedValues.set(id, values);
     }
     return {
       values,
       ids,
     };
   });
+  const projections = parseProjections(
+    value.projections,
+    definition,
+    documentIds,
+    indexedValues,
+  );
   return {
     version: 1,
     definition,
     entries,
+    ...(projections ? { projections } : {}),
   };
 }
 
@@ -369,12 +445,18 @@ export function secondaryIndexDefinitionsEqual(
     left.fields.length === right.fields.length &&
     left.fields.every(
       (field, index) => field === right.fields[index],
+    ) &&
+    (left.include?.length ?? 0) ===
+      (right.include?.length ?? 0) &&
+    (left.include ?? []).every(
+      (field, index) => field === right.include?.[index],
     )
   );
 }
 
 function addDocument(
   entries: Map<string, SecondaryIndexEntry>,
+  projections: Record<string, JsonDocument> | undefined,
   definition: SecondaryIndexDefinition,
   document: JsonDocument,
 ): void {
@@ -393,6 +475,158 @@ function addDocument(
     entry.ids.sort();
   }
   entries.set(key, entry);
+  if (projections) {
+    projections[document.id] = projectIndexDocument(
+      definition,
+      document,
+    );
+  }
+}
+
+export function documentsFromCoveringIndex<
+  T extends { id: string },
+>(
+  page: SecondaryIndexPage,
+  plan: SecondaryIndexPlan<T>,
+  requiredFields: Iterable<string>,
+): JsonDocument[] | null {
+  if (!page.projections) {
+    return null;
+  }
+  const covered = new Set([
+    "id",
+    ...page.definition.fields,
+    ...(page.definition.include ?? []),
+  ]);
+  if (
+    [...requiredFields].some((field) => !covered.has(field))
+  ) {
+    return null;
+  }
+  const ids = idsFromSecondaryIndex(page, plan);
+  const documents: JsonDocument[] = [];
+  for (const id of ids) {
+    const projection = page.projections[id];
+    if (!projection) {
+      throw new Error(
+        `Secondary index projection is missing document ${id}`,
+      );
+    }
+    documents.push(structuredClone(projection));
+  }
+  return documents;
+}
+
+function projectIndexDocument(
+  definition: SecondaryIndexDefinition,
+  document: JsonDocument,
+): JsonDocument {
+  const projection: JsonDocument = { id: document.id };
+  for (const field of [
+    ...definition.fields,
+    ...(definition.include ?? []),
+  ]) {
+    if (document[field] !== undefined) {
+      projection[field] = structuredClone(document[field]);
+    }
+  }
+  if (
+    encodeJson(projection as unknown as JsonValue).byteLength >
+    MAX_COVERING_DOCUMENT_BYTES
+  ) {
+    throw new SecondaryIndexLimitError(
+      `Secondary index covering projection exceeds ${MAX_COVERING_DOCUMENT_BYTES} decoded bytes for ${document.id}`,
+    );
+  }
+
+  return projection;
+}
+
+export function encodeSecondaryIndexPage(
+  page: SecondaryIndexPage,
+): Uint8Array {
+  const bytes = encodeJson(page as unknown as JsonValue);
+  if (bytes.byteLength > MAX_SECONDARY_INDEX_PAGE_BYTES) {
+    throw new SecondaryIndexLimitError(
+      `Secondary index ${page.definition.name} exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} decoded bytes`,
+    );
+  }
+  return bytes;
+}
+
+function isIndexFieldName(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[A-Za-z0-9_-]{1,64}$/.test(value) &&
+    value !== "__proto__" &&
+    value !== "prototype" &&
+    value !== "constructor"
+  );
+}
+
+function parseProjections(
+  value: unknown,
+  definition: SecondaryIndexDefinition,
+  documentIds: Set<string>,
+  indexedValues: Map<string, JsonPrimitive[]>,
+): Record<string, JsonDocument> | undefined {
+  if (!definition.include) {
+    if (value !== undefined) {
+      throw new Error(
+        "Secondary index page has undeclared projections",
+      );
+    }
+    return undefined;
+  }
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new Error(
+      "Secondary index page is missing covering projections",
+    );
+  }
+  const allowedFields = new Set([
+    "id",
+    ...definition.fields,
+    ...definition.include,
+  ]);
+  const projections = createDictionary<JsonDocument>();
+  for (const [id, candidate] of Object.entries(value)) {
+    if (
+      !documentIds.has(id) ||
+      typeof candidate !== "object" ||
+      candidate === null ||
+      Array.isArray(candidate) ||
+      candidate.id !== id ||
+      Object.keys(candidate).some(
+        (field) => !allowedFields.has(field),
+      )
+    ) {
+      throw new Error(
+        "Secondary index covering projection is malformed",
+      );
+    }
+    const projection = candidate as JsonDocument;
+    const values = indexedValues.get(id)!;
+    for (let index = 0; index < definition.fields.length; index += 1) {
+      if (
+        projection[definition.fields[index]!] !== values[index]
+      ) {
+        throw new Error(
+          "Secondary index covering projection does not match its key",
+        );
+      }
+    }
+    projections[id] = structuredClone(projection);
+  }
+  if (Object.keys(projections).length !== documentIds.size) {
+    throw new Error(
+      "Secondary index page is missing covering projections",
+    );
+  }
+  return projections;
 }
 
 function flattenComparisons<T extends { id: string }>(

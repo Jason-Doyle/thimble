@@ -23,6 +23,7 @@ import {
   type RemoteJsonObject,
   type SnapshotHead,
   type TrieHead,
+  MAX_SECONDARY_INDEX_PAGE_BYTES,
 } from "../src/index.js";
 import { LocalObjectStore } from "../src/providers/local.js";
 
@@ -31,6 +32,49 @@ type Note = {
   title: string;
   lastModified: number;
   tags?: string[];
+};
+
+const noteSummarySchema = {
+  parse(value: unknown): Pick<
+    Note,
+    "id" | "title" | "lastModified"
+  > {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("id" in value) ||
+      typeof value.id !== "string" ||
+      !("title" in value) ||
+      typeof value.title !== "string" ||
+      !("lastModified" in value) ||
+      typeof value.lastModified !== "number"
+    ) {
+      throw new Error("Invalid note summary");
+    }
+    return value as Pick<
+      Note,
+      "id" | "title" | "lastModified"
+    >;
+  },
+};
+
+const noteTagsSchema = {
+  parse(value: unknown): Pick<Note, "id" | "title" | "tags"> {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("id" in value) ||
+      typeof value.id !== "string" ||
+      !("title" in value) ||
+      typeof value.title !== "string" ||
+      !("tags" in value) ||
+      !Array.isArray(value.tags) ||
+      !value.tags.every((tag) => typeof tag === "string")
+    ) {
+      throw new Error("Invalid note tags");
+    }
+    return value as Pick<Note, "id" | "title" | "tags">;
+  },
 };
 
 const indexes: CollectionIndexConfiguration = {
@@ -209,6 +253,7 @@ describe("secondary indexes", () => {
         },
         collectionIndexes: indexes,
       });
+
       const result = await client
         .collection<Note>("notes")
         .where((note) => note.title.eq("same"))
@@ -220,6 +265,475 @@ describe("secondary indexes", () => {
       expect(
         calls.get(snapshotPageKey("notes", snapshotHash)),
       ).toBe(1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["snapshot", "trie"] as const)(
+    "maintains explicit covering projections for %s indexes",
+    async (layout) => {
+      const directory = await mkdtemp(
+        path.join(
+          os.tmpdir(),
+          `thimble-covering-${layout}-`,
+        ),
+      );
+      try {
+        const store = new LocalObjectStore(directory);
+        const covering: CollectionIndexConfiguration = {
+          notes: [
+            defineIndex<Note>(
+              "by-title",
+              ["title"],
+              "equality",
+              { include: ["lastModified"] },
+            ),
+          ],
+        };
+        const engine =
+          layout === "snapshot"
+            ? new ImmutableSnapshotEngine(
+                store,
+                40,
+                address,
+                false,
+                covering,
+              )
+            : new ContentAddressedTrieEngine(
+                store,
+                40,
+                address,
+                false,
+                covering,
+              );
+        await engine.putMany("notes", [
+          {
+            id: "note-1",
+            title: "same",
+            lastModified: 1,
+            tags: ["first"],
+          },
+          {
+            id: "note-2",
+            title: "same",
+            lastModified: 2,
+            tags: ["second"],
+          },
+        ]);
+
+        let page = await coveringPage(store, layout);
+        expect(page.projections).toEqual({
+          "note-1": {
+            id: "note-1",
+            title: "same",
+            lastModified: 1,
+          },
+          "note-2": {
+            id: "note-2",
+            title: "same",
+            lastModified: 2,
+          },
+        });
+
+        await engine.put("notes", "note-1", {
+          id: "note-1",
+          title: "same",
+          lastModified: 3,
+          tags: ["updated"],
+        });
+        page = await coveringPage(store, layout);
+        expect(page.projections?.["note-1"]).toEqual({
+          id: "note-1",
+          title: "same",
+          lastModified: 3,
+        });
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("serves an explicit projection without loading full documents", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimble-covering-query-"),
+    );
+    try {
+      const store = new LocalObjectStore(directory);
+      const covering: CollectionIndexConfiguration = {
+        notes: [
+          defineIndex<Note>(
+            "by-title",
+            ["title"],
+            "equality",
+            { include: ["lastModified"] },
+          ),
+        ],
+      };
+      const engine = new ImmutableSnapshotEngine(
+        store,
+        40,
+        address,
+        false,
+        covering,
+      );
+      await engine.putMany("notes", [
+        {
+          id: "note-1",
+          title: "same",
+          lastModified: 2,
+          tags: ["private"],
+        },
+        {
+          id: "note-2",
+          title: "same",
+          lastModified: 1,
+          tags: ["private"],
+        },
+      ]);
+      const calls = new Map<string, number>();
+      const client = new ThimbleClient({
+        reader: objectReader(store, calls),
+        cache: new TieredObjectCache(
+          new MemoryObjectCache(),
+          new NullPersistentCache(),
+        ),
+        headTtlMs: 10_000,
+        collectionLayouts: { notes: "snapshot" },
+        collectionIndexes: covering,
+      });
+
+      const result = await client
+        .collection<Note>("notes")
+        .where((note) => note.title.eq("same"))
+        .orderBy((note) => note.lastModified.asc())
+        .select(
+          ["title", "lastModified"],
+          noteSummarySchema,
+        )
+        .get();
+      const head = (await readHeadForIndex(
+        store,
+        "snapshot",
+        "by-title",
+      )) as SnapshotHead;
+
+      expect(result.plan).toBe("index");
+      expect(result.documents).toEqual([
+        {
+          id: "note-2",
+          title: "same",
+          lastModified: 1,
+        },
+        {
+          id: "note-1",
+          title: "same",
+          lastModified: 2,
+        },
+      ]);
+      expect(
+        calls.get(snapshotPageKey("notes", head.snapshotHash!)),
+      ).toBeUndefined();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("loads full documents when a selected field is not covered", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimble-covering-fallback-"),
+    );
+    try {
+      const store = new LocalObjectStore(directory);
+      const covering: CollectionIndexConfiguration = {
+        notes: [
+          defineIndex<Note>(
+            "by-title",
+            ["title"],
+            "equality",
+            { include: ["lastModified"] },
+          ),
+        ],
+      };
+      const engine = new ImmutableSnapshotEngine(
+        store,
+        40,
+        address,
+        false,
+        covering,
+      );
+      await engine.put("notes", "note-1", {
+        id: "note-1",
+        title: "same",
+        lastModified: 1,
+        tags: ["required"],
+      });
+
+      const calls = new Map<string, number>();
+      const client = new ThimbleClient({
+        reader: objectReader(store, calls),
+        cache: new TieredObjectCache(
+          new MemoryObjectCache(),
+          new NullPersistentCache(),
+        ),
+        headTtlMs: 10_000,
+        collectionLayouts: { notes: "snapshot" },
+        collectionIndexes: covering,
+      });
+
+      const result = await client
+        .collection<Note>("notes")
+        .where((note) => note.title.eq("same"))
+        .select(
+          ["title", "tags"],
+          noteTagsSchema,
+        )
+        .get();
+      const head = (await readHeadForIndex(
+        store,
+        "snapshot",
+        "by-title",
+      )) as SnapshotHead;
+
+      expect(result.documents).toEqual([
+        {
+          id: "note-1",
+          title: "same",
+          tags: ["required"],
+        },
+      ]);
+      expect(
+        calls.get(snapshotPageKey("notes", head.snapshotHash!)),
+      ).toBe(1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["snapshot", "trie"] as const)(
+    "rejects oversized %s projections before writing content objects",
+    async (layout) => {
+      const directory = await mkdtemp(
+        path.join(
+          os.tmpdir(),
+          `thimble-covering-size-${layout}-`,
+        ),
+      );
+      try {
+        const store = new LocalObjectStore(directory);
+        const covering: CollectionIndexConfiguration = {
+          notes: [
+            defineIndex<Note>(
+              "by-title",
+              ["title"],
+              "equality",
+              { include: ["tags"] },
+            ),
+          ],
+        };
+        const engine =
+          layout === "snapshot"
+            ? new ImmutableSnapshotEngine(
+                store,
+                40,
+                address,
+                false,
+                covering,
+              )
+            : new ContentAddressedTrieEngine(
+                store,
+                40,
+                address,
+                false,
+                covering,
+              );
+
+        await expect(
+          engine.put("notes", "note-1", {
+            id: "note-1",
+            title: "large",
+            lastModified: 1,
+            tags: ["x".repeat(70 * 1024)],
+          }),
+        ).rejects.toThrow(
+          "covering projection exceeds 65536 decoded bytes",
+        );
+        expect(
+          await store.list(
+            layout === "snapshot"
+              ? "content-snapshot/notes/"
+              : "content-trie/notes/",
+          ),
+        ).toEqual([]);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("rejects aggregate covering index pages above four MiB", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimble-covering-page-size-"),
+    );
+    try {
+      const store = new LocalObjectStore(directory);
+      const covering: CollectionIndexConfiguration = {
+        notes: [
+          defineIndex<Note>(
+            "by-title",
+            ["title"],
+            "equality",
+            { include: ["tags"] },
+          ),
+        ],
+      };
+      const engine = new ImmutableSnapshotEngine(
+        store,
+        40,
+        address,
+        false,
+        covering,
+      );
+
+      await expect(
+        engine.putMany(
+          "notes",
+          Array.from({ length: 70 }, (_, index) => ({
+            id: `note-${index}`,
+            title: `title-${index}`,
+            lastModified: index,
+            tags: ["x".repeat(60_000)],
+          })),
+        ),
+      ).rejects.toThrow(
+        `exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} decoded bytes`,
+      );
+      expect(
+        await store.list("content-snapshot/notes/"),
+      ).toEqual([]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("projects stale covering definitions after bounded scan fallback", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimble-covering-stale-"),
+    );
+    try {
+      const store = new LocalObjectStore(directory);
+      const oldIndexes: CollectionIndexConfiguration = {
+        notes: [
+          defineIndex<Note>("by-title", ["title"]),
+        ],
+      };
+      await new ImmutableSnapshotEngine(
+        store,
+        40,
+        address,
+        false,
+        oldIndexes,
+      ).put("notes", "note-1", {
+        id: "note-1",
+        title: "same",
+        lastModified: 1,
+        secret: "must-not-return",
+      });
+      const covering: CollectionIndexConfiguration = {
+        notes: [
+          defineIndex<Note>(
+            "by-title",
+            ["title"],
+            "equality",
+            { include: ["lastModified"] },
+          ),
+        ],
+      };
+      const result = await browserClient(
+        store,
+        "snapshot",
+        covering,
+      )
+        .collection<Note>("notes")
+        .where((note) => note.title.eq("same"))
+        .select(["title"], {
+          parse(value: unknown) {
+            return value as Pick<Note, "id" | "title">;
+          },
+        })
+        .get();
+
+      expect(result.plan).toBe("scan");
+      expect(result.documents).toEqual([
+        {
+          id: "note-1",
+          title: "same",
+        },
+      ]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("bypasses oversized index pages from authenticated HEAD metadata", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimble-index-client-size-"),
+    );
+    try {
+      const store = new LocalObjectStore(directory);
+      const engine = new ImmutableSnapshotEngine(
+        store,
+        40,
+        address,
+        false,
+        indexes,
+      );
+      await engine.put("notes", "note-1", {
+        id: "note-1",
+        title: "same",
+        lastModified: 1,
+      });
+      const headObject = await store.get(
+        snapshotHeadKey("notes"),
+      );
+      const head = JSON.parse(
+        Buffer.from(headObject!.bytes).toString("utf8"),
+      ) as SnapshotHead;
+      head.indexes!["by-title"]!.decodedBytes =
+        MAX_SECONDARY_INDEX_PAGE_BYTES + 1;
+      await store.put(
+        snapshotHeadKey("notes"),
+        Buffer.from(JSON.stringify(head)),
+        { ifMatch: headObject!.etag },
+      );
+      const calls = new Map<string, number>();
+      const client = new ThimbleClient({
+        reader: objectReader(store, calls),
+        cache: new TieredObjectCache(
+          new MemoryObjectCache(),
+          new NullPersistentCache(),
+        ),
+        headTtlMs: 10_000,
+        collectionLayouts: { notes: "snapshot" },
+        collectionIndexes: indexes,
+      });
+
+      const result = await client
+        .collection<Note>("notes")
+        .where((note) => note.title.eq("same"))
+        .get();
+      const reference = head.indexes!["by-title"]!;
+
+      expect(result.plan).toBe("scan");
+      expect(
+        calls.get(
+          snapshotIndexKey(
+            "notes",
+            "by-title",
+            reference.hash,
+          ),
+        ),
+      ).toBeUndefined();
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -327,6 +841,20 @@ describe("secondary indexes", () => {
     expect(() =>
       defineIndex<Note>("duplicate", ["title", "title"]),
     ).toThrow("Invalid secondary index configuration");
+    expect(() =>
+      defineIndex<Note>(
+        "invalid-cover",
+        ["title"],
+        "equality",
+        { include: ["title"] },
+      ),
+    ).toThrow("Invalid secondary index configuration");
+    expect(() =>
+      defineIndex<Note>(
+        "prototype-field",
+        ["__proto__" as keyof Note],
+      ),
+    ).toThrow("Invalid secondary index configuration");
 
     expect(() =>
       secondaryIndexPageFromJson({
@@ -348,6 +876,24 @@ describe("secondary indexes", () => {
         ],
       }),
     ).toThrow("duplicate document");
+
+    expect(() =>
+      secondaryIndexPageFromJson({
+        version: 1,
+        definition: {
+          name: "by-title",
+          fields: ["title"],
+          mode: "equality",
+          include: ["lastModified"],
+        },
+        entries: [
+          {
+            values: ["First"],
+            ids: ["note-1"],
+          },
+        ],
+      }),
+    ).toThrow("missing covering projections");
   });
 
   it("does not use a sparse range index for ordering alone", () => {
@@ -450,6 +996,7 @@ describe("secondary indexes", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+
   });
 
   it.each(["snapshot", "trie"] as const)(
@@ -632,6 +1179,53 @@ describe("secondary indexes", () => {
     },
   );
 });
+
+async function readHeadForIndex(
+  store: LocalObjectStore,
+  layout: "snapshot" | "trie",
+  indexName: string,
+): Promise<SnapshotHead | TrieHead> {
+  const key =
+    layout === "snapshot"
+      ? snapshotHeadKey("notes")
+      : trieHeadKey("notes");
+  const object = await store.get(key);
+  if (!object) {
+    throw new Error("Collection head is missing");
+  }
+  const head = JSON.parse(
+    Buffer.from(object.bytes).toString("utf8"),
+  ) as SnapshotHead | TrieHead;
+  if (!head.indexes?.[indexName]) {
+    throw new Error(`Index ${indexName} is missing`);
+  }
+  return head;
+}
+
+async function coveringPage(
+  store: LocalObjectStore,
+  layout: "snapshot" | "trie",
+) {
+  const head = await readHeadForIndex(
+    store,
+    layout,
+    "by-title",
+  );
+  const reference = head.indexes!["by-title"]!;
+  const key =
+    layout === "snapshot"
+      ? snapshotIndexKey("notes", "by-title", reference.hash)
+      : trieIndexKey("notes", "by-title", reference.hash);
+  const object = await store.get(key);
+  if (!object) {
+    throw new Error("Covering index page is missing");
+  }
+  return secondaryIndexPageFromJson(
+    JSON.parse(
+      Buffer.from(object.bytes).toString("utf8"),
+    ) as JsonValue,
+  );
+}
 
 async function readHead(
   store: LocalObjectStore,

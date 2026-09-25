@@ -170,6 +170,24 @@ describe("Cloudflare Worker request parsing", () => {
     await expect(missingOrigin.json()).resolves.toMatchObject({
       error: "origin_rejected",
     });
+
+    const disabledBundle = await createCloudflareAuthority().fetch(
+      new Request(
+        "https://db.example.test/api/read-bundles/public/notes/note-1",
+      ),
+      environment as never,
+    );
+    expect(disabledBundle.status).toBe(404);
+
+    const bundle = await createCloudflareAuthority({
+      readBundles: true,
+    }).fetch(
+      new Request(
+        "https://db.example.test/api/read-bundles/public/notes/note-1",
+      ),
+      environment as never,
+    );
+    expect(bundle.status).toBe(401);
   });
 
   it("does not apply Studio catalog limits when Studio is disabled", async () => {

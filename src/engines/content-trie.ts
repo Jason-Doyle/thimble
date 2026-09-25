@@ -30,12 +30,14 @@ import {
   type TrieLeafMetadata,
   type TrieNode,
   type TrieReadBundle,
+  type ReadBundleLimits,
   type TrieRootNode,
   type TrieStoredDocument,
   type TrieTombstone,
 } from "../trie-protocol.js";
 import {
   buildSecondaryIndexPage,
+  encodeSecondaryIndexPage,
   secondaryIndexDefinitionsEqual,
   secondaryIndexPageFromJson,
   updateSecondaryIndexPage,
@@ -56,6 +58,13 @@ type TrieUpdate = {
   document: TrieStoredDocument | null;
   first: string;
   second: string;
+};
+
+type PreparedSecondaryIndex = {
+  key: string;
+  bytes: Uint8Array;
+  name: string;
+  reference: SecondaryIndexReference;
 };
 
 export class ContentAddressedTrieEngine implements DatabaseEngine {
@@ -444,10 +453,11 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       );
     }
     const normalized = validateName(collection, "Collection");
-    const indexes = await this.writeFreshIndexes(
+    const preparedIndexes = await this.prepareFreshIndexes(
       normalized,
       documents,
     );
+    const indexes = await this.commitIndexes(preparedIndexes);
     for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
       const head = await this.loadHead(normalized);
       const nextHead: TrieHead = {
@@ -532,6 +542,11 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       ) {
         return false;
       }
+      const preparedIndexes = await this.prepareIndexes(
+        normalized,
+        head.state,
+        collapsedChanges,
+      );
       const root =
         head.state.rootHash === null
           ? this.emptyRoot()
@@ -631,10 +646,8 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         Object.keys(nextRoot.children).length === 0
           ? null
           : await this.writeNode(normalized, nextRoot);
-      const indexes = await this.writeIndexes(
-        normalized,
-        head.state,
-        collapsedChanges,
+      const indexes = await this.commitIndexes(
+        preparedIndexes,
       );
       const nextHead: TrieHead = {
         revision: head.state.revision + 1,
@@ -742,17 +755,25 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
   async readBundle(
     collection: string,
     id: string,
+    limits?: ReadBundleLimits,
   ): Promise<TrieReadBundle> {
     const normalized = validateName(collection, "Collection");
     const head = await this.loadHead(normalized);
-    const objects = [];
+    const objects: TrieReadBundle["objects"] = [];
+    let decodedBytes = 0;
 
     if (head.object !== null) {
-      objects.push({
+      decodedBytes = addBundleObject(
+        objects,
+        decodedBytes,
+        {
         key: trieHeadKey(normalized),
         etag: head.object.etag,
         value: head.state as unknown as JsonValue,
-      });
+        },
+        head.object.bytes.byteLength,
+        limits,
+      );
     }
 
     if (head.state.rootHash === null) {
@@ -762,6 +783,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         revision: head.state.revision,
         document: null,
         objects,
+        layout: "trie",
       };
     }
 
@@ -771,11 +793,17 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       head.state.rootHash,
       "root",
     );
-    objects.push({
-      key: trieNodeKey(normalized, head.state.rootHash),
-      etag: root.object.etag,
-      value: root.value as unknown as JsonValue,
-    });
+    decodedBytes = addBundleObject(
+      objects,
+      decodedBytes,
+      {
+        key: trieNodeKey(normalized, head.state.rootHash),
+        etag: root.object.etag,
+        value: root.value as unknown as JsonValue,
+      },
+      root.object.bytes.byteLength,
+      limits,
+    );
     const branchHash = root.value.children[first];
     if (!branchHash) {
       return {
@@ -784,6 +812,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         revision: head.state.revision,
         document: null,
         objects,
+        layout: "trie",
       };
     }
 
@@ -792,11 +821,17 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       branchHash,
       "branch",
     );
-    objects.push({
-      key: trieNodeKey(normalized, branchHash),
-      etag: branch.object.etag,
-      value: branch.value as unknown as JsonValue,
-    });
+    decodedBytes = addBundleObject(
+      objects,
+      decodedBytes,
+      {
+        key: trieNodeKey(normalized, branchHash),
+        etag: branch.object.etag,
+        value: branch.value as unknown as JsonValue,
+      },
+      branch.object.bytes.byteLength,
+      limits,
+    );
     const leafHash = branch.value.children[second];
     if (!leafHash) {
       return {
@@ -805,7 +840,21 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         revision: head.state.revision,
         document: null,
         objects,
+        layout: "trie",
       };
+    }
+    if (limits) {
+      const metadata = branch.value.leafMetadata?.[second];
+      if (!metadata) {
+        throw new BoundedReadError(
+          "Trie leaf size metadata is unavailable for a bounded read bundle",
+        );
+      }
+      assertBundleCapacity(
+        objects.length + 1,
+        decodedBytes + metadata.decodedBytes,
+        limits,
+      );
     }
 
     const leaf = await this.loadNodeObject<TrieLeafNode>(
@@ -813,14 +862,20 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       leafHash,
       "leaf",
     );
-    objects.push({
-      key: trieNodeKey(
-        normalized,
-        leafHash,
-      ),
-      etag: leaf.object.etag,
-      value: leaf.value as unknown as JsonValue,
-    });
+    addBundleObject(
+      objects,
+      decodedBytes,
+      {
+        key: trieNodeKey(
+          normalized,
+          leafHash,
+        ),
+        etag: leaf.object.etag,
+        value: leaf.value as unknown as JsonValue,
+      },
+      leaf.object.bytes.byteLength,
+      limits,
+    );
 
     return {
       collection: normalized,
@@ -830,6 +885,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         ownValue(leaf.value.documents, id),
       ),
       objects,
+      layout: "trie",
     };
   }
 
@@ -845,19 +901,18 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     return { object, state: decodeJson<TrieHead>(object.bytes) };
   }
 
-  private async writeIndexes(
+  private async prepareIndexes(
     collection: string,
     head: TrieHead,
     changes: SecondaryIndexChange[],
-  ): Promise<SecondaryIndexReferences> {
+  ): Promise<PreparedSecondaryIndex[]> {
     const definitions = this.indexConfiguration[collection] ?? [];
     if (definitions.length === 0) {
-      return {};
+      return [];
     }
 
     let storedDocuments: TrieStoredDocument[] | undefined;
-    const references =
-      createDictionary<SecondaryIndexReference>();
+    const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of definitions) {
       const currentReference = head.indexes?.[definition.name];
       let currentPage: SecondaryIndexPage | null = null;
@@ -909,45 +964,66 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         definition,
         changes,
       );
-      const bytes = encodeJson(page as unknown as JsonValue);
+      const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressNode(bytes);
-      try {
-        await this.store.put(
-          trieIndexKey(collection, definition.name, hash),
-          bytes,
-          { ifNoneMatch: true },
-        );
-      } catch (error) {
-        if (!isPreconditionFailure(error)) {
-          throw error;
-        }
-      }
-      references[definition.name] = {
-        hash,
-        entries: page.entries.length,
-        decodedBytes: bytes.byteLength,
-      };
+      prepared.push({
+        key: trieIndexKey(
+          collection,
+          definition.name,
+          hash,
+        ),
+        bytes,
+        name: definition.name,
+        reference: {
+          hash,
+          entries: page.entries.length,
+          decodedBytes: bytes.byteLength,
+        },
+      });
     }
-    return references;
+    return prepared;
   }
 
-  private async writeFreshIndexes(
+  private async prepareFreshIndexes(
     collection: string,
     documents: TrieStoredDocument[],
-  ): Promise<SecondaryIndexReferences> {
-    const references =
-      createDictionary<SecondaryIndexReference>();
+  ): Promise<PreparedSecondaryIndex[]> {
+    const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of this.indexConfiguration[collection] ?? []) {
       const page = buildSecondaryIndexPage(
         definition,
         documents,
       );
-      const bytes = encodeJson(page as unknown as JsonValue);
+      const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressNode(bytes);
+      prepared.push({
+        key: trieIndexKey(
+          collection,
+          definition.name,
+          hash,
+        ),
+        bytes,
+        name: definition.name,
+        reference: {
+          hash,
+          entries: page.entries.length,
+          decodedBytes: bytes.byteLength,
+        },
+      });
+    }
+    return prepared;
+  }
+
+  private async commitIndexes(
+    prepared: PreparedSecondaryIndex[],
+  ): Promise<SecondaryIndexReferences> {
+    const references =
+      createDictionary<SecondaryIndexReference>();
+    for (const index of prepared) {
       try {
         await this.store.put(
-          trieIndexKey(collection, definition.name, hash),
-          bytes,
+          index.key,
+          index.bytes,
           { ifNoneMatch: true },
         );
       } catch (error) {
@@ -955,11 +1031,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           throw error;
         }
       }
-      references[definition.name] = {
-        hash,
-        entries: page.entries.length,
-        decodedBytes: bytes.byteLength,
-      };
+      references[index.name] = index.reference;
     }
     return references;
   }
@@ -1278,6 +1350,40 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
 
   private nodeKey(collection: string, hash: string): string {
     return trieNodeKey(collection, hash);
+  }
+}
+
+function addBundleObject(
+  objects: TrieReadBundle["objects"],
+  decodedBytes: number,
+  object: TrieReadBundle["objects"][number],
+  objectBytes: number,
+  limits?: ReadBundleLimits,
+): number {
+  const nextBytes = decodedBytes + objectBytes;
+  if (limits) {
+    assertBundleCapacity(
+      objects.length + 1,
+      nextBytes,
+      limits,
+    );
+  }
+  objects.push(object);
+  return nextBytes;
+}
+
+function assertBundleCapacity(
+  objects: number,
+  decodedBytes: number,
+  limits: ReadBundleLimits,
+): void {
+  if (
+    objects > limits.maxObjects ||
+    decodedBytes > limits.maxDecodedBytes
+  ) {
+    throw new BoundedReadError(
+      `Read bundle exceeds ${limits.maxObjects} objects or ${limits.maxDecodedBytes} decoded bytes`,
+    );
   }
 }
 

@@ -33,11 +33,12 @@ scope and one collection.
 ## Architecture and security
 
 - [Architecture](${site.url}/docs/architecture/): Browser cache, authority, object storage, and scopes.
+- [Authority deployment modes](${site.url}/docs/authority-deployment/): Embedded and separate authority services, decision criteria, and same-origin requirements.
 - [Security](${site.url}/security/): Threat model, encryption, key handling, and browser boundaries.
 - [Authentication](${site.url}/docs/authentication/): External OIDC identities and revocable sessions.
 - [Machine and service access](${site.url}/docs/service-access/): Entra roles, service principals, live viewers, and why there is no global admin key.
 - [Object protocol](${site.url}/docs/protocol/): TDB1 envelopes, snapshots, tries, and conditional writes.
-- [Queries and indexes](${site.url}/docs/queries-indexes/): Typed predicates and developer-declared secondary indexes.
+- [Queries and indexes](${site.url}/docs/queries-indexes/): Typed predicates, developer-declared secondary indexes, and explicit covering projections.
 - [Deletion and retention](${site.url}/docs/deletion-retention/): Tombstones, restore windows, and physical collection.
 - [Logical migration](${site.url}/docs/migration/): Portable archives and database adapters.
 

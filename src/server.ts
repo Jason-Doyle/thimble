@@ -40,6 +40,7 @@ import type {
   JsonValue,
   ObjectStore,
 } from "./core.js";
+import { BoundedReadError } from "./core.js";
 import { ContentAddressedTrieEngine } from "./engines/content-trie.js";
 import { ImmutableSnapshotEngine } from "./engines/immutable-snapshot.js";
 import { EnvelopeObjectStore } from "./envelope-store.js";
@@ -69,6 +70,7 @@ import {
 import type { CollectionLayout } from "./snapshot-protocol.js";
 import {
   parseIndexConfiguration,
+  SecondaryIndexLimitError,
   validateIndexConfiguration,
   type CollectionIndexConfiguration,
 } from "./secondary-index.js";
@@ -83,6 +85,7 @@ import {
   studioDeletedDocuments,
   studioScopes,
 } from "./studio-api.js";
+import { readPointBundle } from "./read-bundle.js";
 
 type ScopeRuntime = {
   material: ScopeMaterial;
@@ -105,6 +108,7 @@ type ServerContext = {
   layoutGeneration: string;
   maintenanceMode: boolean;
   studioEnabled: boolean;
+  readBundlesEnabled: boolean;
   studioOrigin: string | null;
   developmentIdentity: boolean;
   oidcProviders: string[];
@@ -123,6 +127,7 @@ export type NodeAuthorityOptions = {
   collectionIndexes?: CollectionIndexConfiguration;
   collections?: string[];
   studio?: boolean;
+  readBundles?: boolean;
   studioOrigin?: string;
 };
 
@@ -172,6 +177,9 @@ async function createContext(
       : requiredEnvironment("THIMBLE_ALLOWED_ORIGIN"));
   const studioEnabled =
     options.studio ?? process.env.THIMBLE_STUDIO === "true";
+  const readBundlesEnabled =
+    options.readBundles ??
+    process.env.THIMBLE_READ_BUNDLES === "true";
   const studioOrigin =
     options.studioOrigin ??
     process.env.THIMBLE_STUDIO_ORIGIN ??
@@ -302,6 +310,7 @@ async function createContext(
     maintenanceMode:
       process.env.THIMBLE_MAINTENANCE_MODE === "true",
     studioEnabled,
+    readBundlesEnabled,
     studioOrigin,
     developmentIdentity,
     oidcProviders: [...identityAdapters.keys()].filter(
@@ -837,6 +846,9 @@ async function handleRequest(
       name: "ThimbleDB",
       provider: context.provider,
       readBaseUrl: "/api/objects",
+      ...(context.readBundlesEnabled
+        ? { readBundleBaseUrl: "/api/read-bundles" }
+        : {}),
       headTtlMs: context.headTtlMs,
       cachePolicy: "content",
       collectionLayouts: context.collectionLayouts,
@@ -888,6 +900,47 @@ async function handleRequest(
       algorithm: "A256GCM",
       expiresAt: authenticated.session.expiresAt,
     });
+    return;
+  }
+
+  const readBundleRoute =
+    /^\/api\/read-bundles\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "GET" &&
+    context.readBundlesEnabled &&
+    readBundleRoute?.[1] &&
+    readBundleRoute[2] &&
+    readBundleRoute[3]
+  ) {
+    requireAuthenticated(authenticated);
+    const scopeId = decodePathSegment(readBundleRoute[1]);
+    requireGrant(authenticated.session.grants, scopeId, "read");
+    const collection = decodePathSegment(readBundleRoute[2]);
+    const id = decodePathSegment(readBundleRoute[3]);
+    const runtime = await context.scope(scopeId);
+    try {
+      const bundle = await readPointBundle(
+        engineFor(context, runtime, collection),
+        collection,
+        id,
+      );
+      sendJson(response, 200, bundle, {
+        "x-thimble-bundle-objects": String(
+          bundle.objects.length,
+        ),
+      });
+    } catch (error) {
+      if (error instanceof BoundedReadError) {
+        throw new AuthError(
+          413,
+          "read_bundle_unavailable",
+          error.message,
+        );
+      }
+      throw error;
+    }
     return;
   }
 
@@ -2107,26 +2160,51 @@ function handleServerError(
   error: unknown,
   response: ServerResponse,
 ): void {
-  if (!(error instanceof AuthError && error.status < 500)) {
-    console.error(error);
+  const handledError =
+    error instanceof SecondaryIndexLimitError
+      ? new AuthError(
+          413,
+          "secondary_index_too_large",
+          error.message,
+        )
+      : error;
+  if (
+    !(
+      handledError instanceof AuthError &&
+      handledError.status < 500
+    )
+  ) {
+    console.error(handledError);
   }
   if (response.headersSent) {
     response.end();
     return;
   }
-  const status = error instanceof AuthError ? error.status : 500;
+  const status =
+    handledError instanceof AuthError
+      ? handledError.status
+      : 500;
   const headers: Record<string, string> = {};
-  if (error instanceof AuthError && error.retryAfterSeconds) {
-    headers["retry-after"] = String(error.retryAfterSeconds);
+  if (
+    handledError instanceof AuthError &&
+    handledError.retryAfterSeconds
+  ) {
+    headers["retry-after"] = String(
+      handledError.retryAfterSeconds,
+    );
   }
   sendJson(
     response,
     status,
     {
       error:
-        error instanceof AuthError ? error.code : "internal_error",
+        handledError instanceof AuthError
+          ? handledError.code
+          : "internal_error",
       message:
-        error instanceof AuthError ? error.message : "Request failed",
+        handledError instanceof AuthError
+          ? handledError.message
+          : "Request failed",
     },
     headers,
   );

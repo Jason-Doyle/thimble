@@ -10,6 +10,7 @@ const { startNodeAuthority } = await import(
 
 await startNodeAuthority({
   studio: true,
+  readBundles: true,
   collections: ["notes"],
   collectionLayouts: {
     notes: "snapshot",
@@ -20,6 +21,7 @@ await startNodeAuthority({
         name: "by-title",
         fields: ["title"],
         mode: "equality",
+        include: ["lastModified"],
       },
       {
         name: "by-last-modified",

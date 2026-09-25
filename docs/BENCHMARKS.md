@@ -62,6 +62,13 @@ with a ten-second HEAD TTL.
 - The result supports adaptive layout selection for this workload. It does not
   establish superiority over another database.
 
+Version 3.1 adds an optional bounded point-read bundle. Automated browser tests
+verify that an eligible cold trie point read uses one browser request instead
+of four and that unsupported or oversized bundles fall back to the original
+object path. No new live multi-region latency result has yet been published,
+so the request reduction is verified but its production p95 effect remains to
+be measured.
+
 ## Measurements not covered
 
 The published runs do not cover:

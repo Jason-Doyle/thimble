@@ -32,9 +32,37 @@ const noteSchema = {
   },
 };
 
+type NoteSummary = Pick<
+  Note,
+  "id" | "title" | "lastModified"
+>;
+
+const noteSummarySchema = {
+  parse(value: unknown): NoteSummary {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("id" in value) ||
+      typeof value.id !== "string" ||
+      !("title" in value) ||
+      typeof value.title !== "string" ||
+      !("lastModified" in value) ||
+      typeof value.lastModified !== "number"
+    ) {
+      throw new Error("Invalid note summary");
+    }
+    return value as NoteSummary;
+  },
+};
+
 const noteDefinition = defineCollection("notes", noteSchema, {
   indexes: [
-    defineIndex<Note>("by-title", ["title"]),
+    defineIndex<Note>(
+      "by-title",
+      ["title"],
+      "equality",
+      { include: ["lastModified"] },
+    ),
     defineIndex<Note>(
       "by-last-modified",
       ["lastModified"],
@@ -90,6 +118,10 @@ element<HTMLButtonElement>("filter").addEventListener(
         .where((note) => note.title.eq(title))
         .orderBy((note) => note.lastModified.desc())
         .take(50)
+        .select(
+          ["title", "lastModified"],
+          noteSummarySchema,
+        )
         .get();
       status.textContent =
         `${result.documents.length} notes via ${result.plan}` +
@@ -130,14 +162,21 @@ async function renderAll() {
   renderNotes(result.documents);
 }
 
-function renderNotes(items: Note[]) {
+function renderNotes(
+  items: Array<
+    Note | NoteSummary
+  >,
+) {
   notesOutput.replaceChildren(
     ...items.map((note) => {
       const article = document.createElement("article");
       const title = document.createElement("h2");
       title.textContent = note.title;
       const body = document.createElement("p");
-      body.textContent = note.body || "No body";
+      body.textContent =
+        "body" in note
+          ? note.body || "No body"
+          : "Use Show all to load the note body.";
       const metadata = document.createElement("small");
       metadata.textContent = new Date(
         note.lastModified,

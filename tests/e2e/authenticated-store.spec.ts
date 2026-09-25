@@ -5,6 +5,12 @@ test("authenticates externally, reads, writes, persists cache, and logs out", as
   browserName,
   request,
 }) => {
+  const bundleRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/read-bundles/")) {
+      bundleRequests.push(request.url());
+    }
+  });
   const subject = `${browserName}-${crypto.randomUUID()}`;
   const token = await request
     .get(
@@ -50,10 +56,52 @@ test("authenticates externally, reads, writes, persists cache, and logs out", as
     '"products": 128',
   );
 
+  const oversizedProjection = await page.evaluate(async () => {
+    const config = await fetch("/api/config", {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).then((response) => response.json()) as {
+      csrfToken: string;
+      layoutGeneration: string;
+      scope: { id: string };
+    };
+    const response = await fetch(
+      "/api/collections/products/documents/oversized-cover",
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-thimble-csrf": config.csrfToken,
+          "x-thimble-scope": config.scope.id,
+          "x-thimble-layout-generation":
+            config.layoutGeneration,
+        },
+        body: JSON.stringify({
+          id: "oversized-cover",
+          sku: "OVERSIZED",
+          name: "x".repeat(70 * 1024),
+          priceCents: 1,
+        }),
+      },
+    );
+    return {
+      status: response.status,
+      body: await response.json(),
+    };
+  });
+  expect(oversizedProjection).toMatchObject({
+    status: 413,
+    body: {
+      error: "secondary_index_too_large",
+    },
+  });
+
   await page.locator("#read-product").click();
   await expect(page.locator("#product-output")).toContainText(
     "product-00000",
   );
+  expect(bundleRequests).toHaveLength(1);
 
   await page.locator("#delete-product").click();
   await expect(page.locator("#status")).toContainText(

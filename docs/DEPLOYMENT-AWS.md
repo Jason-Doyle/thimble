@@ -8,6 +8,10 @@ AWS is a secondary deployment path. The example uses:
 
 The CloudFormation template is `deploy/aws/template.yaml`.
 
+The Lambda authority can be deployed with the application or as a separate
+service behind the same public application gateway. See
+[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+
 ## Build the Lambda image
 
 Build the Lambda-compatible image, which includes the pinned AWS Lambda Web
@@ -59,6 +63,9 @@ To serve the package-owned Studio from the same authority, set
 `THIMBLE_STUDIO=true` and configure the exact public origin in
 `THIMBLE_STUDIO_ORIGIN`.
 
+Set `THIMBLE_READ_BUNDLES=true` to advertise the bounded cold point-read
+optimization.
+
 For key rotation, deploy `KeyVersion` as the current write version and
 `ReadKeyVersions` as the comma-separated historical versions that remain
 readable.
@@ -89,6 +96,8 @@ skipped rather than collapsing all users onto the adapter loopback address.
 ## Verify
 
 - Function URL serves the application and `/api/config`.
+- `/api/config` advertises the optional bounded read-bundle route.
+- An eligible cold point read uses one browser request.
 - S3 objects are private from the S3 endpoint.
 - Brokered private object bodies start with `TDB1`.
 - The auth bucket is never browser-readable.
