@@ -40,12 +40,22 @@ same object layout.
 ```
 
 Root nodes map the first SHA-256 identifier nibble to branch addresses.
-Branches map the second nibble to leaf addresses. Leaves contain documents.
+Branches retain the version 1 mapping from second nibble to leaf hash. New
+branches may also contain an optional sibling `leafMetadata` map with stored
+record count, retained tombstone count, and decoded byte length for each leaf.
+Older readers ignore this sibling field and continue following the string
+hashes.
 
-Snapshot HEAD objects contain a revision and one immutable snapshot address.
-The snapshot stores the collection's current document dictionary. Snapshot
-layout uses two remote objects for a cold read and one immutable content object
-for full scans.
+Older branch objects without `leafMetadata` remain readable. Bounded query,
+export, and deleted-document operations require the authenticated metadata and
+fail closed until the collection is rewritten.
+
+Snapshot HEAD objects contain a revision, one immutable snapshot address,
+record count, retained tombstone count, and decoded page byte length. The
+authenticated metadata lets bounded management operations reject oversized
+snapshots before downloading and decompressing the page. Older snapshot HEADs
+without this metadata remain readable but require a collection rewrite before
+Studio export or deleted-item listing.
 
 The optional `indexes` object maps each declared index name to one immutable
 encrypted index page and its tuple count. Document and index references are

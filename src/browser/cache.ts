@@ -269,6 +269,50 @@ export class IndexedDbObjectCache implements PersistentObjectCache {
     private readonly databaseName = "thimbledb-cache-v1",
   ) {}
 
+  static async destroyNamespaces(
+    namespacePrefix: string,
+    databaseName = "thimbledb-cache-v1",
+  ): Promise<void> {
+    const database = await openCacheDatabase(databaseName);
+    try {
+      const transaction = database.transaction(
+        ["objects", "keys"],
+        "readwrite",
+      );
+      const objects = transaction.objectStore("objects");
+      const objectRequest = objects.index("namespace").openCursor();
+      objectRequest.onsuccess = () => {
+        const cursor = objectRequest.result;
+        if (!cursor) {
+          return;
+        }
+        const entry = cursor.value as PersistedCacheEntry;
+        if (entry.namespace.startsWith(namespacePrefix)) {
+          objects.delete(cursor.primaryKey);
+        }
+        cursor.continue();
+      };
+      const keys = transaction.objectStore("keys");
+      const keyRequest = keys.openKeyCursor();
+      keyRequest.onsuccess = () => {
+        const cursor = keyRequest.result;
+        if (!cursor) {
+          return;
+        }
+        if (
+          typeof cursor.primaryKey === "string" &&
+          cursor.primaryKey.startsWith(namespacePrefix)
+        ) {
+          keys.delete(cursor.primaryKey);
+        }
+        cursor.continue();
+      };
+      await transactionToPromise(transaction);
+    } finally {
+      database.close();
+    }
+  }
+
   async get(key: string): Promise<CachedJsonObject | null> {
     const database = await this.database();
     const value = await requestToPromise<PersistedCacheEntry | undefined>(
@@ -397,27 +441,17 @@ export class IndexedDbObjectCache implements PersistentObjectCache {
   }
 
   private database(): Promise<IDBDatabase> {
-    this.databasePromise ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.databaseName, 2);
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains("objects")) {
-          const store = database.createObjectStore("objects", {
-            keyPath: "cacheKey",
-          });
-          store.createIndex("namespace", "namespace", { unique: false });
-        }
-        if (!database.objectStoreNames.contains("keys")) {
-          database.createObjectStore("keys", {
-            keyPath: "keyId",
-          });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () =>
-        reject(request.error ?? new Error("Failed to open IndexedDB"));
+    if (this.databasePromise) {
+      return this.databasePromise;
+    }
+    const pending = openCacheDatabase(
+      this.databaseName,
+    ).catch((error: unknown) => {
+      this.databasePromise = undefined;
+      throw error;
     });
-    return this.databasePromise;
+    this.databasePromise = pending;
+    return pending;
   }
 
   private async deviceKey(database: IDBDatabase): Promise<CryptoKey> {
@@ -484,6 +518,36 @@ export class IndexedDbObjectCache implements PersistentObjectCache {
   private deviceKeyId(): string {
     return `${this.namespace}:device-cache-key`;
   }
+}
+
+function openCacheDatabase(
+  databaseName: string,
+): Promise<IDBDatabase> {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 2);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains("objects")) {
+        const store = database.createObjectStore("objects", {
+          keyPath: "cacheKey",
+        });
+        store.createIndex("namespace", "namespace", {
+          unique: false,
+        });
+      }
+      if (!database.objectStoreNames.contains("keys")) {
+        database.createObjectStore("keys", {
+          keyPath: "keyId",
+        });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () =>
+      reject(
+        request.error ??
+          new Error("Failed to open IndexedDB"),
+      );
+  });
 }
 
 export class TieredObjectCache {

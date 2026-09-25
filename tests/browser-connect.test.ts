@@ -1,7 +1,9 @@
+import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import {
   createThimbleConnection,
   createThimbleClient,
+  IndexedDbObjectCache,
   MemoryObjectCache,
   ThimbleClient,
   type CachedJsonObject,
@@ -238,6 +240,41 @@ describe("browser connection factory", () => {
 
     await expect(
       second.cache.get(entry.key),
+    ).resolves.toBeNull();
+  });
+
+  it("purges dormant pre-registry caches on authority logout", async () => {
+    const databaseName = `connection-${crypto.randomUUID()}`;
+    const authority =
+      "local:https://app.example.test:/api/objects";
+    const legacy = new IndexedDbObjectCache(
+      `${authority}:user:legacy`,
+      databaseName,
+    );
+    await legacy.set({
+      key: "content-snapshot/notes/HEAD.json",
+      etag: "legacy",
+      value: { revision: 1, snapshotHash: null },
+      cachedAt: Date.now(),
+      checkedAt: Date.now(),
+      immutable: false,
+    });
+    const connection = await createThimbleConnection({
+      configurationUrl: "https://app.example.test/api/config",
+      indexedDbName: databaseName,
+      fetchImplementation: () =>
+        Promise.resolve(
+          Response.json(browserConfig(false, "user:current")),
+        ),
+    });
+
+    await connection.client.logout();
+
+    await expect(
+      new IndexedDbObjectCache(
+        `${authority}:user:legacy`,
+        databaseName,
+      ).get("content-snapshot/notes/HEAD.json"),
     ).resolves.toBeNull();
   });
 });

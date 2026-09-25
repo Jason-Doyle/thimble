@@ -79,6 +79,10 @@ Generate the recommended Entra delegated scope and application roles with
 fragment with the existing application registration rather than replacing
 unrelated entries.
 
+To serve the package-owned Studio from the same Container App, set
+`THIMBLE_STUDIO=true` and set `THIMBLE_STUDIO_ORIGIN` to the exact public
+authority origin.
+
 For key rotation, set `keyVersion` to the current write version and
 `readKeyVersions` to the comma-separated historical versions that remain
 readable.

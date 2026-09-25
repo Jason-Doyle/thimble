@@ -18,6 +18,7 @@
     "src/providers/azure.ts",
     "src/providers/s3.ts",
     "src/migration/index.ts",
-    "src/index-migrate.ts"
+    "src/index-migrate.ts",
+    "src/metadata-migrate.ts"
   ]
 }

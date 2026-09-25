@@ -9,6 +9,13 @@ export type TrieRootNode = {
 export type TrieBranchNode = {
   kind: "branch";
   children: Record<string, string>;
+  leafMetadata?: Record<string, TrieLeafMetadata>;
+};
+
+export type TrieLeafMetadata = {
+  records: number;
+  tombstones: number;
+  decodedBytes: number;
 };
 
 export type TrieLeafNode = {

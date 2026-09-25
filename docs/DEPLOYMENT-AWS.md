@@ -55,6 +55,10 @@ Generate the recommended Entra delegated scope and application roles with
 machine access, use a service principal and required application role rather
 than a static global key.
 
+To serve the package-owned Studio from the same authority, set
+`THIMBLE_STUDIO=true` and configure the exact public origin in
+`THIMBLE_STUDIO_ORIGIN`.
+
 For key rotation, deploy `KeyVersion` as the current write version and
 `ReadKeyVersions` as the comma-separated historical versions that remain
 readable.

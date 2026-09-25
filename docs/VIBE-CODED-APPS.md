@@ -148,6 +148,8 @@ npm run dev
 
 The generated app includes the safe development identity, typed collection,
 declared indexes, indexed title lookup, ordering, deletion, and restore.
+The same local authority serves [ThimbleDB Studio](STUDIO.md) for inspecting
+scopes, documents, query plans, indexes, exports, and retained deletions.
 
 Then review:
 

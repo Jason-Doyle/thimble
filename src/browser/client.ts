@@ -8,16 +8,19 @@ import {
   trieIndexKey,
   trieNodeKey,
   triePathFromHash,
+  isTrieTombstone,
   visibleTrieDocument,
   type TrieBranchNode,
   type TrieHead,
   type TrieLeafNode,
+  type TrieLeafMetadata,
   type TrieNode,
   type TrieReadBundle,
   type TrieRootNode,
 } from "../trie-protocol.js";
 import {
   createDictionary,
+  encodeJson,
   ownValue,
   validateName,
 } from "../shared-utils.js";
@@ -55,6 +58,7 @@ import type {
   JsonObjectReader,
   RemoteJsonObject,
 } from "./remote-reader.js";
+import { HttpObjectReadError } from "./remote-reader.js";
 import {
   ThimbleCollection,
   type CollectionDefinition,
@@ -71,6 +75,10 @@ export type ThimbleClientMetrics = {
   cache: BrowserCacheMetrics;
 };
 
+const MAX_BOUNDED_STORED_RECORDS = 1_000;
+const MAX_BOUNDED_TOMBSTONES = 1_000;
+const MAX_BOUNDED_DECODED_BYTES = 16 * 1024 * 1024;
+
 export class ThimbleClient {
   private remoteReads = 0;
   private remoteBytes = 0;
@@ -81,11 +89,16 @@ export class ThimbleClient {
   private lifecycleGeneration = 0;
   private layoutCheckedAt = 0;
   private layoutCheckPromise: Promise<void> | undefined;
+  private cacheDestroyed = false;
+  private authorityCleanupComplete = false;
+  private cleanupPromise: Promise<void> | undefined;
+  private authorityCleanupRequested = false;
   private readonly immutableReads = new Map<
     string,
     Promise<RemoteJsonObject>
   >();
   private readonly channel: BroadcastChannel | null;
+  private readonly sessionChannel: BroadcastChannel | null;
 
   constructor(
     private readonly options: {
@@ -98,8 +111,11 @@ export class ThimbleClient {
       scopeKeyId?: string | null;
       keyExpiresAt?: string;
       channelName?: string;
+      sessionChannelName?: string;
       fetchImplementation?: typeof fetch;
       onLogout?: (error?: unknown) => void;
+      onCacheDestroyed?: () => Promise<void> | void;
+      onAuthorityLogout?: () => Promise<void> | void;
       collectionLayouts?: Record<string, CollectionLayout>;
       collectionIndexes?: CollectionIndexConfiguration;
       layoutGeneration?: string;
@@ -114,6 +130,20 @@ export class ThimbleClient {
         : new BroadcastChannel(
             options.channelName ?? "thimbledb-updates",
           );
+    this.sessionChannel =
+      typeof BroadcastChannel === "undefined" ||
+      !options.sessionChannelName
+        ? null
+        : new BroadcastChannel(options.sessionChannelName);
+    if (this.sessionChannel) {
+      this.sessionChannel.onmessage = (
+        event: MessageEvent<unknown>,
+      ) => {
+        if (isLogoutMessage(event.data)) {
+          void this.handleLogout().catch(() => undefined);
+        }
+      };
+    }
     if (this.channel) {
       this.channel.onmessage = (event: MessageEvent<unknown>) => {
         if (isReadBundle(event.data)) {
@@ -124,6 +154,10 @@ export class ThimbleClient {
           ).catch(() => undefined);
         } else if (isLogoutMessage(event.data)) {
           void this.handleLogout().catch(() => undefined);
+        } else if (isScopeLogoutMessage(event.data)) {
+          void this.handleLogout(true, false).catch(
+            () => undefined,
+          );
         } else if (isLayoutChangeMessage(event.data)) {
           void this.handleLayoutChange().catch(() => undefined);
         }
@@ -208,7 +242,10 @@ export class ThimbleClient {
           )
         ) {
           return evaluateThimbleQuery(
-            (await this.scan(collection)) as unknown as T[],
+            (await this.scanBounded(
+              collection,
+              query.maxScanDocuments ?? 1_000,
+            )) as unknown as T[],
             query,
           );
         }
@@ -245,7 +282,10 @@ export class ThimbleClient {
       }
     }
     return evaluateThimbleQuery(
-      (await this.scan(collection)) as unknown as T[],
+      (await this.scanBounded(
+        collection,
+        query.maxScanDocuments ?? 1_000,
+      )) as unknown as T[],
       query,
     );
   }
@@ -335,6 +375,7 @@ export class ThimbleClient {
     if (this.layoutFor(collection) === "snapshot") {
       return this.scanSnapshot(collection, generation);
     }
+
     const head = await this.readHead(collection, generation);
     if (head.rootHash === null) {
       return [];
@@ -385,6 +426,167 @@ export class ThimbleClient {
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
+  private async scanBounded(
+    collection: string,
+    maximum: number,
+  ): Promise<JsonDocument[]> {
+    await this.ensureLayoutCurrent(false);
+    const generation = this.currentGeneration();
+    if (this.layoutFor(collection) === "snapshot") {
+      const head = await this.readSnapshotHead(
+        collection,
+        generation,
+      );
+      if (!head.snapshotHash) {
+        return [];
+      }
+      if (
+        typeof head.records !== "number" ||
+        typeof head.tombstones !== "number" ||
+        typeof head.decodedBytes !== "number"
+      ) {
+        throw new Error(
+          "Snapshot size metadata is unavailable; rewrite the collection before running bounded queries",
+        );
+      }
+      if (head.tombstones > head.records) {
+        throw new Error(
+          "Snapshot tombstone metadata exceeds its record count",
+        );
+      }
+      if (
+        head.records >
+          Math.max(maximum, MAX_BOUNDED_STORED_RECORDS) ||
+        head.tombstones > MAX_BOUNDED_TOMBSTONES ||
+        head.decodedBytes > MAX_BOUNDED_DECODED_BYTES
+      ) {
+        throw new Error(
+          "Bounded snapshot query exceeds stored-record, tombstone, or byte limits",
+        );
+      }
+      const liveRecords = head.records - head.tombstones;
+      if (liveRecords > maximum) {
+        throw new Error(
+          `Query scan contains ${liveRecords} documents, above the configured maximum of ${maximum}`,
+        );
+      }
+      const page = await this.readSnapshotPage(
+        collection,
+        head.snapshotHash,
+        generation,
+      );
+      const stored = Object.values(page.documents);
+      const tombstones = stored.filter(isTrieTombstone).length;
+      if (
+        stored.length !== head.records ||
+        tombstones !== head.tombstones ||
+        encodeJson(page as unknown as JsonValue).byteLength !==
+          head.decodedBytes
+      ) {
+        throw new Error(
+          "Snapshot size metadata does not match its page",
+        );
+      }
+      const documents = stored
+        .map(visibleTrieDocument)
+        .filter(
+          (document): document is JsonDocument =>
+            document !== null,
+        );
+      return documents.sort((left, right) =>
+        left.id.localeCompare(right.id),
+      );
+    }
+    const head = await this.readHead(collection, generation);
+    if (!head.rootHash) {
+      return [];
+    }
+    const root = await this.readNode<TrieRootNode>(
+      collection,
+      head.rootHash,
+      "root",
+      generation,
+    );
+    const documents: JsonDocument[] = [];
+    const leafReferences: Array<{
+      hash: string;
+      metadata: TrieLeafMetadata;
+    }> = [];
+    let storedRecords = 0;
+    let tombstones = 0;
+    let decodedBytes = 0;
+    const maximumStoredRecords = Math.max(
+      maximum,
+      MAX_BOUNDED_STORED_RECORDS,
+    );
+    for (const branchHash of Object.values(root.children).sort()) {
+      const branch = await this.readNode<TrieBranchNode>(
+        collection,
+        branchHash,
+        "branch",
+        generation,
+      );
+      for (const [second, hash] of Object.entries(
+        branch.children,
+      )) {
+        const metadata = branch.leafMetadata?.[second];
+        if (!metadata) {
+          throw new Error(
+            "Trie leaf size metadata is unavailable; rewrite the collection before running bounded queries",
+          );
+        }
+        storedRecords += metadata.records;
+        tombstones += metadata.tombstones;
+        decodedBytes += metadata.decodedBytes;
+        if (
+          storedRecords > maximumStoredRecords ||
+          tombstones > MAX_BOUNDED_TOMBSTONES ||
+          decodedBytes > MAX_BOUNDED_DECODED_BYTES
+        ) {
+          throw new Error(
+            "Bounded trie query exceeds stored-record, tombstone, or byte limits",
+          );
+        }
+        leafReferences.push({ hash, metadata });
+      }
+    }
+    for (const reference of leafReferences.sort((left, right) =>
+      left.hash.localeCompare(right.hash),
+    )) {
+      const leaf = await this.readNode<TrieLeafNode>(
+        collection,
+        reference.hash,
+        "leaf",
+        generation,
+      );
+      const storedDocuments = Object.values(leaf.documents);
+      if (
+        storedDocuments.length !== reference.metadata.records ||
+        storedDocuments.filter(isTrieTombstone).length !==
+          reference.metadata.tombstones
+      ) {
+        throw new Error(
+          `Trie leaf metadata does not match ${reference.hash}`,
+        );
+      }
+      for (const stored of storedDocuments) {
+        const document = visibleTrieDocument(stored);
+        if (!document) {
+          continue;
+        }
+        documents.push(document);
+        if (documents.length > maximum) {
+          throw new Error(
+            `Query scan contains more than ${maximum} documents`,
+          );
+        }
+      }
+    }
+    return documents.sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+  }
+
   async write(
     collection: string,
     id: string,
@@ -421,6 +623,9 @@ export class ThimbleClient {
       },
     );
     if (!response.ok) {
+      await this.handleMutationAuthorizationFailure(
+        response.status,
+      );
       throw new Error(
         `Write failed with ${response.status}: ${await response.text()}`,
       );
@@ -523,11 +728,21 @@ export class ThimbleClient {
   }
 
   async logout(): Promise<void> {
-    if (!this.active) {
-      return;
+    if (this.active) {
+      this.channel?.postMessage({ type: "logout" });
     }
-    this.channel?.postMessage({ type: "logout" });
+    if (!this.authorityCleanupComplete) {
+      this.sessionChannel?.postMessage({ type: "logout" });
+    }
     await this.handleLogout();
+  }
+
+  async dispose(): Promise<void> {
+    try {
+      await this.handleLogout(false, false);
+    } finally {
+      this.sessionChannel?.close();
+    }
   }
 
   resetMetrics(): void {
@@ -553,6 +768,7 @@ export class ThimbleClient {
   close(): void {
     this.active = false;
     this.channel?.close();
+    this.sessionChannel?.close();
   }
 
   private async readHead(
@@ -576,7 +792,11 @@ export class ThimbleClient {
       try {
         remote = await this.readRemote(key, cached?.etag);
       } catch (error) {
-        if (cached && this.active) {
+        if (
+          cached &&
+          this.active &&
+          canUseOfflineFallback(error)
+        ) {
           this.offlineFallbacks += 1;
           this.assertGeneration(generation);
           return asHead(cached.value);
@@ -665,7 +885,11 @@ export class ThimbleClient {
       try {
         remote = await this.readRemote(key, cached?.etag);
       } catch (error) {
-        if (cached && this.active) {
+        if (
+          cached &&
+          this.active &&
+          canUseOfflineFallback(error)
+        ) {
           this.offlineFallbacks += 1;
           this.assertGeneration(generation);
           return asSnapshotHead(cached.value);
@@ -771,23 +995,58 @@ export class ThimbleClient {
     return asNode<T>(remote.value, expectedKind);
   }
 
-  private async handleLogout(): Promise<void> {
-    if (!this.active) {
+  private async handleLogout(
+    notify = true,
+    authorityWide = true,
+  ): Promise<void> {
+    if (authorityWide && !this.authorityCleanupComplete) {
+      this.authorityCleanupRequested = true;
+    }
+    if (
+      this.cacheDestroyed &&
+      (!this.authorityCleanupRequested ||
+        this.authorityCleanupComplete)
+    ) {
       return;
     }
-    this.active = false;
-    this.lifecycleGeneration += 1;
+    if (this.cleanupPromise) {
+      return this.cleanupPromise;
+    }
+    if (this.active) {
+      this.active = false;
+      this.lifecycleGeneration += 1;
+      this.channel?.close();
+    }
     let failure: unknown;
+    this.cleanupPromise = (async () => {
+      if (!this.cacheDestroyed) {
+        await withBrowserLock(
+          this.lifecycleLockName(),
+          () => this.options.cache.destroy(),
+        );
+        await this.options.onCacheDestroyed?.();
+        this.cacheDestroyed = true;
+      }
+      if (
+        this.authorityCleanupRequested &&
+        !this.authorityCleanupComplete
+      ) {
+        await this.options.onAuthorityLogout?.();
+        this.authorityCleanupComplete = true;
+        this.authorityCleanupRequested = false;
+        this.sessionChannel?.close();
+      }
+    })().finally(() => {
+      this.cleanupPromise = undefined;
+    });
     try {
-      await withBrowserLock(
-        this.lifecycleLockName(),
-        () => this.options.cache.destroy(),
-      );
+      await this.cleanupPromise;
     } catch (error) {
       failure = error;
     }
-    this.channel?.close();
-    this.options.onLogout?.(failure);
+    if (notify) {
+      this.options.onLogout?.(failure);
+    }
     if (failure) {
       throw failure;
     }
@@ -841,7 +1100,18 @@ export class ThimbleClient {
     ifNoneMatch?: string,
   ): Promise<RemoteJsonObject> {
     this.remoteReads += 1;
-    const result = await this.options.reader.get(key, ifNoneMatch);
+    let result: RemoteJsonObject;
+    try {
+      result = await this.options.reader.get(key, ifNoneMatch);
+    } catch (error) {
+      if (
+        error instanceof HttpObjectReadError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        await this.handleAuthorizationFailure(error.status);
+      }
+      throw error;
+    }
     if (result.status === "found") {
       this.remoteBytes += result.bytes;
     } else if (result.status === "not-modified") {
@@ -850,6 +1120,30 @@ export class ThimbleClient {
       this.missing += 1;
     }
     return result;
+  }
+
+  private async handleAuthorizationFailure(
+    status: number,
+  ): Promise<void> {
+    if (status !== 401 && status !== 403) {
+      return;
+    }
+    if (status === 401) {
+      this.sessionChannel?.postMessage({ type: "logout" });
+      this.channel?.postMessage({ type: "logout" });
+      await this.handleLogout();
+      return;
+    }
+    this.channel?.postMessage({ type: "scope-logout" });
+    await this.handleLogout(true, false);
+  }
+
+  private async handleMutationAuthorizationFailure(
+    status: number,
+  ): Promise<void> {
+    if (status === 401) {
+      await this.handleAuthorizationFailure(status);
+    }
   }
 
   private readImmutableRemote(
@@ -907,6 +1201,9 @@ export class ThimbleClient {
       },
     );
     if (!response.ok) {
+      await this.handleMutationAuthorizationFailure(
+        response.status,
+      );
       throw new Error(
         `Mutation failed with ${response.status}: ${await response.text()}`,
       );
@@ -949,6 +1246,7 @@ export class ThimbleClient {
       },
     );
     if (!response.ok) {
+      await this.handleAuthorizationFailure(response.status);
       throw new Error(
         `Layout configuration check failed with ${response.status}`,
       );
@@ -985,6 +1283,7 @@ export class ThimbleClient {
       );
     } finally {
       this.channel?.close();
+      this.sessionChannel?.close();
       this.options.onLayoutChange?.();
     }
   }
@@ -999,6 +1298,13 @@ function revisionFromValue(value: JsonValue): number {
     : -1;
 }
 
+function canUseOfflineFallback(error: unknown): boolean {
+  return !(
+    error instanceof HttpObjectReadError &&
+    (error.status === 401 || error.status === 403)
+  );
+}
+
 function asSnapshotHead(value: JsonValue): SnapshotHead {
   if (
     typeof value !== "object" ||
@@ -1008,13 +1314,34 @@ function asSnapshotHead(value: JsonValue): SnapshotHead {
     !(
       value.snapshotHash === null ||
       typeof value.snapshotHash === "string"
-    )
+    ) ||
+    (value.records !== undefined &&
+      (typeof value.records !== "number" ||
+        !Number.isInteger(value.records) ||
+        value.records < 0)) ||
+    (value.decodedBytes !== undefined &&
+      (typeof value.decodedBytes !== "number" ||
+        !Number.isInteger(value.decodedBytes) ||
+        value.decodedBytes < 0)) ||
+    (value.tombstones !== undefined &&
+      (typeof value.tombstones !== "number" ||
+        !Number.isInteger(value.tombstones) ||
+        value.tombstones < 0))
   ) {
     throw new Error("Invalid snapshot HEAD object");
   }
   return {
     revision: value.revision,
     snapshotHash: value.snapshotHash,
+    ...(typeof value.records === "number"
+      ? { records: value.records }
+      : {}),
+    ...(typeof value.decodedBytes === "number"
+      ? { decodedBytes: value.decodedBytes }
+      : {}),
+    ...(typeof value.tombstones === "number"
+      ? { tombstones: value.tombstones }
+      : {}),
     ...indexesFromValue(value.indexes),
   };
 }
@@ -1103,7 +1430,11 @@ function indexesFromValue(
       !/^[a-f0-9]{64}$/.test(reference.hash) ||
       typeof reference.entries !== "number" ||
       !Number.isInteger(reference.entries) ||
-      reference.entries < 0
+      reference.entries < 0 ||
+      (reference.decodedBytes !== undefined &&
+        (typeof reference.decodedBytes !== "number" ||
+          !Number.isInteger(reference.decodedBytes) ||
+          reference.decodedBytes < 0))
     ) {
       throw new Error(
         `Invalid secondary index reference: ${name}`,
@@ -1112,6 +1443,9 @@ function indexesFromValue(
     indexes[name] = {
       hash: reference.hash,
       entries: reference.entries,
+      ...(typeof reference.decodedBytes === "number"
+        ? { decodedBytes: reference.decodedBytes }
+        : {}),
     };
   }
   return { indexes };
@@ -1171,6 +1505,17 @@ function isLayoutChangeMessage(
     value !== null &&
     "type" in value &&
     value.type === "layout-change"
+  );
+}
+
+function isScopeLogoutMessage(
+  value: unknown,
+): value is { type: "scope-logout" } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "scope-logout"
   );
 }
 

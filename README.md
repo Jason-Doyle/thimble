@@ -91,6 +91,7 @@ Only bindings, credentials, and browser read authorisation differ.
 - typed collections, bounded predicates, and declared secondary indexes
 - versioned logical archives and explicit migration adapters
 - local application scaffolding and diagnostics
+- optional package-owned Studio management frontend
 - evidence-based layout recommendations and explicit migration
 - write responses that update all open browser tabs
 - Cloudflare Worker and native R2 binding
@@ -101,7 +102,7 @@ Only bindings, credentials, and browser read authorisation differ.
 - reusable Node and Cloudflare authority endpoint exports
 - Docker, Wrangler, Bicep, and CloudFormation deployment paths
 
-The reference browser build is about 54.5 KB uncompressed and 15.3 KB gzip.
+The reference browser build is about 58.6 KB uncompressed and 16.3 KB gzip.
 It ships no database runtime or WASM module.
 
 ## Quick start
@@ -131,6 +132,17 @@ roles:
 ```powershell
 npx thimbledb generate-entra-roles --out entra-authorization.json
 ```
+
+Enable the package-owned management frontend on a Node authority:
+
+```ts
+await startNodeAuthority({
+  studio: true,
+  studioOrigin: "https://database.example.com",
+});
+```
+
+Then open `/studio/`. See [ThimbleDB Studio](docs/STUDIO.md).
 
 The base install includes the browser/core APIs, authentication, Cloudflare
 authority, local provider, and Node authority without cloud storage SDKs.

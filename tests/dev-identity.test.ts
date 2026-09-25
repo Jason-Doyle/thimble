@@ -62,7 +62,16 @@ describe("development identity", () => {
         host: "127.0.0.1",
         allowedOrigin: "https://app.example.com",
       }),
-    ).toThrow("requires a loopback THIMBLE_ALLOWED_ORIGIN");
+    ).toThrow("requires every allowed origin to be loopback");
+    expect(() =>
+      validateDevelopmentIdentity({
+        enabled: true,
+        provider: "local",
+        host: "127.0.0.1",
+        allowedOrigin: "http://127.0.0.1:5173",
+        additionalOrigins: ["https://studio.example.com"],
+      }),
+    ).toThrow("requires every allowed origin to be loopback");
   });
 
   it("stays disabled without the explicit flag", () => {

@@ -108,6 +108,21 @@ Use the repository as a template, preserve its security boundaries, and
 replace only the application model, identity configuration, and provider
 resources required by the target deployment.
 
+## Add the packaged Studio
+
+```text
+Enable ThimbleDB Studio on this authority.
+
+Requirements:
+1. Use the Studio assets and APIs from the installed thimbledb package.
+2. Mount the frontend at /studio/.
+3. Configure an exact Studio origin.
+4. Keep Studio read-only until the operator explicitly unlocks writes.
+5. Never give thimble.admin implicit access to an ungranted data scope.
+6. Keep object-storage credentials and server encryption keys out of browser code.
+7. Validate collection discovery, bounded queries, editing, delete and restore, export, and index health.
+```
+
 ## Design collections and choose layouts
 
 ```text

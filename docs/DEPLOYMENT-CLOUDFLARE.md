@@ -99,6 +99,27 @@ the minimal internal mapping and stable `user:<uuid>` data scope.
 Cloudflare Access can remain an additional outer boundary around the
 application hostname.
 
+### Optional Studio
+
+Enable the Studio API in the authority factory or set:
+
+```text
+THIMBLE_STUDIO=true
+THIMBLE_STUDIO_ORIGIN=https://database.example.com
+```
+
+Build the browser application and copy the package-owned Studio assets after
+the final client build:
+
+```powershell
+npm run build:client-assets
+```
+
+Keep `run_worker_first: true` so `/api/*` requests reach the Worker before
+asset fallback. Open `/studio/` on the configured exact origin.
+
+See [ThimbleDB Studio](STUDIO.md).
+
 ## 7. Create secrets
 
 Generate the deployment master key:
@@ -117,7 +138,7 @@ $masterKey = $null
 ## 8. Deploy
 
 ```powershell
-npm run build:client
+npm run build:client-assets
 npx wrangler deploy --config deploy\cloudflare\wrangler.local.jsonc
 ```
 

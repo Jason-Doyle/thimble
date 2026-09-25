@@ -82,6 +82,7 @@ describe("ThimbleDB CLI", () => {
     ).toBe("thimble.access");
     expect(manifest.appRoles).toHaveLength(4);
   });
+
 });
 
 function run(args: string[], cwd = process.cwd()) {

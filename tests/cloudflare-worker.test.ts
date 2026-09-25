@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { AuthError } from "../src/auth/service.js";
 import worker, {
+  createCloudflareAuthority,
   readJsonRequest,
 } from "../src/cloudflare-worker.js";
 import type { R2BucketBinding } from "../src/cloudflare/r2-object-store.js";
@@ -126,6 +127,75 @@ describe("Cloudflare Worker request parsing", () => {
     await expect(removedRoute.json()).resolves.toEqual({
       error: "not_found",
     });
+  });
+
+  it("keeps Studio opt-in and session protected", async () => {
+    const bucket = emptyBucket();
+    const environment = {
+      DB: bucket,
+      AUTH_DB: bucket,
+      THIMBLE_MASTER_KEY: Buffer.alloc(32, 7).toString("base64"),
+      THIMBLE_ALLOWED_ORIGIN: "https://db.example.test",
+    };
+
+    const disabled = await worker.fetch(
+      new Request("https://db.example.test/api/studio"),
+      environment as never,
+    );
+    expect(disabled.status).toBe(404);
+
+    const enabled = await createCloudflareAuthority({
+      studio: true,
+    }).fetch(
+      new Request("https://db.example.test/api/studio"),
+      environment as never,
+    );
+    expect(enabled.status).toBe(401);
+
+    const missingOrigin = await createCloudflareAuthority().fetch(
+      new Request(
+        "https://db.example.test/api/auth/oidc/unknown/session",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer invalid",
+          },
+          body: "{}",
+        },
+      ),
+      environment as never,
+    );
+    expect(missingOrigin.status).toBe(403);
+    await expect(missingOrigin.json()).resolves.toMatchObject({
+      error: "origin_rejected",
+    });
+  });
+
+  it("does not apply Studio catalog limits when Studio is disabled", async () => {
+    const bucket = emptyBucket();
+    const collectionLayouts = Object.fromEntries(
+      Array.from({ length: 1_001 }, (_, index) => [
+        `collection-${index}`,
+        "trie" as const,
+      ]),
+    );
+    const authority = createCloudflareAuthority({
+      collectionLayouts,
+    });
+    const response = await authority.fetch(
+      new Request("https://db.example.test/api/auth/config"),
+      {
+        DB: bucket,
+        AUTH_DB: bucket,
+        THIMBLE_MASTER_KEY: Buffer.alloc(32, 7).toString(
+          "base64",
+        ),
+        THIMBLE_ALLOWED_ORIGIN: "https://db.example.test",
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
   });
 });
 

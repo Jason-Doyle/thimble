@@ -221,6 +221,15 @@ export const docs: DocMeta[] = [
     featured: true,
   },
   {
+    id: "studio",
+    title: "ThimbleDB Studio",
+    description:
+      "Host the packaged management frontend for scoped browsing, queries, index health, exports, and guarded operations.",
+    group: "Start here",
+    order: 18,
+    featured: true,
+  },
+  {
     id: "security",
     title: "Security model",
     description:

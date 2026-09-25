@@ -22,6 +22,9 @@ viewer requires:
 The viewer then uses the normal brokered object and document endpoints. It
 does not receive object-storage credentials or server encryption keys.
 
+[ThimbleDB Studio](STUDIO.md) provides this browser-based management view and
+retains the same explicit scope boundary.
+
 ## Headless service principal
 
 Microsoft Entra service principals can obtain an application token through

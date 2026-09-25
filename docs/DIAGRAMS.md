@@ -353,6 +353,32 @@ flowchart LR
 The Worker brokers private reads and performs every write. R2 credentials and
 scope encryption material are not exposed to browser code.
 
+## Studio hosting and authorization
+
+```mermaid
+flowchart LR
+  Package["thimbledb npm package"]
+  Assets["Version-matched Studio assets"]
+  Node["Node authority<br/>serves /studio/"]
+  Copy["thimbledb studio-assets"]
+  WorkerAssets["Cloudflare asset build<br/>/studio/"]
+  Studio["Studio browser"]
+  Session["OIDC session"]
+  Grants["Explicit scope grants"]
+  APIs["Authority Studio and document APIs"]
+
+  Package --> Assets
+  Assets --> Node
+  Assets --> Copy --> WorkerAssets
+  Node --> Studio
+  WorkerAssets --> Studio
+  Studio --> Session --> Grants --> APIs
+```
+
+Studio and the authority come from the same package version. The frontend
+never connects directly to object storage and `thimble.admin` does not bypass
+the selected scope grant.
+
 ## Provider boundary comparison
 
 ```mermaid

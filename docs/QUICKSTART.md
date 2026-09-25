@@ -24,6 +24,9 @@ Open `http://127.0.0.1:5173`. The scaffold uses the loopback-only development
 identity, encrypted local scopes, typed notes, declared indexes, deletion, and
 restore.
 
+Open `http://127.0.0.1:5173/studio/` to inspect the same local authority
+through the packaged management frontend.
+
 See [Local development](DEVELOPMENT.md) before replacing the development
 identity with production OIDC.
 

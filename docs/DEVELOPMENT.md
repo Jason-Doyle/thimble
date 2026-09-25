@@ -12,6 +12,8 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:5173`.
+Open `http://127.0.0.1:5173/studio/` for the same authority's packaged
+management frontend.
 
 The same application is available as the
 [Node starter repository](https://github.com/Jason-Doyle/thimbledb-node-starter).
@@ -45,6 +47,7 @@ npm run build
 - `THIMBLE_PROVIDER=local`
 - `THIMBLE_HOST` is `127.0.0.1`, `localhost`, or `::1`
 - `THIMBLE_ALLOWED_ORIGIN` uses a loopback hostname
+- every configured Studio origin uses a loopback hostname
 
 The authority fails startup when any condition is violated.
 

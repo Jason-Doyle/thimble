@@ -1,11 +1,12 @@
-import type {
-  DatabaseEngine,
-  EngineDiagnostics,
-  DeletionPolicy,
-  JsonDocument,
-  JsonValue,
-  ObjectStore,
-  StoredObject,
+import {
+  BoundedReadError,
+  type DatabaseEngine,
+  type EngineDiagnostics,
+  type DeletionPolicy,
+  type JsonDocument,
+  type JsonValue,
+  type ObjectStore,
+  type StoredObject,
 } from "../core.js";
 import {
   createDictionary,
@@ -26,6 +27,7 @@ import {
   type TrieBranchNode,
   type TrieHead,
   type TrieLeafNode,
+  type TrieLeafMetadata,
   type TrieNode,
   type TrieReadBundle,
   type TrieRootNode,
@@ -391,6 +393,27 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     return this.scanStoredFromHead(normalized, head.state);
   }
 
+  async exportStoredBounded(
+    collection: string,
+    maxRecords: number,
+    maxBytes: number,
+    maxTombstones?: number,
+  ): Promise<TrieStoredDocument[]> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    return this.scanStoredFromHead(
+      normalized,
+      head.state,
+      {
+        maxRecords,
+        maxBytes,
+        ...(maxTombstones !== undefined
+          ? { maxTombstones }
+          : {}),
+      },
+    );
+  }
+
   async replaceStored(
     collection: string,
     documents: TrieStoredDocument[],
@@ -409,6 +432,50 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           document: null,
         })),
     ]);
+  }
+
+  async rebuildIndexesFromStored(
+    collection: string,
+    documents: TrieStoredDocument[],
+  ): Promise<void> {
+    if (!this.allowIndexConfigurationChange) {
+      throw new Error(
+        "Rebuilding trie indexes requires explicit index configuration change mode",
+      );
+    }
+    const normalized = validateName(collection, "Collection");
+    const indexes = await this.writeFreshIndexes(
+      normalized,
+      documents,
+    );
+    for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
+      const head = await this.loadHead(normalized);
+      const nextHead: TrieHead = {
+        revision: head.state.revision + 1,
+        rootHash: head.state.rootHash,
+        ...(Object.keys(indexes).length > 0
+          ? { indexes }
+          : {}),
+      };
+      try {
+        await this.store.put(
+          this.headKey(normalized),
+          encodeJson(nextHead as unknown as JsonValue),
+          head.object === null
+            ? { ifNoneMatch: true }
+            : { ifMatch: head.object.etag },
+        );
+        return;
+      } catch (error) {
+        if (!isPreconditionFailure(error)) {
+          throw error;
+        }
+        this.casRetries += 1;
+      }
+    }
+    throw new Error(
+      `Trie index rebuild exceeded ${this.maxRetries} retries`,
+    );
   }
 
   async dropCollection(collection: string): Promise<number> {
@@ -492,11 +559,15 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           const nextBranch: TrieBranchNode = {
             kind: "branch",
             children: { ...currentBranch.children },
+            leafMetadata: createDictionary(
+              currentBranch.leafMetadata,
+            ),
           };
 
           const changedLeaves = await Promise.all(
             [...byLeaf].map(async ([second, leafUpdates]) => {
-              const currentLeafHash = currentBranch.children[second];
+              const currentLeafHash =
+                currentBranch.children[second];
               const currentLeaf = currentLeafHash
                 ? await this.readNode<TrieLeafNode>(
                     normalized,
@@ -522,15 +593,20 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
               }
               return [
                 second,
-                await this.writeNode(normalized, nextLeaf),
+                await this.writeLeafNode(normalized, nextLeaf),
               ] as const;
             }),
           );
-          for (const [second, leafHash] of changedLeaves) {
-            if (leafHash === null) {
+          for (const [second, leafResult] of changedLeaves) {
+            if (leafResult === null) {
               delete nextBranch.children[second];
+              delete nextBranch.leafMetadata?.[second];
             } else {
-              nextBranch.children[second] = leafHash;
+              nextBranch.children[second] = leafResult.hash;
+              nextBranch.leafMetadata ??=
+                createDictionary<TrieLeafMetadata>();
+              nextBranch.leafMetadata[second] =
+                leafResult.metadata;
             }
           }
           if (Object.keys(nextBranch.children).length === 0) {
@@ -738,7 +814,10 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       "leaf",
     );
     objects.push({
-      key: trieNodeKey(normalized, leafHash),
+      key: trieNodeKey(
+        normalized,
+        leafHash,
+      ),
       etag: leaf.object.etag,
       value: leaf.value as unknown as JsonValue,
     });
@@ -782,7 +861,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     for (const definition of definitions) {
       const currentReference = head.indexes?.[definition.name];
       let currentPage: SecondaryIndexPage | null = null;
-      if (currentReference) {
+      if (currentReference && !this.allowIndexConfigurationChange) {
         const object = await this.store.get(
           trieIndexKey(
             collection,
@@ -846,6 +925,40 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       references[definition.name] = {
         hash,
         entries: page.entries.length,
+        decodedBytes: bytes.byteLength,
+      };
+    }
+    return references;
+  }
+
+  private async writeFreshIndexes(
+    collection: string,
+    documents: TrieStoredDocument[],
+  ): Promise<SecondaryIndexReferences> {
+    const references =
+      createDictionary<SecondaryIndexReference>();
+    for (const definition of this.indexConfiguration[collection] ?? []) {
+      const page = buildSecondaryIndexPage(
+        definition,
+        documents,
+      );
+      const bytes = encodeJson(page as unknown as JsonValue);
+      const hash = await this.addressNode(bytes);
+      try {
+        await this.store.put(
+          trieIndexKey(collection, definition.name, hash),
+          bytes,
+          { ifNoneMatch: true },
+        );
+      } catch (error) {
+        if (!isPreconditionFailure(error)) {
+          throw error;
+        }
+      }
+      references[definition.name] = {
+        hash,
+        entries: page.entries.length,
+        decodedBytes: bytes.byteLength,
       };
     }
     return references;
@@ -945,6 +1058,11 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
   private async scanStoredFromHead(
     collection: string,
     head: TrieHead,
+    limits?: {
+      maxRecords: number;
+      maxBytes: number;
+      maxTombstones?: number;
+    },
   ): Promise<TrieStoredDocument[]> {
     if (head.rootHash === null) {
       return [];
@@ -954,33 +1072,103 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       head.rootHash,
       "root",
     );
-    const branches = await Promise.all(
-      Object.values(root.children).map((branchHash) =>
-        this.readNode<TrieBranchNode>(
-          collection,
-          branchHash,
-          "branch",
-        ),
-      ),
-    );
-    const leaves = await Promise.all(
-      [
-        ...new Set(
-          branches.flatMap((branch) =>
-            Object.values(branch.children),
+    if (!limits) {
+      const branches = await Promise.all(
+        Object.values(root.children).map((branchHash) =>
+          this.readNode<TrieBranchNode>(
+            collection,
+            branchHash,
+            "branch",
           ),
         ),
-      ].map((leafHash) =>
-        this.readNode<TrieLeafNode>(
-          collection,
-          leafHash,
-          "leaf",
+      );
+      const leaves = await Promise.all(
+        [
+          ...new Set(
+            branches.flatMap((branch) =>
+              Object.values(branch.children),
+            ),
+          ),
+        ].map((leafHash) =>
+          this.readNode<TrieLeafNode>(
+            collection,
+            leafHash,
+            "leaf",
+          ),
         ),
-      ),
+      );
+      return leaves
+        .flatMap((leaf) => Object.values(leaf.documents))
+        .sort((left, right) =>
+          left.id.localeCompare(right.id),
+        );
+    }
+    const documents: TrieStoredDocument[] = [];
+    let records = 0;
+    let bytes = 0;
+    let tombstones = 0;
+    const leafReferences: Array<{
+      hash: string;
+      metadata: TrieLeafMetadata;
+    }> = [];
+    for (const branchHash of Object.values(root.children).sort()) {
+      const branch = await this.readNode<TrieBranchNode>(
+        collection,
+        branchHash,
+        "branch",
+      );
+      for (const [second, hash] of Object.entries(
+        branch.children,
+      )) {
+        const metadata = branch.leafMetadata?.[second];
+        if (!metadata) {
+          throw new BoundedReadError(
+            "Trie leaf size metadata is unavailable; rewrite the collection before using bounded reads",
+          );
+        }
+        records += metadata.records;
+        bytes += metadata.decodedBytes;
+        tombstones += metadata.tombstones;
+        if (
+          records > limits.maxRecords ||
+          bytes > limits.maxBytes ||
+          (limits.maxTombstones !== undefined &&
+            tombstones > limits.maxTombstones)
+        ) {
+          throw new BoundedReadError(
+            `Bounded stored-document read exceeded ${limits.maxRecords} records, ${limits.maxBytes} bytes, or ${limits.maxTombstones ?? "the configured"} tombstones`,
+          );
+        }
+        leafReferences.push({ hash, metadata });
+      }
+    }
+    for (const reference of leafReferences.sort((left, right) =>
+      left.hash.localeCompare(right.hash),
+    )) {
+      const leaf = await this.loadNodeObject<TrieLeafNode>(
+        collection,
+        reference.hash,
+        "leaf",
+      );
+      const leafDocuments = Object.values(leaf.value.documents);
+      if (
+        leaf.object.bytes.byteLength !==
+          reference.metadata.decodedBytes ||
+        leafDocuments.length !== reference.metadata.records ||
+        leafDocuments.filter(isTrieTombstone).length !==
+          reference.metadata.tombstones
+      ) {
+        throw new Error(
+          `Trie leaf metadata does not match ${reference.hash}`,
+        );
+      }
+      for (const document of leafDocuments) {
+        documents.push(document);
+      }
+    }
+    return documents.sort((left, right) =>
+      left.id.localeCompare(right.id),
     );
-    return leaves
-      .flatMap((leaf) => Object.values(leaf.documents))
-      .sort((left, right) => left.id.localeCompare(right.id));
   }
 
   private async writeNode(
@@ -1001,6 +1189,37 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       this.reusedNodes += 1;
     }
     return hash;
+  }
+
+  private async writeLeafNode(
+    collection: string,
+    leaf: TrieLeafNode,
+  ): Promise<{
+    hash: string;
+    metadata: TrieLeafMetadata;
+  }> {
+    const bytes = encodeJson(leaf as unknown as JsonValue);
+    const hash = await this.addressNode(bytes);
+    try {
+      await this.store.put(this.nodeKey(collection, hash), bytes, {
+        ifNoneMatch: true,
+      });
+      this.nodesCreated += 1;
+    } catch (error) {
+      if (!isPreconditionFailure(error)) {
+        throw error;
+      }
+      this.reusedNodes += 1;
+    }
+    const documents = Object.values(leaf.documents);
+    return {
+      hash,
+      metadata: {
+        records: documents.length,
+        tombstones: documents.filter(isTrieTombstone).length,
+        decodedBytes: bytes.byteLength,
+      },
+    };
   }
 
   private async readNode<T extends TrieNode>(

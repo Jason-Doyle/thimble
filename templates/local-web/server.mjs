@@ -9,6 +9,8 @@ const { startNodeAuthority } = await import(
 );
 
 await startNodeAuthority({
+  studio: true,
+  collections: ["notes"],
   collectionLayouts: {
     notes: "snapshot",
   },
