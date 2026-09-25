@@ -116,4 +116,29 @@ describe("ThimbleDB binary envelope", () => {
     expect(inspectEnvelope(compressed).compressed).toBe(true);
     await expect(decodeEnvelope(compressed)).resolves.toEqual(repetitive);
   });
+
+  it("rejects compressed output while it exceeds a decoded limit", async () => {
+    const plaintext = new TextEncoder().encode(
+      "bounded-output".repeat(100_000),
+    );
+    const envelope = await encodeEnvelope(plaintext);
+    expect(inspectEnvelope(envelope).compressed).toBe(true);
+
+    await expect(
+      decodeEnvelope(
+        envelope,
+        undefined,
+        undefined,
+        { maximumDecodedBytes: 64 * 1024 },
+      ),
+    ).rejects.toThrow("exceeds");
+    await expect(
+      decodeEnvelope(
+        envelope,
+        undefined,
+        undefined,
+        { maximumDecodedBytes: plaintext.byteLength },
+      ),
+    ).resolves.toEqual(plaintext);
+  });
 });

@@ -23,6 +23,10 @@ export type EnvelopeKeyResolver = (
   keyId: string,
 ) => Promise<CryptoKey | null> | CryptoKey | null;
 
+export type EnvelopeDecodeOptions = {
+  maximumDecodedBytes?: number;
+};
+
 export async function encodeEnvelope(
   plaintext: Uint8Array,
   options: EnvelopeEncodeOptions = {},
@@ -90,7 +94,18 @@ export async function decodeEnvelope(
   envelope: Uint8Array,
   resolveKey?: EnvelopeKeyResolver,
   additionalData?: Uint8Array,
+  options: EnvelopeDecodeOptions = {},
 ): Promise<Uint8Array> {
+  const maximumDecodedBytes = options.maximumDecodedBytes;
+  if (
+    maximumDecodedBytes !== undefined &&
+    (!Number.isSafeInteger(maximumDecodedBytes) ||
+      maximumDecodedBytes < 0)
+  ) {
+    throw new Error(
+      "Envelope maximum decoded bytes must be a non-negative safe integer",
+    );
+  }
   const metadata = inspectEnvelope(envelope);
   const header = envelope.slice(0, metadata.headerBytes);
   let payload = envelope.slice(metadata.headerBytes);
@@ -125,7 +140,11 @@ export async function decodeEnvelope(
     );
   }
 
-  return metadata.compressed ? gunzip(payload) : payload;
+  if (metadata.compressed) {
+    return gunzip(payload, maximumDecodedBytes);
+  }
+  requireDecodedLimit(payload.byteLength, maximumDecodedBytes);
+  return payload;
 }
 
 export function inspectEnvelope(
@@ -219,19 +238,66 @@ async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
   return transform(bytes, new CompressionStream("gzip"));
 }
 
-async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
-  return transform(bytes, new DecompressionStream("gzip"));
+async function gunzip(
+  bytes: Uint8Array,
+  maximumOutputBytes?: number,
+): Promise<Uint8Array> {
+  return transform(
+    bytes,
+    new DecompressionStream("gzip"),
+    maximumOutputBytes,
+  );
 }
 
 async function transform(
   bytes: Uint8Array,
   stream: CompressionStream | DecompressionStream,
+  maximumOutputBytes?: number,
 ): Promise<Uint8Array> {
-  const output = new Response(stream.readable).arrayBuffer();
   const writer = stream.writable.getWriter();
-  await writer.write(toBufferView(bytes));
-  await writer.close();
-  return new Uint8Array(await output);
+  const reader = stream.readable.getReader();
+  const write = (async () => {
+    await writer.write(toBufferView(bytes));
+    await writer.close();
+  })();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+      const chunk = new Uint8Array(result.value);
+      total += chunk.byteLength;
+      requireDecodedLimit(total, maximumOutputBytes);
+      chunks.push(chunk);
+    }
+    await write;
+  } catch (error) {
+    await reader.cancel(error).catch(() => {});
+    await writer.abort(error).catch(() => {});
+    await write.catch(() => {});
+    throw error;
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
+function requireDecodedLimit(
+  bytes: number,
+  maximum: number | undefined,
+): void {
+  if (maximum !== undefined && bytes > maximum) {
+    throw new Error(
+      `Envelope decoded payload exceeds ${maximum} bytes`,
+    );
+  }
 }
 
 function toBufferView(

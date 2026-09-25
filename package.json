@@ -108,6 +108,7 @@
     "benchmark:azure": "tsx src/cli.ts --provider azure --profile tiny",
     "benchmark:s3": "tsx src/cli.ts --provider s3 --profile tiny",
     "benchmark:compare:local": "tsx benchmarks/comparative/run.mjs",
+    "benchmark:indexed-segment": "tsx benchmarks/indexed-segment/run.mjs",
     "migrate:keys": "tsx src/key-migrate.ts",
     "migrate:external-auth": "tsx src/remove-local-auth.ts",
     "advise:layout": "tsx src/layout-advisor-cli.ts",
