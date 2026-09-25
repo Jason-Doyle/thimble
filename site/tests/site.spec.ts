@@ -96,9 +96,7 @@ test("AI discovery routes publish explicit access and decision content", async (
   const robotsText = await robots.text();
   expect(robotsText).toContain("User-agent: *");
   expect(robotsText).toContain("Allow: /");
-  expect(robotsText).toContain(
-    "Content-Signal: search=yes, ai-input=yes, ai-train=yes",
-  );
+  expect(robotsText).not.toContain("Disallow:");
 
   const llms = await request.get("/llms.txt");
   expect(llms.ok()).toBe(true);

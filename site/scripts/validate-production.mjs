@@ -39,10 +39,7 @@ assert.equal(robots.status, 200);
 const robotsText = await robots.text();
 assert.match(robotsText, /User-agent: \*/);
 assert.match(robotsText, /Allow: \//);
-assert.match(
-  robotsText,
-  /Content-Signal: search=yes, ai-input=yes, ai-train=yes/,
-);
+assert.doesNotMatch(robotsText, /Disallow:/);
 
 for (const userAgent of [
   "OAI-SearchBot",
