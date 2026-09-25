@@ -23,6 +23,9 @@ import {
   buildIndexedSegment,
 } from "../../../src/experimental/indexed-segment.ts";
 import {
+  ExperimentalManifestedSegmentEngine,
+} from "../../../src/experimental/manifested-segment.ts";
+import {
   encodeJson,
 } from "../../../src/shared-utils.ts";
 import { LocalObjectStore } from "../../../src/stores.ts";
@@ -52,10 +55,15 @@ const experimentalRoot = path.join(
   objectsRoot,
   "experimental",
 );
+const manifestedRoot = path.join(
+  objectsRoot,
+  "manifested",
+);
 await Promise.all([
   mkdir(snapshotRoot, { recursive: true }),
   mkdir(trieRoot, { recursive: true }),
   mkdir(experimentalRoot, { recursive: true }),
+  mkdir(manifestedRoot, { recursive: true }),
 ]);
 
 const rawKey = Uint8Array.from(
@@ -119,6 +127,26 @@ await writeFile(
   segment,
 );
 
+const manifestedRaw = new LocalObjectStore(manifestedRoot);
+const manifested = new ExperimentalManifestedSegmentEngine(
+  new EnvelopeObjectStore(manifestedRaw, {
+    key,
+    keyId,
+    compression: "gzip",
+  }),
+  {
+    targetBlockBytes: 256 * 1024,
+    collectionFields: {
+      notes: [
+        { field: "category", mode: "equality" },
+        { field: "bucket", mode: "equality" },
+        { field: "lastModified", mode: "range" },
+      ],
+    },
+  },
+);
+await manifested.putMany("notes", dataset);
+
 const snapshotPortable = await encodeEnvelope(
   encodeJson({
     documents: Object.fromEntries(
@@ -165,6 +193,7 @@ const manifest = {
     snapshot: await inventory(snapshotRoot),
     trie: await inventory(trieRoot),
     experimental: await inventory(experimentalRoot),
+    manifested: await inventory(manifestedRoot),
     portableSnapshot: {
       objects: 1,
       bytes: snapshotPortable.byteLength,

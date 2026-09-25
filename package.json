@@ -109,6 +109,7 @@
     "benchmark:s3": "tsx src/cli.ts --provider s3 --profile tiny",
     "benchmark:compare:local": "tsx benchmarks/comparative/run.mjs",
     "benchmark:indexed-segment": "tsx benchmarks/indexed-segment/run.mjs",
+    "benchmark:manifested-write": "tsx benchmarks/indexed-segment/manifested-write.mjs",
     "benchmark:indexed-segment:regional:generate": "tsx benchmarks/indexed-segment/regional/generate-data.mjs",
     "benchmark:indexed-segment:regional:build": "vite build --config benchmarks/indexed-segment/regional/vite.config.ts",
     "benchmark:indexed-segment:regional:aggregate": "node benchmarks/indexed-segment/regional/aggregate.mjs",

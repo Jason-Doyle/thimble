@@ -121,6 +121,7 @@ console.log(JSON.stringify({
 
 function aggregateRuns(selectedRuns) {
   const pointCases = [
+    "point-manifested",
     "point-experimental",
     "point-snapshot",
     "point-trie",
@@ -128,18 +129,22 @@ function aggregateRuns(selectedRuns) {
   ];
   const queryCases = {
     clusteredEquality: [
+      "clustered-manifested",
       "clustered-experimental",
       "clustered-snapshot",
     ],
     narrowRange: [
+      "range-manifested",
       "range-experimental",
       "range-snapshot",
     ],
     distributedEquality: [
+      "distributed-manifested",
       "distributed-experimental",
       "distributed-snapshot",
     ],
     fullScan: [
+      "scan-manifested",
       "scan-experimental",
       "scan-snapshot",
     ],
@@ -175,6 +180,14 @@ function aggregateRuns(selectedRuns) {
     point,
     queries,
     comparisons: {
+      pointManifestedVsSnapshot: compare(
+        point["point-manifested"],
+        point["point-snapshot"],
+      ),
+      pointManifestedVsTis1: compare(
+        point["point-manifested"],
+        point["point-experimental"],
+      ),
       pointExperimentalVsSnapshot: compare(
         point["point-experimental"],
         point["point-snapshot"],
@@ -191,9 +204,27 @@ function aggregateRuns(selectedRuns) {
         queries.clusteredEquality["clustered-experimental"],
         queries.clusteredEquality["clustered-snapshot"],
       ),
+      clusteredManifestedVsSnapshot: compare(
+        queries.clusteredEquality["clustered-manifested"],
+        queries.clusteredEquality["clustered-snapshot"],
+      ),
+      clusteredManifestedVsTis1: compare(
+        queries.clusteredEquality["clustered-manifested"],
+        queries.clusteredEquality[
+          "clustered-experimental"
+        ],
+      ),
       rangeExperimentalVsSnapshot: compare(
         queries.narrowRange["range-experimental"],
         queries.narrowRange["range-snapshot"],
+      ),
+      rangeManifestedVsSnapshot: compare(
+        queries.narrowRange["range-manifested"],
+        queries.narrowRange["range-snapshot"],
+      ),
+      rangeManifestedVsTis1: compare(
+        queries.narrowRange["range-manifested"],
+        queries.narrowRange["range-experimental"],
       ),
       distributedExperimentalVsSnapshot: compare(
         queries.distributedEquality[
@@ -203,8 +234,20 @@ function aggregateRuns(selectedRuns) {
           "distributed-snapshot"
         ],
       ),
+      distributedManifestedVsSnapshot: compare(
+        queries.distributedEquality[
+          "distributed-manifested"
+        ],
+        queries.distributedEquality[
+          "distributed-snapshot"
+        ],
+      ),
       scanExperimentalVsSnapshot: compare(
         queries.fullScan["scan-experimental"],
+        queries.fullScan["scan-snapshot"],
+      ),
+      scanManifestedVsSnapshot: compare(
+        queries.fullScan["scan-manifested"],
         queries.fullScan["scan-snapshot"],
       ),
     },

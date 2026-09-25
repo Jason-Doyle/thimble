@@ -2048,7 +2048,9 @@ function snapshotDocument(document: JsonDocument): JsonDocument {
   );
 }
 
-function encodeCanonicalJson(value: JsonValue): Uint8Array {
+export function encodeCanonicalJson(
+  value: JsonValue,
+): Uint8Array {
   return textBytes(canonicalStringify(value));
 }
 

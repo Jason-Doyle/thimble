@@ -15,6 +15,7 @@ const scanIterations = numberValue(
 );
 
 const pointCases = [
+  "point-manifested",
   "point-experimental",
   "point-snapshot",
   "point-trie",
@@ -22,14 +23,17 @@ const pointCases = [
 ];
 const queryGroups = {
   clusteredEquality: [
+    "clustered-manifested",
     "clustered-experimental",
     "clustered-snapshot",
   ],
   narrowRange: [
+    "range-manifested",
     "range-experimental",
     "range-snapshot",
   ],
   distributedEquality: [
+    "distributed-manifested",
     "distributed-experimental",
     "distributed-snapshot",
   ],
@@ -42,6 +46,7 @@ for (const cases of Object.values(queryGroups)) {
   await Promise.all(cases.map((caseName) => invoke(caseName)));
 }
 await Promise.all([
+  invoke("scan-manifested"),
   invoke("scan-experimental"),
   invoke("scan-snapshot"),
 ]);
@@ -77,6 +82,7 @@ for (const [name, cases] of Object.entries(queryGroups)) {
 }
 
 const scanSamples = {
+  "scan-manifested": [],
   "scan-experimental": [],
   "scan-snapshot": [],
 };

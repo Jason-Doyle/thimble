@@ -22,6 +22,9 @@ import {
   type IndexedSegmentPredicate,
   type IndexedSegmentSource,
 } from "../../../src/experimental/indexed-segment.js";
+import {
+  ExperimentalManifestedSegmentEngine,
+} from "../../../src/experimental/manifested-segment.js";
 import { PrefixObjectStore } from "../../../src/prefix-store.js";
 import {
   R2ObjectStore,
@@ -205,6 +208,8 @@ async function runCase(
 
   if (caseName === "point-experimental") {
     metrics = await experimentalPoint(env, id);
+  } else if (caseName === "point-manifested") {
+    metrics = await manifestedPoint(env, id);
   } else if (caseName === "point-snapshot") {
     metrics = await oldPoint(env, "snapshot", id);
   } else if (caseName === "point-trie") {
@@ -217,6 +222,12 @@ async function runCase(
       operator: "eq",
       value: config.clusteredCategory,
     });
+  } else if (caseName === "clustered-manifested") {
+    metrics = await manifestedQuery(env, {
+      field: "category",
+      operator: "eq",
+      value: config.clusteredCategory,
+    });
   } else if (caseName === "clustered-snapshot") {
     metrics = await snapshotQuery(env, {
       field: "category",
@@ -225,6 +236,13 @@ async function runCase(
     });
   } else if (caseName === "range-experimental") {
     metrics = await experimentalQuery(env, {
+      field: "lastModified",
+      operator: "between",
+      lower: config.rangeLower,
+      upper: config.rangeUpper,
+    });
+  } else if (caseName === "range-manifested") {
+    metrics = await manifestedQuery(env, {
       field: "lastModified",
       operator: "between",
       lower: config.rangeLower,
@@ -243,6 +261,12 @@ async function runCase(
       operator: "eq",
       value: config.distributedBucket,
     });
+  } else if (caseName === "distributed-manifested") {
+    metrics = await manifestedQuery(env, {
+      field: "bucket",
+      operator: "eq",
+      value: config.distributedBucket,
+    });
   } else if (caseName === "distributed-snapshot") {
     metrics = await snapshotQuery(env, {
       field: "bucket",
@@ -251,10 +275,48 @@ async function runCase(
     });
   } else if (caseName === "scan-experimental") {
     metrics = await experimentalScan(env);
+  } else if (caseName === "scan-manifested") {
+    metrics = await manifestedScan(env);
   } else if (caseName === "scan-snapshot") {
     metrics = await snapshotScan(env);
   } else {
     throw new Error(`Unknown benchmark case ${caseName}`);
+  }
+
+  async function manifestedPoint(
+    env: Env,
+    id: string,
+  ): Promise<RunMetrics> {
+    const runtime = await createManifestedEngine(env);
+    const document = await runtime.engine.get("notes", id);
+    requireDocument(document, id, "manifested");
+    return storeMetrics(runtime.store, 1);
+  }
+
+  async function manifestedQuery(
+    env: Env,
+    predicate: IndexedSegmentPredicate,
+  ): Promise<RunMetrics> {
+    const runtime = await createManifestedEngine(env);
+    const result = await runtime.engine.query(
+      "notes",
+      predicate,
+      Number(env.BENCHMARK_DOCUMENTS),
+    );
+    return storeMetrics(runtime.store, result.documents.length);
+  }
+
+  async function manifestedScan(
+    env: Env,
+  ): Promise<RunMetrics> {
+    const runtime = await createManifestedEngine(env);
+    const documents = await runtime.engine.scan("notes");
+    requireCount(
+      documents.length,
+      Number(env.BENCHMARK_DOCUMENTS),
+      "manifested scan",
+    );
+    return storeMetrics(runtime.store, documents.length);
   }
 
   return {
@@ -414,6 +476,34 @@ async function createTrieEngine(env: Env): Promise<{
     store: storage.counting,
     engine: new ContentAddressedTrieEngine(
       storage.encrypted,
+    ),
+  };
+}
+
+async function createManifestedEngine(env: Env): Promise<{
+  engine: ExperimentalManifestedSegmentEngine;
+  store: CountingObjectStore;
+}> {
+  const key = (await getKeyMaterial(env)).key;
+  const storage = countingEncryptedStore(
+    env,
+    "manifested",
+    key,
+  );
+  return {
+    store: storage.counting,
+    engine: new ExperimentalManifestedSegmentEngine(
+      storage.encrypted,
+      {
+        targetBlockBytes: 256 * 1024,
+        collectionFields: {
+          notes: [
+            { field: "category", mode: "equality" },
+            { field: "bucket", mode: "equality" },
+            { field: "lastModified", mode: "range" },
+          ],
+        },
+      },
     ),
   };
 }
