@@ -89,6 +89,9 @@ let keyMaterialPromise: Promise<KeyMaterial> | undefined;
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/regional-result") {
+      return regionalResult(request, env, url);
+    }
     if (url.pathname === "/benchmark-config.json") {
       return json(benchmarkConfig(env));
     }
@@ -140,6 +143,54 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+async function regionalResult(
+  request: Request,
+  env: Env,
+  url: URL,
+): Promise<Response> {
+  const run = safeResultName(url.searchParams.get("run"));
+  const region = safeResultName(
+    url.searchParams.get("region"),
+  );
+  if (!run || !region) {
+    return json({ error: "Invalid result path" }, 400);
+  }
+  const key = `results/${run}/${region}.json`;
+  if (request.method === "POST") {
+    const declared = Number(
+      request.headers.get("content-length") ?? "0",
+    );
+    if (declared > 1024 * 1024) {
+      return json({ error: "Result is too large" }, 413);
+    }
+    const body = await request.text();
+    if (body.length > 1024 * 1024) {
+      return json({ error: "Result is too large" }, 413);
+    }
+    JSON.parse(body);
+    await env.BENCHMARK_BUCKET.put(
+      key,
+      new TextEncoder().encode(body),
+    );
+    return json({ stored: key }, 201);
+  }
+  if (request.method === "GET") {
+    const object = (await env.BENCHMARK_BUCKET.get(
+      key,
+    )) as RangeObject | null;
+    if (!object) {
+      return json({ error: "Result not found" }, 404);
+    }
+    return new Response(object.body, {
+      headers: {
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=utf-8",
+      },
+    });
+  }
+  return json({ error: "Method not allowed" }, 405);
+}
 
 async function runCase(
   request: Request,
@@ -671,6 +722,12 @@ function requireCount(
 function quoteEtag(etag: string): string {
   const raw = etag.replace(/^W\//, "").replace(/^"|"$/g, "");
   return `"${raw}"`;
+}
+
+function safeResultName(value: string | null): string | null {
+  return value && /^[A-Za-z0-9_-]{1,80}$/.test(value)
+    ? value
+    : null;
 }
 
 function round(value: number): number {

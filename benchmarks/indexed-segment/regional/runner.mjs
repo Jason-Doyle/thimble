@@ -1,5 +1,6 @@
 const target = required("TARGET_URL").replace(/\/+$/, "");
 const region = required("BENCHMARK_REGION");
+const runId = required("BENCHMARK_RUN_ID");
 const pointIterations = numberValue(
   process.env.POINT_ITERATIONS,
   24,
@@ -105,6 +106,22 @@ const result = {
   coldPointSamples: pointSamples,
   queries,
 };
+
+const resultUrl = new URL("/regional-result", target);
+resultUrl.searchParams.set("run", runId);
+resultUrl.searchParams.set("region", region);
+const stored = await fetch(resultUrl, {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+  },
+  body: JSON.stringify(result),
+});
+if (!stored.ok) {
+  throw new Error(
+    `Result upload failed with ${stored.status}: ${await stored.text()}`,
+  );
+}
 
 console.log(`THIMBLE_RESULT=${JSON.stringify(result)}`);
 
