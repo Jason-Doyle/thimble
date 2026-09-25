@@ -126,7 +126,8 @@ Supported expressions:
 - up to four ordering fields
 - a result limit from 1 to 1,000
 
-ID equality is planned as a direct document read.
+ID equality uses a direct document read. On a cold cache miss, an authority
+with read bundles enabled can satisfy it with one bounded browser request.
 
 ## Local predicates
 
