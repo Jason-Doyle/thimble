@@ -15,8 +15,8 @@
 | [Use cases](USE-CASES.md) | Fit criteria and application-specific guides |
 | [Database comparisons](COMPARISONS.md) | Workload comparisons with D1, SQLite, Firestore, lowdb, and direct object storage |
 | [Architecture](ARCHITECTURE.md) | Components, data flow, scopes, and provider model |
-| [Authority deployment modes](AUTHORITY-DEPLOYMENT.md) | Embedded and separate authority topologies, decision criteria, and origin boundaries |
-| [System diagrams](DIAGRAMS.md) | Trust boundaries, sequences, keys, scopes, and providers |
+| [In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md) | Topologies, scaling opportunities, trust boundaries, and origin requirements |
+| [System diagrams](DIAGRAMS.md) | Trust, deployment, read, write, deletion, key, migration, Studio, and provider flows |
 | [Storage providers](STORAGE-PROVIDERS.md) | Provider abstraction, support levels, and conformance |
 | [Security](SECURITY.md) | Threat model, keys, encryption, revocation, and XSS boundary |
 | [Authentication](AUTHENTICATION.md) | External identity mappings, sessions, and scope grants |

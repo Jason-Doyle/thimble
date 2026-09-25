@@ -1,7 +1,7 @@
 # System diagrams
 
 These Mermaid diagrams describe the ThimbleDB 3.1 data, identity, query,
-index, migration, and deployment paths.
+index, deletion, migration, and deployment paths.
 
 ## Trust boundaries
 
@@ -68,7 +68,7 @@ flowchart LR
 The browser receives decrypt-only scope keys. It never receives a storage
 credential, an authority write key, or a database-wide administrator key.
 
-## Embedded authority deployment
+## In-app (embedded) authority deployment
 
 ```mermaid
 flowchart LR
@@ -94,11 +94,11 @@ flowchart LR
   Secrets --> Authority
 ```
 
-Embedded mode keeps one deployment, release cadence, public origin, and
+In-app mode keeps one deployment, release cadence, public origin, and
 scaling policy. Application server code and authority secrets share one
 runtime trust boundary.
 
-## Separate authority deployment
+## Separate Worker or service deployment
 
 ```mermaid
 flowchart LR
@@ -111,7 +111,7 @@ flowchart LR
 
   App["Application assets or application service"]
 
-  subgraph AuthorityService["Separate authority deployment"]
+  subgraph AuthorityService["Separate Worker or service deployment"]
     Authority["ThimbleDB authority"]
     Broker["Object broker and read bundles"]
     Mutation["Validation and conditional writes"]
@@ -174,8 +174,10 @@ flowchart TD
   Point{"ID equality?"}
   Bundle{"Cold cache and bundle endpoint available?"}
   BundleRead["One bounded authority read bundle"]
+  BundleValidate["Validate bundled HEAD and immutable values"]
   Index{"Matching declared index with indexable values?"}
-  Head["Read collection HEAD"]
+  PointHead["Read collection HEAD"]
+  IndexHead["Read collection HEAD"]
   IndexPage["Read immutable encrypted index page"]
   Candidates["Resolve bounded candidate IDs"]
   Covered{"Explicit selected fields and all query fields covered?"}
@@ -188,10 +190,10 @@ flowchart TD
 
   Query --> Validate --> Point
   Point -- Yes --> Bundle
-  Bundle -- Yes --> BundleRead --> Result
-  Bundle -- No or fallback --> ReadDocs
+  Bundle -- Yes --> BundleRead --> BundleValidate --> Result
+  Bundle -- No or fallback --> PointHead --> ReadDocs
   Point -- No --> Index
-  Index -- Yes --> Head --> IndexPage --> Candidates --> Covered
+  Index -- Yes --> IndexHead --> IndexPage --> Candidates --> Covered
   Covered -- Yes --> Projection --> Predicate
   Covered -- No --> ReadDocs
   Index -- No --> Scan
@@ -202,7 +204,7 @@ flowchart TD
 Arrays and objects are not secondary-index values. Queries using those values
 fall back to a bounded scan instead of returning an empty indexed result.
 
-## Indexed query read sequence
+## Point-read and indexed-query sequence
 
 ```mermaid
 sequenceDiagram
@@ -220,7 +222,7 @@ sequenceDiagram
     Client->>Broker: GET bounded point-read bundle
     Broker->>Broker: Require current read grant and enforce object/byte limits
     Broker-->>Client: Decoded HEAD and immutable cache values over HTTPS
-    Client->>Cache: Store returned objects
+    Client->>Cache: Store returned values with device-key encryption
   else HEAD missing or stale
     Client->>Broker: GET encrypted HEAD with session
     Broker->>Store: Read object with ETag condition
@@ -244,7 +246,7 @@ sequenceDiagram
     Client->>Client: Enforce bounded collection scan
   end
 
-  Client->>Client: Decrypt, validate candidates, order, and limit
+  Client->>Client: Decrypt when required, validate candidates, order, and limit
   Client-->>App: Documents plus point/index/scan plan
 ```
 
@@ -282,6 +284,32 @@ sequenceDiagram
 Document roots and secondary indexes become visible through the same
 conditional HEAD write. A process that sees existing index references but has
 no matching index configuration refuses to rewrite the collection.
+
+## Retained deletion, restore, and physical collection
+
+```mermaid
+flowchart LR
+  Live["Live document"]
+  Delete["Authorised DELETE"]
+  Tombstone["Encrypted tombstone<br/>original document retained"]
+  Hidden["Reads and scans hide document"]
+  Restore{"Restore requested<br/>inside restore window?"}
+  Restored["Authorised restore<br/>new live generation"]
+  Grace["Restore window expires<br/>then purge grace elapses"]
+  Purge["Authorised purge removes tombstone<br/>from current live layout"]
+  Unreachable["Old immutable generations<br/>become unreachable"]
+  Quiescent["All authorities in maintenance mode<br/>quiescent flag confirmed"]
+  Collection["Maintenance deletes unreachable objects<br/>and retired layout prefixes"]
+
+  Live --> Delete --> Tombstone --> Hidden --> Restore
+  Restore -- Yes --> Restored --> Live
+  Restore -- No --> Grace --> Purge --> Unreachable
+  Unreachable --> Quiescent --> Collection
+```
+
+Logical deletion is immediate, restoration is bounded by the configured
+retention window, and physical object deletion is a separate operator-approved
+maintenance step. Object-store age rules cannot determine reachability.
 
 ## Key hierarchy, rotation, and browser lifetime
 

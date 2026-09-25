@@ -3,6 +3,7 @@ import {
   readFileSync,
   readdirSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 const root = process.cwd();
@@ -164,6 +165,29 @@ if (!packageJson.files?.includes("docs")) {
 if (packageJson.homepage !== "https://thimbledb.com") {
   errors.push("package.json: homepage is not https://thimbledb.com");
 }
+if (
+  !packageJson.description?.includes(
+    "Encrypted browser-first JSON database",
+  ) ||
+  !packageJson.description.includes("in-app or separate")
+) {
+  errors.push(
+    "package.json: description does not match the current product and deployment model",
+  );
+}
+for (const keyword of [
+  "browser-database",
+  "json-database",
+  "object-storage",
+  "cloudflare-workers",
+  "aws-s3",
+  "azure-blob-storage",
+  "oidc",
+]) {
+  if (!packageJson.keywords?.includes(keyword)) {
+    errors.push(`package.json: missing keyword ${keyword}`);
+  }
+}
 
 const changelog = readFileSync(
   path.join(root, "CHANGELOG.md"),
@@ -183,6 +207,25 @@ const configuration = readFileSync(
   path.join(docsRoot, "CONFIGURATION.md"),
   "utf8",
 );
+const readme = readFileSync(path.join(root, "README.md"), "utf8");
+const readmeDiagramCount = [
+  ...readme.matchAll(/```mermaid\s*\r?\n[\s\S]*?\r?\n```/g),
+].length;
+if (readmeDiagramCount < 4) {
+  errors.push(
+    `README.md: expected at least 4 detailed Mermaid diagrams, found ${readmeDiagramCount}`,
+  );
+}
+for (const heading of [
+  "### Identity, session, and client bootstrap",
+  "### Read flow",
+  "### Mutation and cache-synchronisation flow",
+  "### Deployment, scaling, and storage flow",
+]) {
+  if (!readme.includes(heading)) {
+    errors.push(`README.md: missing ${heading}`);
+  }
+}
 const sourceFiles = walk(path.join(root, "src")).filter((file) =>
   file.endsWith(".ts"),
 );
@@ -215,6 +258,47 @@ configuredNames.delete("AWS_LAMBDA_FUNCTION_NAME");
 for (const name of configuredNames) {
   if (!configuration.includes(`\`${name}\``)) {
     errors.push(`docs/CONFIGURATION.md: missing ${name}`);
+  }
+}
+
+const diagramDirectory = path.join(
+  root,
+  "site",
+  "public",
+  "diagrams",
+);
+const expectedDiagramAssets = new Set(
+  walk(docsRoot)
+    .filter((file) => file.endsWith(".md"))
+    .flatMap((file) => [
+      ...readFileSync(file, "utf8").matchAll(
+        /```mermaid\s*\r?\n([\s\S]*?)\r?\n```/g,
+      ),
+    ])
+    .map((match) =>
+      `${createHash("sha256")
+        .update(match[1].replace(/\r\n/g, "\n").trim())
+        .digest("hex")
+        .slice(0, 20)}.svg`,
+    ),
+);
+const actualDiagramAssets = new Set(
+  readdirSync(diagramDirectory).filter((file) =>
+    file.endsWith(".svg"),
+  ),
+);
+for (const asset of expectedDiagramAssets) {
+  if (!actualDiagramAssets.has(asset)) {
+    errors.push(
+      `site/public/diagrams: missing ${asset}; run npm run site:diagrams`,
+    );
+  }
+}
+for (const asset of actualDiagramAssets) {
+  if (!expectedDiagramAssets.has(asset)) {
+    errors.push(
+      `site/public/diagrams: stale ${asset}; run npm run site:diagrams`,
+    );
   }
 }
 

@@ -11,7 +11,8 @@ The Bicep template is `deploy/azure/main.bicep`.
 
 The Container App authority can share an application deployment boundary or
 run independently behind Front Door or another same-origin gateway. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md) for the
+scaling and operations tradeoffs.
 
 ## Prerequisites
 

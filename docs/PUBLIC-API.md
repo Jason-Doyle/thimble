@@ -110,8 +110,8 @@ authentication, object broker, key grant, write, deletion, linking,
 administration, retention, and layout-migration endpoints used by the
 reference deployment.
 
-See [Authority deployment modes](AUTHORITY-DEPLOYMENT.md) before choosing one
-application deployment or a separately operated authority service.
+See [In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md) before
+choosing an in-app authority or a separately operated Worker or service.
 
 ### `thimbledb/authority/cloudflare`
 

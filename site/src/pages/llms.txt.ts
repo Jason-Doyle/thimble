@@ -34,7 +34,8 @@ scope and one collection.
 ## Architecture and security
 
 - [Architecture](${site.url}/docs/architecture/): Browser cache, authority, object storage, and scopes.
-- [Authority deployment modes](${site.url}/docs/authority-deployment/): Embedded and separate authority services, decision criteria, and same-origin requirements.
+- [In-app and separate authority deployment](${site.url}/docs/authority-deployment/): Topologies, scaling opportunities, trust boundaries, and same-origin requirements.
+- [System diagrams](${site.url}/docs/diagrams/): Rendered trust, deployment, read, write, deletion, key, migration, Studio, and provider flows.
 - [Security](${site.url}/security/): Threat model, encryption, key handling, and browser boundaries.
 - [Authentication](${site.url}/docs/authentication/): External OIDC identities and revocable sessions.
 - [Machine and service access](${site.url}/docs/service-access/): Entra roles, service principals, live viewers, and why there is no global admin key.

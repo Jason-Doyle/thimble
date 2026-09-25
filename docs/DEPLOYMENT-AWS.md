@@ -10,7 +10,8 @@ The CloudFormation template is `deploy/aws/template.yaml`.
 
 The Lambda authority can be deployed with the application or as a separate
 service behind the same public application gateway. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md) for the
+scaling and operations tradeoffs.
 
 ## Build the Lambda image
 

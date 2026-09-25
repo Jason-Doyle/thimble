@@ -198,9 +198,9 @@ export const docs: DocMeta[] = [
   },
   {
     id: "authority-deployment",
-    title: "Authority deployment modes",
+    title: "In-app and separate authority deployment",
     description:
-      "Choose an embedded or separately deployed authority and preserve the browser origin, secret, and operations boundaries.",
+      "Compare in-app and separate Worker or service topologies, scaling opportunities, trust boundaries, and same-origin requirements.",
     group: "Understand",
     order: 15,
     featured: true,
@@ -209,7 +209,7 @@ export const docs: DocMeta[] = [
     id: "diagrams",
     title: "System diagrams",
     description:
-      "Review trust boundaries, query and index flows, key rotation, service access, migration, and provider topology.",
+      "Review trust boundaries, deployment styles, read and write flows, deletion, key rotation, migration, and provider topology.",
     group: "Understand",
     order: 20,
   },

@@ -12,6 +12,10 @@ comments, contact forms, or application data storage. It does not receive
 documents, scope keys, provider credentials, session cookies, or exports from
 applications that use ThimbleDB.
 
+Search and copy controls run in the browser. Mermaid source is pre-rendered
+into site-hosted SVG assets during development and is not sent to an external
+rendering service when a visitor opens the site.
+
 Cloudflare hosts the site and Cloudflare Web Analytics is enabled. Cloudflare
 describes Web Analytics as privacy-first analytics that does not use cookies
 or collect visitors' personal data:

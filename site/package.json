@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "prepare:assets": "node scripts/prepare-assets.mjs",
+    "generate:diagrams": "node scripts/generate-diagrams.mjs",
     "dev": "npm run prepare:assets && astro dev",
     "check": "npm run prepare:assets && astro check",
     "build": "npm run prepare:assets && astro check && astro build",

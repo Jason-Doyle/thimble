@@ -4,7 +4,7 @@ export const site = {
   name: "ThimbleDB",
   url: "https://thimbledb.com",
   description:
-    "Encrypted browser-first database for small web applications, backed by object storage.",
+    "Encrypted browser-first JSON database for small web apps, backed by object storage with in-app or separate Cloudflare and Node authorities.",
   repository: "https://github.com/Jason-Doyle/thimble",
   issues: "https://github.com/Jason-Doyle/thimble/issues",
   license:

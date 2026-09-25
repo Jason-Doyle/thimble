@@ -23,55 +23,152 @@ Licensed under the [Apache License 2.0](LICENSE).
 
 ## Architecture
 
+### Identity, session, and client bootstrap
+
 ```mermaid
-flowchart LR
-  subgraph Browser["Browser trust boundary"]
-    App["Web application"]
-    Client["ThimbleDB client"]
-    Memory["Decoded memory LRU"]
-    IDB["Device-key-encrypted IndexedDB"]
-    ScopeKey["Non-extractable scope key"]
+sequenceDiagram
+  autonumber
+  participant User as User
+  participant IdP as External OIDC provider
+  participant App as Browser application
+  participant Client as ThimbleDB client
+  participant Cache as Memory + encrypted IndexedDB
+  participant Authority as In-app or separate authority
+  participant Auth as Private auth store
 
-    App --> Client
-    Client --> Memory
-    Client --> IDB
-    Client --> ScopeKey
-  end
+  User->>IdP: Authenticate with authorization code + PKCE
+  IdP-->>App: Short-lived access token
+  App->>Authority: Exchange token for opaque session
+  Authority->>Authority: Verify signature, issuer, audience, scope, and role
+  Authority->>Auth: Map identity and create revocable session
+  Authority-->>App: HttpOnly cookie and CSRF token
 
-  subgraph ReadPath["Authenticated read boundary"]
-    Domain["Ciphertext-object and decoded-bundle endpoint"]
-    Objects["TDB1 gzip + AES-GCM envelopes"]
-    Domain --> Objects
-  end
-
-  subgraph Authority["Authenticated authority boundary"]
-    Auth["Authentication and scope authorisation"]
-    Grant["Short-lived key grant"]
-    Write["Validation and conditional write"]
-    Auth --> Grant
-    Auth --> Write
-  end
-
-  Client -- "Ciphertext objects or opt-in bounded bundles" --> Domain
-  Client -- "Mutations" --> Auth
-  Grant -- "Memory-only CryptoKey" --> ScopeKey
-  Write -- "Encrypted objects" --> Objects
+  App->>Client: createThimbleClient()
+  Client->>Authority: GET /api/config
+  Authority->>Auth: Reload user and calculate current grants
+  Authority-->>Client: Scope, layouts, indexes, generation, and capabilities
+  Client->>Authority: GET authorised scope-key grant
+  Authority-->>Client: Current and readable historical scope keys
+  Client->>Client: Import non-extractable decrypt-only keys
+  Client->>Cache: Open authority-and-scope cache namespace
+  Client-->>App: Ready typed client
 ```
+
+1. External OIDC owns credentials, MFA, recovery, and token issuance. Service
+   principals use short-lived application tokens through the same exchange.
+2. The authority maps the external identity to a stable internal principal,
+   stores only an opaque session digest, and recalculates grants on requests.
+3. The browser imports authorised scope keys as non-extractable, memory-only
+   CryptoKeys. Persistent cache values use a separate device key.
+
+### Read flow
+
+```mermaid
+flowchart TD
+  Read["Point read or bounded query"] --> HeadCached{"Collection HEAD cached?"}
+  HeadCached -- No --> BundleCheck{"Eligible cold point read<br/>and bundle advertised?"}
+  HeadCached -- Yes --> HeadFresh{"HEAD inside its TTL?"}
+  HeadFresh -- Yes --> Resolve["Resolve referenced index,<br/>snapshot, or trie objects"]
+  HeadFresh -- No --> Revalidate["Authenticated HEAD revalidation<br/>with If-None-Match"]
+  Revalidate --> HeadResult{"HEAD result"}
+  HeadResult -- "304" --> Resolve
+  HeadResult -- "Changed" --> Objects
+  HeadResult -- "Network unavailable<br/>and cached HEAD usable" --> Resolve
+  HeadResult -- "Network unavailable<br/>and no usable cache" --> ReadError["Return explicit read error"]
+  Resolve --> ValuesCached{"Required immutable values cached?"}
+  ValuesCached -- Yes --> Plan["Validate document or query plan,<br/>predicate, ordering, projection, and limit"]
+  ValuesCached -- No --> Objects
+
+  BundleCheck -- Yes --> Bundle["Authority revalidates read grant,<br/>reads encrypted HEAD and required objects"]
+  Bundle --> BundleLimit{"At most 4 objects and 4 MiB<br/>with authenticated size metadata?"}
+  BundleLimit -- Yes --> Decoded["Return decoded cache values<br/>over HTTPS with no-store"]
+  BundleLimit -- No --> Objects
+  BundleCheck -- No --> Objects["Revalidate read grant and return<br/>authenticated TDB1 objects"]
+  Objects --> BrowserDecrypt["Browser decrypts and validates<br/>HEAD, index, snapshot, or trie objects"]
+  Decoded --> DeviceCache["Encrypt decoded values with device key<br/>and update the scoped cache"]
+  BrowserDecrypt --> DeviceCache --> Plan
+  Plan --> ReadResult["Document, or bounded query result<br/>with point, index, or scan plan"]
+```
+
+1. Warm reads stay in the authority-and-scope cache while the mutable HEAD is
+   fresh. Expired HEADs use conditional revalidation, and a usable cache can
+   remain available during a network failure.
+2. Cold point reads can use one
+   bounded decoded bundle when explicitly enabled; every ineligible or failed
+   bundle falls back to authenticated TDB1 object reads.
+3. Queries remain bounded and report whether they used a point, declared
+   index, covering projection, or collection scan plan.
+
+### Mutation and cache-synchronisation flow
+
+```mermaid
+flowchart TD
+  Mutation["Create, replace, delete, restore, purge,<br/>scope erase, or index rebuild"]
+  Mutation --> Request["Session + CSRF + exact Origin<br/>scope + layout generation"]
+  Request --> Guards{"Operation allowed by maintenance state<br/>and generation current?"}
+  Guards -- No --> Reject["Return explicit maintenance<br/>or layout-changed error"]
+  Guards -- Yes --> Grant["Reload user and current write or admin grant"]
+  Grant --> Authorised{"Authorised?"}
+  Authorised -- No --> Deny["Return explicit forbidden response"]
+  Authorised -- Yes --> Load["Read current HEAD and affected immutable objects"]
+  Load --> Validate["Validate route, ID, document, limits,<br/>layout, and complete index configuration"]
+  Validate --> Immutable["Create immutable document, root,<br/>and index objects"]
+  Immutable --> Publish["Publish one HEAD with If-Match"]
+  Publish --> Conflict{"ETag conflict?"}
+  Conflict -- Yes --> Retry{"Bounded retry remains?"}
+  Retry -- Yes --> Load
+  Retry -- No --> ConflictError["Return explicit conflict"]
+  Conflict -- No --> Commit["Return committed values and new ETag"]
+  Commit --> Cache["Update the current scoped cache"]
+  Cache --> Tabs["Notify other tabs through BroadcastChannel"]
+  Tabs --> Result["Committed mutation result"]
+```
+
+1. The authority validates every mutation, creates immutable document and
+   index objects, and publishes their references through one conditional HEAD.
+2. Successful writes update the current cache and notify other tabs. Logout
+   revokes the session and clears the affected browser cache namespace.
+
+### Deployment, scaling, and storage flow
 
 ```mermaid
 flowchart TB
-  Engine["ThimbleDB protocol<br/>cache + scopes + TDB1 + conditional HEAD"]
-  Contract["ObjectStore abstraction<br/>get + put + delete + list + ETag conditions"]
+  Browser["Browser application"] --> Origin["One public browser origin"]
 
-  Engine --> Contract
-  Contract --> R2["Cloudflare R2<br/>preferred"]
-  Contract --> Local["Local filesystem<br/>development"]
-  Contract --> Azure["Azure Blob Storage<br/>supported"]
-  Contract --> S3["Amazon S3<br/>supported"]
+  subgraph InApp["In-app authority"]
+    Combined["Application + ThimbleDB authority<br/>secrets colocated<br/>one release and scaling policy"]
+  end
+
+  subgraph Separate["Separate Worker or service"]
+    Router["Path router or application gateway"]
+    Application["Application assets or server"]
+    Authority["ThimbleDB authority + secrets<br/>independent release, limits,<br/>logs, region, and scaling"]
+    Router -- "/" --> Application
+    Router -- "/api/* and /studio/*" --> Authority
+  end
+
+  Origin -- "In-app" --> Combined
+  Origin -- "Separate" --> Router
+
+  Combined --> Contract["ObjectStore contract<br/>get + put + delete + list + ETag conditions"]
+  Authority --> Contract
+
+  Contract --> R2["Cloudflare R2<br/>private data + auth bindings"]
+  Contract --> S3["Amazon S3<br/>private data + auth buckets"]
+  Contract --> Azure["Azure Blob Storage<br/>private data + auth containers"]
+  Contract --> Local["Local filesystem<br/>two roots, one process"]
 ```
 
+In-app deployment has the lowest operational floor and scales the application
+and authority together. A separate Worker or service isolates credentials,
+deployments, failures, observability, regional placement, and runtime scaling.
+It does not remove per-collection conditional-write contention or change the
+browser API.
+
 The stored object and encryption protocol stays the same across providers.
-Only bindings, credentials, and browser read authorisation differ.
+Only bindings, credentials, and deployment primitives differ. The local
+filesystem adapter remains single-process; use shared cloud object storage
+before horizontally scaling a Node authority.
 
 ## Features
 
@@ -165,9 +262,11 @@ Use the browser/core API from `thimbledb`, external identity primitives from
 `thimbledb/authority/node` or `thimbledb/authority/cloudflare`. Consumers
 supply their own domain, storage, OIDC application, and secrets.
 
-The authority can share the application deployment or run as a separate
-service behind the same public browser origin. See
-[Authority deployment modes](docs/AUTHORITY-DEPLOYMENT.md).
+The authority can run in-app with the application or as a separate Worker,
+container, function, or Node service behind the same public browser origin.
+In-app deployment minimises operations. A separate authority isolates secrets,
+releases, failures, and scaling. See
+[In-app and separate authority deployment](docs/AUTHORITY-DEPLOYMENT.md).
 
 After the authority session exists:
 
@@ -258,8 +357,8 @@ layout decision thresholds.
 | [npm publishing](docs/NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
 | [Use cases](docs/USE-CASES.md) | Fit criteria and application-specific guides |
 | [Architecture](docs/ARCHITECTURE.md) | Components, data flow, and scope model |
-| [Authority deployment modes](docs/AUTHORITY-DEPLOYMENT.md) | Embedded and separate authority topologies and decision criteria |
-| [System diagrams](docs/DIAGRAMS.md) | Trust boundaries, sequences, keys, and providers |
+| [In-app and separate authority deployment](docs/AUTHORITY-DEPLOYMENT.md) | Topologies, scaling opportunities, trust boundaries, and decision criteria |
+| [System diagrams](docs/DIAGRAMS.md) | Trust, deployment, read, write, deletion, key, migration, Studio, and provider flows |
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |
 | [Security](docs/SECURITY.md) | Threat model, encryption, keys, and revocation |
 | [Authentication](docs/AUTHENTICATION.md) | External identity mapping, sessions, and scope grants |

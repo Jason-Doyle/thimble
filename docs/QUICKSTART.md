@@ -12,12 +12,14 @@ The browser API is the same for every authority.
 
 Choose one deployment shape:
 
-- embed the authority in the application deployment
-- run the authority in a separate Worker, container, function, or Node service
+- run the authority in-app inside the application deployment for the smallest
+  operational surface
+- run the authority as a separate Worker, container, function, or Node service
+  for independent secret, release, failure, and scaling boundaries
 
 In either case, preserve one public browser origin through the application
 server or a path-based gateway. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md).
 
 ## Fast local evaluation
 

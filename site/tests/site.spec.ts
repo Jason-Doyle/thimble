@@ -19,7 +19,7 @@ test("homepage presents the product and complete SEO metadata", async ({
   ).toHaveAttribute("href", "https://thimbledb.com/");
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     "content",
-    /encrypted, browser-first database/i,
+    /encrypted browser-first JSON database/i,
   );
   await expect(
     page.locator('script[type="application/ld+json"]'),
@@ -47,6 +47,20 @@ test("homepage presents the product and complete SEO metadata", async ({
     "href",
     "https://github.com/Jason-Doyle/thimble/issues",
   );
+  await expect(
+    page.getByRole("heading", {
+      level: 3,
+      name: "Keep the authority in-app, or give it its own boundary.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: /Compare deployment and scaling tradeoffs/,
+    }),
+  ).toHaveAttribute("href", "/docs/authority-deployment/");
+  await expect(
+    page.locator('script[src*="MermaidDiagrams"]'),
+  ).toHaveCount(0);
   await assertNoHorizontalOverflow(page);
 });
 
@@ -86,19 +100,25 @@ test("repository documentation renders with rewritten internal links", async ({
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Authority deployment modes",
+      name: "In-app and separate authority deployment",
     }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", {
       level: 2,
-      name: "Embedded authority",
+      name: "In-app (embedded) authority",
     }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", {
       level: 2,
-      name: "Separate authority service",
+      name: "Separate Worker or service",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 2,
+      name: "Scaling opportunities",
     }),
   ).toBeVisible();
   await assertNoHorizontalOverflow(page);
@@ -128,6 +148,36 @@ test("documentation search returns relevant repository pages", async ({
   await expect(
     page.getByRole("link", { name: /Deletion and retention/ }),
   ).toBeVisible();
+});
+
+test("Mermaid source renders as diagrams with accessible fallback", async ({
+  page,
+}) => {
+  await page.goto("/docs/diagrams/");
+  await expect(
+    page.locator('script[src*="MermaidDiagrams"]'),
+  ).toHaveCount(0);
+  await expect(page.locator(".mermaid-figure")).toHaveCount(16);
+  await expect(page.locator(".mermaid-static")).toHaveCount(16);
+  await expect(page.locator(".mermaid-source")).toHaveCount(16);
+  await expect(page.locator(".mermaid-figure .code-shell")).toHaveCount(0);
+  const firstDiagram = page.locator(".mermaid-static").first();
+  await firstDiagram.scrollIntoViewIfNeeded();
+  await expect(firstDiagram).toHaveJSProperty("complete", true);
+  expect(
+    await firstDiagram.evaluate(
+      (image: HTMLImageElement) => image.naturalWidth,
+    ),
+  ).toBeGreaterThan(100);
+  expect(
+    Number(await firstDiagram.getAttribute("width")),
+  ).toBeGreaterThan(100);
+
+  await page.goto("/docs/authority-deployment/");
+  await page.goto("/docs/authority-deployment/");
+  await expect(
+    page.locator('script[src*="MermaidDiagrams"]'),
+  ).toHaveCount(0);
 });
 
 test("FAQ publishes structured answers and user-facing content", async ({
@@ -174,7 +224,8 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(llmsText).toContain("Logical migration");
   expect(llmsText).toContain("Machine and service access");
   expect(llmsText).toContain("ThimbleDB Studio");
-  expect(llmsText).toContain("Authority deployment modes");
+  expect(llmsText).toContain("In-app and separate authority deployment");
+  expect(llmsText).toContain("System diagrams");
   expect(llmsText).toContain("Configuration reference");
 
   const full = await request.get("/llms-full.txt");
@@ -185,7 +236,10 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(fullText).toContain("# Logical migration");
   expect(fullText).toContain("# Machine and service access");
   expect(fullText).toContain("# ThimbleDB Studio");
-  expect(fullText).toContain("# Authority deployment modes");
+  expect(fullText).toContain(
+    "# In-app and separate authority deployment",
+  );
+  expect(fullText).toContain("# System diagrams");
   expect(fullText).toContain("# Configuration reference");
   expect(fullText).toContain("# Website privacy");
   expect(fullText).toContain("## 3.1.0");

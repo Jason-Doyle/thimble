@@ -2,10 +2,10 @@
 
 Cloudflare Workers and R2 are the reference ThimbleDB deployment.
 
-The authority can share the application Worker deployment or run as a
-separately routed Worker. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md). In both modes, prefer
-one public browser origin.
+The authority can run in-app inside the application Worker or as a separately
+routed Worker with its own release, limits, logs, and scaling boundary. See
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md). In both
+modes, prefer one public browser origin.
 
 The design uses:
 
@@ -49,7 +49,7 @@ applies to Standard storage. Never attach a custom domain to the auth bucket.
 
 ## 4. Configure the application domain
 
-For the embedded reference deployment, use one Worker hostname:
+For the in-app reference deployment, use one Worker hostname:
 
 ```text
 db.example.com
