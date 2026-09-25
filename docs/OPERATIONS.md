@@ -84,7 +84,7 @@ $env:THIMBLE_MIGRATION_QUIESCENT = "true"
 $env:THIMBLE_SCOPE_ID = "user:<id>"
 $env:THIMBLE_COLLECTIONS = "notes"
 $env:THIMBLE_COLLECTION_LAYOUTS = "notes=snapshot"
-$env:THIMBLE_COLLECTION_INDEXES = '{"notes":[{"name":"by-title","fields":["title"],"mode":"equality"}]}'
+$env:THIMBLE_COLLECTION_INDEXES = '{"notes":[{"name":"by-title","fields":["title"],"mode":"equality","include":["lastModified"]}]}'
 npx thimbledb rebuild-indexes
 ```
 
@@ -94,6 +94,7 @@ through the collection HEAD, and verifies full document equality.
 Other rewrite operations preserve the complete active index definition set
 and fail if `THIMBLE_COLLECTION_INDEXES` is absent, partial, or mismatched.
 Use the explicit index migration when removing or redefining an index.
+Adding or changing covering `include` fields is an index redefinition.
 
 See [Queries and secondary indexes](QUERIES-INDEXES.md).
 
@@ -141,6 +142,7 @@ Record:
 
 - read source: memory, IndexedDB, or remote
 - remote object bytes
+- read-bundle requests, bytes, object counts, and fallbacks
 - compression ratio
 - envelope encode/decode duration
 - HEAD conditional-write retries

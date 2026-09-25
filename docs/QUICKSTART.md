@@ -10,6 +10,15 @@ Choose one authority:
 
 The browser API is the same for every authority.
 
+Choose one deployment shape:
+
+- embed the authority in the application deployment
+- run the authority in a separate Worker, container, function, or Node service
+
+In either case, preserve one public browser origin through the application
+server or a path-based gateway. See
+[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+
 ## Fast local evaluation
 
 Generate a complete local Node authority and Vite application:
@@ -97,13 +106,14 @@ Use a Wrangler configuration with caller-owned resources:
     "THIMBLE_KEY_VERSION": "1",
     "THIMBLE_READ_KEY_VERSIONS": "",
     "THIMBLE_HEAD_TTL_MS": "10000",
+    "THIMBLE_READ_BUNDLES": "true",
     "THIMBLE_COLLECTION_LAYOUTS": "",
     "THIMBLE_COLLECTION_INDEXES": "{}",
     "THIMBLE_RETIRED_COLLECTION_LAYOUTS": "",
     "THIMBLE_DELETE_RETENTION_DAYS": "30",
     "THIMBLE_DELETE_GRACE_DAYS": "7",
     "THIMBLE_MAINTENANCE_MODE": "false",
-    "THIMBLE_ALLOWED_ORIGIN": "https://app.example.com",
+    "THIMBLE_ALLOWED_ORIGIN": "https://database.example.com",
     "ENTRA_TENANT_ID": "<tenant-id>",
     "ENTRA_AUDIENCE": "<api-client-id>",
     "ENTRA_REQUIRED_SCOPE": "thimble.access",
@@ -121,7 +131,7 @@ Use a Wrangler configuration with caller-owned resources:
   ],
   "routes": [
     {
-      "pattern": "db.example.com",
+      "pattern": "database.example.com",
       "custom_domain": true
     }
   ]
@@ -159,7 +169,9 @@ Create `server.mjs`:
 ```js
 import { startNodeAuthority } from "thimbledb/authority/node";
 
-await startNodeAuthority();
+await startNodeAuthority({
+  readBundles: true,
+});
 ```
 
 For local development:
@@ -226,7 +238,14 @@ type Note = {
 
 const notes = defineCollection<Note>("notes", {
   indexes: [
-    defineIndex<Note>("by-title", ["title"]),
+    defineIndex<Note>(
+      "by-title",
+      ["title"],
+      "equality",
+      {
+        include: ["body", "lastModified"],
+      },
+    ),
     defineIndex<Note>(
       "by-last-modified",
       ["lastModified"],
@@ -235,16 +254,36 @@ const notes = defineCollection<Note>("notes", {
   ],
 });
 
+const noteCardSchema = {
+  parse(value: unknown): Pick<
+    Note,
+    "id" | "title" | "body" | "lastModified"
+  > {
+    return value as Pick<
+      Note,
+      "id" | "title" | "body" | "lastModified"
+    >;
+  },
+};
+
 const result = await db
   .collection(notes)
   .where((note) => note.title.eq("First note"))
   .orderBy((note) => note.lastModified.desc())
   .take(25)
+  .select(
+    ["title", "body", "lastModified"],
+    noteCardSchema,
+  )
   .get();
 ```
 
 The authority must configure the same indexes. See
 [Queries and secondary indexes](QUERIES-INDEXES.md).
+
+On an eligible cold point read, the ready client uses the bounded bundle
+endpoint advertised by a version 3.1 authority. Older or oversized
+deployments automatically use the individual object path.
 
 ## Advanced manual client construction
 
@@ -255,6 +294,7 @@ directly:
 import {
   EnvelopeJsonObjectReader,
   HttpByteObjectReader,
+  HttpPointReadBundleReader,
   IndexedDbObjectCache,
   MemoryObjectCache,
   ScopedJsonObjectReader,
@@ -302,6 +342,14 @@ const cache = new TieredObjectCache(
 
 const db = new ThimbleClient({
   reader,
+  ...(config.readBundleBaseUrl
+    ? {
+        bundleReader: new HttpPointReadBundleReader(
+          config.readBundleBaseUrl,
+          config.scope.id,
+        ),
+      }
+    : {}),
   cache,
   headTtlMs: config.headTtlMs,
   csrfToken: config.csrfToken,
@@ -338,11 +386,13 @@ Confirm:
 2. The session cookie is HttpOnly, SameSite=Strict, and Secure in production.
 3. `/api/config` returns the expected internal user scope.
 4. Brokered objects begin with `TDB1`.
-5. R2, S3, or Blob credentials never reach the browser.
-6. Scope keys exist only as non-extractable in-memory CryptoKeys.
-7. Logout blocks later object reads and clears the browser cache.
-8. Delete and restore follow the configured retention window.
-9. A stale layout generation receives `409 layout_changed`.
+5. Eligible cold point reads use one bounded bundle request and oversized
+   bundles fall back to the object path.
+6. R2, S3, or Blob credentials never reach the browser.
+7. Scope keys exist only as non-extractable in-memory CryptoKeys.
+8. Logout blocks later object reads and clears the browser cache.
+9. Delete and restore follow the configured retention window.
+10. A stale layout generation receives `409 layout_changed`.
 
 Continue with [Authentication](AUTHENTICATION.md),
 [Local development](DEVELOPMENT.md),

@@ -188,6 +188,15 @@ export const docs: DocMeta[] = [
     featured: true,
   },
   {
+    id: "authority-deployment",
+    title: "Authority deployment modes",
+    description:
+      "Choose an embedded or separately deployed authority and preserve the browser origin, secret, and operations boundaries.",
+    group: "Understand",
+    order: 15,
+    featured: true,
+  },
+  {
     id: "diagrams",
     title: "System diagrams",
     description:
@@ -258,7 +267,7 @@ export const docs: DocMeta[] = [
     id: "queries-indexes",
     title: "Queries and secondary indexes",
     description:
-      "Define typed collections, bounded predicates, deterministic query plans, and explicit immutable indexes.",
+      "Define typed collections, bounded predicates, deterministic query plans, explicit indexes, and covering projections.",
     group: "Understand",
     order: 75,
     featured: true,

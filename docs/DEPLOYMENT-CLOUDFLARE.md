@@ -2,6 +2,11 @@
 
 Cloudflare Workers and R2 are the reference ThimbleDB deployment.
 
+The authority can share the application Worker deployment or run as a
+separately routed Worker. See
+[Authority deployment modes](AUTHORITY-DEPLOYMENT.md). In both modes, prefer
+one public browser origin.
+
 The design uses:
 
 - one Worker for static assets, writes, sessions, and scope-key grants
@@ -21,7 +26,7 @@ npm run build:client
 npm run build:worker
 ```
 
-The Worker bundle is about 33.8 KB gzip. Track bundle growth before
+The Worker bundle is about 42.9 KB gzip. Track bundle growth before
 deploying an upgrade.
 
 ## 2. Authenticate Wrangler
@@ -44,7 +49,7 @@ applies to Standard storage. Never attach a custom domain to the auth bucket.
 
 ## 4. Configure the application domain
 
-Use one Worker hostname:
+For the embedded reference deployment, use one Worker hostname:
 
 ```text
 db.example.com
@@ -52,6 +57,10 @@ db.example.com
 
 Object reads pass through the Worker and require a valid session and scope
 grant. No R2 custom domain or browser CORS rule is required.
+
+For a separate authority Worker, route `/api/*` and `/studio/*` from the
+application hostname to that Worker rather than introducing a second browser
+origin by default.
 
 ## 5. Create Wrangler configuration
 
@@ -106,6 +115,7 @@ Enable the Studio API in the authority factory or set:
 ```text
 THIMBLE_STUDIO=true
 THIMBLE_STUDIO_ORIGIN=https://database.example.com
+THIMBLE_READ_BUNDLES=true
 ```
 
 Build the browser application and copy the package-owned Studio assets after
@@ -149,13 +159,15 @@ npx wrangler deploy --config deploy\cloudflare\wrangler.local.jsonc
 3. Seed the tiny store.
 4. Confirm `/api/config` returns provider `r2`.
 5. Confirm private object GETs use `/api/objects/scopes/...`.
-6. Confirm raw object bodies start with `TDB1` and contain no plaintext JSON.
-7. Confirm a second HEAD request returns 304.
-8. Confirm the browser key is non-extractable.
-9. Confirm logout revokes the session and blocks brokered reads.
-10. Delete and restore a test document.
-11. Confirm administrator user listing is restricted to `thimble.admin`.
-12. Enable maintenance mode in a non-production scope and verify writes return
+6. Confirm `/api/config` advertises `/api/read-bundles`.
+7. Confirm an eligible cold point read uses one bounded bundle request.
+8. Confirm raw object bodies start with `TDB1` and contain no plaintext JSON.
+9. Confirm a second HEAD request returns 304.
+10. Confirm the browser key is non-extractable.
+11. Confirm logout revokes the session and blocks brokered reads.
+12. Delete and restore a test document.
+13. Confirm administrator user listing is restricted to `thimble.admin`.
+14. Enable maintenance mode in a non-production scope and verify writes return
     `503 maintenance_mode`.
 
 ## 10. Operations

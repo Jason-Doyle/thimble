@@ -71,6 +71,23 @@ authority-managed metadata and maintenance endpoints.
 This is a major release because bounded query behavior now fails closed when
 legacy collections do not yet contain authenticated size metadata.
 
+## Version 3.1
+
+Version 3.1 adds compatible read and index optimizations:
+
+- authorities may explicitly advertise a bounded point-read bundle endpoint
+- clients use one browser request on eligible cold point reads
+- clients fall back to individual object reads when the capability is absent
+  or bounded limits reject the bundle
+- secondary index definitions may declare up to eight covering fields
+- typed `.select(...)` projections can use those fields without loading full
+  documents
+
+The TDB1 envelope and collection HEAD formats are unchanged. Index pages gain
+optional definition and projection fields that older readers ignore. Upgrade
+every writing authority before enabling covering fields, then rebuild the
+affected indexes while writes are quiescent.
+
 ## Object protocol version
 
 `TDB1` is stored in every object envelope. Protocol compatibility is separate

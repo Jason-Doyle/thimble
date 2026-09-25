@@ -34,7 +34,13 @@ The UI can:
 - link external identities and use administrator controls
 - compare trie and snapshot collection behaviour
 - display remote reads, transferred bytes, cache hits, ETag 304 responses,
-  offline fallbacks, and retained memory
+  read-bundle requests and fallbacks, offline fallbacks, and retained memory
+
+Enable the opt-in cold point-read bundle path with:
+
+```powershell
+$env:THIMBLE_READ_BUNDLES = "true"
+```
 
 For a compiled local run:
 

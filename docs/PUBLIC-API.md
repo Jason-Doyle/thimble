@@ -37,18 +37,43 @@ Typed collection:
 ```ts
 const notes = defineCollection<Note>("notes", {
   indexes: [
-    defineIndex<Note>("by-title", ["title"]),
+    defineIndex<Note>(
+      "by-title",
+      ["title"],
+      "equality",
+      { include: ["lastModified"] },
+    ),
   ],
 });
+
+const noteSummarySchema = {
+  parse(value: unknown): Pick<
+    Note,
+    "id" | "title" | "lastModified"
+  > {
+    return value as Pick<
+      Note,
+      "id" | "title" | "lastModified"
+    >;
+  },
+};
 
 const result = await db
   .collection(notes)
   .where((note) => note.title.eq("abc"))
   .take(25)
+  .select(
+    ["title", "lastModified"],
+    noteSummarySchema,
+  )
   .get();
 ```
 
 See [Queries and secondary indexes](QUERIES-INDEXES.md).
+
+Connections created by `createThimbleClient()` use an advertised bounded
+point-read bundle endpoint on cold cache misses. They automatically retain the
+individual object path for older or oversized deployments.
 
 ### `thimbledb/auth`
 
@@ -70,6 +95,7 @@ import { startNodeAuthority } from "thimbledb/authority/node";
 
 await startNodeAuthority({
   studio: true,
+  readBundles: true,
   studioOrigin: "https://database.example.com",
   collections: ["notes"],
   collectionLayouts: {
@@ -84,6 +110,9 @@ authentication, object broker, key grant, write, deletion, linking,
 administration, retention, and layout-migration endpoints used by the
 reference deployment.
 
+See [Authority deployment modes](AUTHORITY-DEPLOYMENT.md) before choosing one
+application deployment or a separately operated authority service.
+
 ### `thimbledb/authority/cloudflare`
 
 ```ts
@@ -93,6 +122,7 @@ import {
 
 export default createCloudflareAuthority({
   studio: true,
+  readBundles: true,
   studioOrigin: "https://database.example.com",
   collections: ["notes"],
   collectionLayouts: {

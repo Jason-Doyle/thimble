@@ -36,6 +36,9 @@ export const notes = defineCollection("notes", noteSchema, {
       "by-last-modified",
       ["lastModified"],
       "range",
+      {
+        include: ["title"],
+      },
     ),
   ],
 });
@@ -189,6 +192,78 @@ four fields.
 
 Only scalar string, number, boolean, or null values are indexed. Arrays and
 objects remain available to bounded local filtering.
+
+## Explicit covering fields
+
+An index can include up to eight additional document fields:
+
+```ts
+defineIndex<Note>(
+  "by-title",
+  ["title"],
+  "equality",
+  {
+    include: ["body", "lastModified"],
+  },
+);
+```
+
+Use an explicit typed projection to opt into the covering path:
+
+```ts
+const noteCardSchema = {
+  parse(value: unknown): Pick<
+    Note,
+    "id" | "title" | "body" | "lastModified"
+  > {
+    // Validate with Zod or another schema in a real application.
+    return value as Pick<
+      Note,
+      "id" | "title" | "body" | "lastModified"
+    >;
+  },
+};
+
+const cards = await notes
+  .where((note) => note.title.eq("abc"))
+  .orderBy((note) => note.lastModified.desc())
+  .take(25)
+  .select(
+    ["title", "body", "lastModified"],
+    noteCardSchema,
+  )
+  .get();
+```
+
+The result documents contain `id` and the selected fields. The index can
+answer the query without full-document reads only when all predicate,
+ordering, and selected fields are either index key fields or declared
+`include` fields.
+
+The projection schema is required even when the index covers the query.
+ThimbleDB does not cast unvalidated index values to the application type.
+Zod-compatible `parse(value)` schemas work without adding Zod as a ThimbleDB
+runtime dependency.
+
+Each stored covering projection is limited to 64 KiB decoded. A write fails
+explicitly if the declared fields exceed that bound; choose smaller list-view
+fields instead of including large bodies or binary-like JSON values.
+
+The complete immutable index page is limited to 4 MiB decoded. Index pages are
+built and checked before changed document objects are written. Oversized
+definitions fail with `413 secondary_index_too_large`.
+
+ThimbleDB loads complete documents when:
+
+- `.select(...)` is not used
+- any selected field is not covered
+- any predicate field is not covered
+- any ordering field is not covered
+- the active index page predates or disagrees with the covering definition
+
+This preserves schema validation and full-document behaviour for existing
+queries. Adding or changing `include` fields is an index-definition change and
+requires the explicit index rebuild process.
 
 ## Query plans
 

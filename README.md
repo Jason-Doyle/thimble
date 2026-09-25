@@ -89,6 +89,8 @@ Only bindings, credentials, and browser read authorisation differ.
 - retained deletion, restoration, and quiescent physical collection
 - immutable snapshot and content-addressed trie collection layouts
 - typed collections, bounded predicates, and declared secondary indexes
+- bounded cold point-read bundles with object-path fallback
+- explicit covering index fields and typed projections
 - versioned logical archives and explicit migration adapters
 - local application scaffolding and diagnostics
 - optional package-owned Studio management frontend
@@ -102,7 +104,7 @@ Only bindings, credentials, and browser read authorisation differ.
 - reusable Node and Cloudflare authority endpoint exports
 - Docker, Wrangler, Bicep, and CloudFormation deployment paths
 
-The reference browser build is about 58.6 KB uncompressed and 16.3 KB gzip.
+The reference browser build is about 68.3 KB uncompressed and 18.7 KB gzip.
 It ships no database runtime or WASM module.
 
 ## Quick start
@@ -160,6 +162,10 @@ Use the browser/core API from `thimbledb`, external identity primitives from
 `thimbledb/auth`, and the complete endpoint authority from either
 `thimbledb/authority/node` or `thimbledb/authority/cloudflare`. Consumers
 supply their own domain, storage, OIDC application, and secrets.
+
+The authority can share the application deployment or run as a separate
+service behind the same public browser origin. See
+[Authority deployment modes](docs/AUTHORITY-DEPLOYMENT.md).
 
 After the authority session exists:
 
@@ -249,6 +255,7 @@ layout decision thresholds.
 | [npm publishing](docs/NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
 | [Use cases](docs/USE-CASES.md) | Fit criteria and application-specific guides |
 | [Architecture](docs/ARCHITECTURE.md) | Components, data flow, and scope model |
+| [Authority deployment modes](docs/AUTHORITY-DEPLOYMENT.md) | Embedded and separate authority topologies and decision criteria |
 | [System diagrams](docs/DIAGRAMS.md) | Trust boundaries, sequences, keys, and providers |
 | [Storage providers](docs/STORAGE-PROVIDERS.md) | Provider abstraction and conformance requirements |
 | [Security](docs/SECURITY.md) | Threat model, encryption, keys, and revocation |

@@ -60,6 +60,12 @@ export type TrieReadBundle = {
   revision: number;
   document: JsonDocument | null;
   objects: TrieBundleObject[];
+  layout?: "trie" | "snapshot";
+};
+
+export type ReadBundleLimits = {
+  maxObjects: number;
+  maxDecodedBytes: number;
 };
 
 export function trieCollectionPrefix(collection: string): string {

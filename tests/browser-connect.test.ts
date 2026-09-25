@@ -110,6 +110,77 @@ describe("browser connection factory", () => {
     client.close();
   });
 
+  it("uses an advertised point-read bundle endpoint", async () => {
+    const requests: string[] = [];
+    const client = await createThimbleClient({
+      configurationUrl: "https://app.example.test/api/config",
+      persistentCache: false,
+      fetchImplementation: async (input) => {
+        const url = String(input);
+        requests.push(url);
+        if (url.endsWith("/api/config")) {
+          return Response.json({
+            ...browserConfig(false),
+            readBundleBaseUrl: "/api/read-bundles",
+          });
+        }
+        if (
+          url.endsWith(
+            "/api/read-bundles/user%3Auser-1/notes/note-1",
+          )
+        ) {
+          return Response.json({
+            collection: "notes",
+            id: "note-1",
+            revision: 1,
+            document: {
+              id: "note-1",
+              title: "Bundled",
+            },
+            objects: [
+              {
+                key: "content-snapshot/notes/HEAD.json",
+                etag: "head",
+                value: {
+                  revision: 1,
+                  snapshotHash: "snapshot-one",
+                },
+              },
+              {
+                key:
+                  "content-snapshot/notes/snapshots/" +
+                  "snapshot-one.json",
+                etag: "snapshot",
+                value: {
+                  documents: {
+                    "note-1": {
+                      id: "note-1",
+                      title: "Bundled",
+                    },
+                  },
+                },
+              },
+            ],
+            layout: "snapshot",
+          });
+        }
+        return new Response(null, { status: 404 });
+      },
+    });
+
+    await expect(
+      client.get("notes", "note-1"),
+    ).resolves.toEqual({
+      id: "note-1",
+      title: "Bundled",
+    });
+    expect(requests).toEqual([
+      "https://app.example.test/api/config",
+      "https://app.example.test/api/read-bundles/" +
+        "user%3Auser-1/notes/note-1",
+    ]);
+  });
+
   it("rejects malformed authority configuration", async () => {
     await expect(
       createThimbleClient({

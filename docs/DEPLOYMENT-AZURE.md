@@ -9,6 +9,10 @@ Azure is a secondary deployment path using:
 
 The Bicep template is `deploy/azure/main.bicep`.
 
+The Container App authority can share an application deployment boundary or
+run independently behind Front Door or another same-origin gateway. See
+[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+
 ## Prerequisites
 
 - Azure CLI
@@ -83,6 +87,9 @@ To serve the package-owned Studio from the same Container App, set
 `THIMBLE_STUDIO=true` and set `THIMBLE_STUDIO_ORIGIN` to the exact public
 authority origin.
 
+Set `THIMBLE_READ_BUNDLES=true` to advertise the bounded cold point-read
+optimization.
+
 For key rotation, set `keyVersion` to the current write version and
 `readKeyVersions` to the comma-separated historical versions that remain
 readable.
@@ -92,6 +99,7 @@ readable.
 - Container App uses HTTPS.
 - The auth container is not exposed through any SAS or public endpoint.
 - Browser object requests use the authenticated `/api/objects` broker.
+- Eligible cold point reads use the advertised bounded read-bundle route.
 - Object bodies begin with `TDB1`.
 - The Container App can seed and mutate data.
 - Direct browser reads cannot write or delete blobs.

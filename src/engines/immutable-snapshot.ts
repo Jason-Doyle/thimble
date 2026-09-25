@@ -28,11 +28,13 @@ import {
   isTrieTombstone,
   visibleTrieDocument,
   type TrieReadBundle,
+  type ReadBundleLimits,
   type TrieStoredDocument,
   type TrieTombstone,
 } from "../trie-protocol.js";
 import {
   buildSecondaryIndexPage,
+  encodeSecondaryIndexPage,
   secondaryIndexDefinitionsEqual,
   secondaryIndexPageFromJson,
   type CollectionIndexConfiguration,
@@ -43,6 +45,13 @@ import {
 type LoadedHead = {
   object: StoredObject | null;
   state: SnapshotHead;
+};
+
+type PreparedSecondaryIndex = {
+  key: string;
+  bytes: Uint8Array;
+  name: string;
+  reference: SecondaryIndexReference;
 };
 
 export class ImmutableSnapshotEngine implements DatabaseEngine {
@@ -369,35 +378,82 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
   async readBundle(
     collection: string,
     id: string,
+    limits?: ReadBundleLimits,
   ): Promise<TrieReadBundle> {
     const normalized = validateName(collection, "Collection");
-    const loaded = await this.loadCurrent(normalized);
-    const objects = [];
-    if (loaded.head.object) {
-      objects.push({
+    const head = await this.loadHead(normalized);
+    const objects: TrieReadBundle["objects"] = [];
+    let decodedBytes = 0;
+    if (head.object) {
+      decodedBytes = addBundleObject(
+        objects,
+        decodedBytes,
+        {
         key: snapshotHeadKey(normalized),
-        etag: loaded.head.object.etag,
-        value: loaded.head.state as unknown as JsonValue,
-      });
+        etag: head.object.etag,
+        value: head.state as unknown as JsonValue,
+        },
+        head.object.bytes.byteLength,
+        limits,
+      );
     }
-    if (loaded.pageObject && loaded.head.state.snapshotHash) {
-      objects.push({
+    if (!head.state.snapshotHash) {
+      return {
+        collection: normalized,
+        id,
+        revision: head.state.revision,
+        document: null,
+        objects,
+        layout: "snapshot",
+      };
+    }
+    if (limits) {
+      if (typeof head.state.decodedBytes !== "number") {
+        throw new BoundedReadError(
+          "Snapshot size metadata is unavailable for a bounded read bundle",
+        );
+      }
+      assertBundleCapacity(
+        objects.length + 1,
+        decodedBytes + head.state.decodedBytes,
+        limits,
+      );
+    }
+    const pageObject = await this.store.get(
+      snapshotPageKey(
+        normalized,
+        head.state.snapshotHash,
+      ),
+    );
+    if (!pageObject) {
+      throw new Error(
+        `Snapshot ${head.state.snapshotHash} is missing`,
+      );
+    }
+    const page = decodeJson<SnapshotPage>(pageObject.bytes);
+    addBundleObject(
+      objects,
+      decodedBytes,
+      {
         key: snapshotPageKey(
           normalized,
-          loaded.head.state.snapshotHash,
+          head.state.snapshotHash,
         ),
-        etag: loaded.pageObject.etag,
-        value: loaded.page as unknown as JsonValue,
-      });
-    }
+        etag: pageObject.etag,
+        value: page as unknown as JsonValue,
+      },
+      pageObject.bytes.byteLength,
+      limits,
+    );
     return {
       collection: normalized,
       id,
-      revision: loaded.head.state.revision,
+      revision: head.state.revision,
       document: visibleTrieDocument(
-        ownValue(loaded.page.documents, id),
+        ownValue(page.documents, id),
       ),
       objects,
+      layout: "snapshot",
     };
   }
 
@@ -421,8 +477,13 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       if (!updateResult.changed) {
         return updateResult.result;
       }
+
       const page: SnapshotPage = { documents };
       const pageBytes = encodeJson(page as unknown as JsonValue);
+      const preparedIndexes = await this.prepareIndexes(
+        normalized,
+        Object.values(documents),
+      );
       const snapshotHash =
         Object.keys(documents).length === 0
           ? null
@@ -430,9 +491,8 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
               normalized,
               pageBytes,
             );
-      const indexes = await this.writeIndexes(
-        normalized,
-        Object.values(documents),
+      const indexes = await this.commitIndexes(
+        preparedIndexes,
       );
       const nextHead: SnapshotHead = {
         revision: loaded.head.state.revision + 1,
@@ -526,24 +586,47 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     return hash;
   }
 
-  private async writeIndexes(
+  private async prepareIndexes(
     collection: string,
     documents: TrieStoredDocument[],
-  ): Promise<SecondaryIndexReferences> {
+  ): Promise<PreparedSecondaryIndex[]> {
     const definitions = this.indexConfiguration[collection] ?? [];
-    const references =
-      createDictionary<SecondaryIndexReference>();
+    const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of definitions) {
       const page = buildSecondaryIndexPage(
         definition,
         documents,
       );
-      const bytes = encodeJson(page as unknown as JsonValue);
+      const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressSnapshot(bytes);
+      prepared.push({
+        key: snapshotIndexKey(
+          collection,
+          definition.name,
+          hash,
+        ),
+        bytes,
+        name: definition.name,
+        reference: {
+          hash,
+          entries: page.entries.length,
+          decodedBytes: bytes.byteLength,
+        },
+      });
+    }
+    return prepared;
+  }
+
+  private async commitIndexes(
+    prepared: PreparedSecondaryIndex[],
+  ): Promise<SecondaryIndexReferences> {
+    const references =
+      createDictionary<SecondaryIndexReference>();
+    for (const index of prepared) {
       try {
         await this.store.put(
-          snapshotIndexKey(collection, definition.name, hash),
-          bytes,
+          index.key,
+          index.bytes,
           { ifNoneMatch: true },
         );
       } catch (error) {
@@ -551,11 +634,7 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
           throw error;
         }
       }
-      references[definition.name] = {
-        hash,
-        entries: page.entries.length,
-        decodedBytes: bytes.byteLength,
-      };
+      references[index.name] = index.reference;
     }
     return references;
   }
@@ -614,6 +693,40 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
         );
       }
     }
+  }
+}
+
+function addBundleObject(
+  objects: TrieReadBundle["objects"],
+  decodedBytes: number,
+  object: TrieReadBundle["objects"][number],
+  objectBytes: number,
+  limits?: ReadBundleLimits,
+): number {
+  const nextBytes = decodedBytes + objectBytes;
+  if (limits) {
+    assertBundleCapacity(
+      objects.length + 1,
+      nextBytes,
+      limits,
+    );
+  }
+  objects.push(object);
+  return nextBytes;
+}
+
+function assertBundleCapacity(
+  objects: number,
+  decodedBytes: number,
+  limits: ReadBundleLimits,
+): void {
+  if (
+    objects > limits.maxObjects ||
+    decodedBytes > limits.maxDecodedBytes
+  ) {
+    throw new BoundedReadError(
+      `Read bundle exceeds ${limits.maxObjects} objects or ${limits.maxDecodedBytes} decoded bytes`,
+    );
   }
 }
 

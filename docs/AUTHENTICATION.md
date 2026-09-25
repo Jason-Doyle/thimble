@@ -106,6 +106,10 @@ account security version, provider, expiry, CSRF token, and issued scope
 grants. Cookies use HttpOnly, SameSite=Strict, and Secure outside local
 development.
 
+Embedded and separately deployed authorities should normally remain behind one
+public browser origin. See
+[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+
 On every authenticated request the authority reloads the current internal user
 record and recalculates grants. Role or tenant removal observed during a later
 OIDC exchange therefore also affects existing sessions.
@@ -235,6 +239,7 @@ grants. `thimble.admin` does not make ungranted data scopes visible.
 | `POST /api/auth/identities/unlink` | Recent session + CSRF | Remove a non-final identity and revoke sessions |
 | `GET /api/config` | Session | Current user, scope, CSRF, and cache config |
 | `GET /api/keys/:scope` | Session + read grant | Scope key grant |
+| `GET /api/read-bundles/:scope/:collection/:id` | Session + read grant | Optional bounded cold point-read bundle |
 | `GET /api/admin/users` | `thimble.admin` | List identity mappings |
 | `POST /api/admin/users/:id` | `thimble.admin` + CSRF | Change status, application roles, or tenants |
 | `POST /api/admin/users/:id/revoke-sessions` | `thimble.admin` + CSRF | Revoke every user session |

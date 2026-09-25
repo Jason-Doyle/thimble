@@ -34,6 +34,7 @@ import type {
   JsonValue,
   ObjectStore,
 } from "./core.js";
+import { BoundedReadError } from "./core.js";
 import { ContentAddressedTrieEngine } from "./engines/content-trie.js";
 import { ImmutableSnapshotEngine } from "./engines/immutable-snapshot.js";
 import { EnvelopeObjectStore } from "./envelope-store.js";
@@ -56,6 +57,7 @@ import {
 import type { CollectionLayout } from "./snapshot-protocol.js";
 import {
   parseIndexConfiguration,
+  SecondaryIndexLimitError,
   validateIndexConfiguration,
   type CollectionIndexConfiguration,
 } from "./secondary-index.js";
@@ -70,6 +72,7 @@ import {
   studioDeletedDocuments,
   studioScopes,
 } from "./studio-api.js";
+import { readPointBundle } from "./read-bundle.js";
 
 type RateLimitBinding = {
   limit(options: { key: string }): Promise<{ success: boolean }>;
@@ -92,6 +95,7 @@ export type CloudflareAuthorityEnv = {
   THIMBLE_DELETE_GRACE_DAYS?: string;
   THIMBLE_MAINTENANCE_MODE?: string;
   THIMBLE_STUDIO?: string;
+  THIMBLE_READ_BUNDLES?: string;
   THIMBLE_STUDIO_ORIGIN?: string;
   THIMBLE_COLLECTIONS?: string;
   ENTRA_TENANT_ID?: string;
@@ -137,6 +141,7 @@ type Runtime = {
   layoutGeneration: string;
   maintenanceMode: boolean;
   studioEnabled: boolean;
+  readBundlesEnabled: boolean;
   studioOrigin: string | null;
   oidcProviders: string[];
   allowedOrigin: string;
@@ -148,6 +153,7 @@ export type CloudflareAuthorityOptions = {
   collectionIndexes?: CollectionIndexConfiguration;
   collections?: string[];
   studio?: boolean;
+  readBundles?: boolean;
   studioOrigin?: string;
 };
 
@@ -166,26 +172,45 @@ export function createCloudflareAuthority(
         );
         return await route(await runtimePromise, request, env);
       } catch (error) {
-        if (!(error instanceof AuthError && error.status < 500)) {
-          console.error(error);
+        const handledError =
+          error instanceof SecondaryIndexLimitError
+            ? new AuthError(
+                413,
+                "secondary_index_too_large",
+                error.message,
+              )
+            : error;
+        if (
+          !(
+            handledError instanceof AuthError &&
+            handledError.status < 500
+          )
+        ) {
+          console.error(handledError);
         }
-        const status = error instanceof AuthError ? error.status : 500;
+        const status =
+          handledError instanceof AuthError
+            ? handledError.status
+            : 500;
         const headers = new Headers();
-        if (error instanceof AuthError && error.retryAfterSeconds) {
+        if (
+          handledError instanceof AuthError &&
+          handledError.retryAfterSeconds
+        ) {
           headers.set(
             "retry-after",
-            String(error.retryAfterSeconds),
+            String(handledError.retryAfterSeconds),
           );
         }
         return json(
           {
             error:
-              error instanceof AuthError
-                ? error.code
+              handledError instanceof AuthError
+                ? handledError.code
                 : "internal_error",
             message:
-              error instanceof AuthError
-                ? error.message
+              handledError instanceof AuthError
+                ? handledError.message
                 : "Request failed",
           },
           status,
@@ -620,6 +645,9 @@ async function route(
       name: "ThimbleDB",
       provider: "r2",
       readBaseUrl: "/api/objects",
+      ...(runtime.readBundlesEnabled
+        ? { readBundleBaseUrl: "/api/read-bundles" }
+        : {}),
       headTtlMs: runtime.headTtlMs,
       cachePolicy: "content",
       collectionLayouts: runtime.collectionLayouts,
@@ -674,6 +702,50 @@ async function route(
       algorithm: "A256GCM",
       expiresAt: authenticated.session.expiresAt,
     });
+  }
+
+  const readBundleRoute =
+    /^\/api\/read-bundles\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "GET" &&
+    runtime.readBundlesEnabled &&
+    readBundleRoute?.[1] &&
+    readBundleRoute[2] &&
+    readBundleRoute[3]
+  ) {
+    requireAuthenticated(authenticated);
+    const scopeId = decodePathSegment(readBundleRoute[1]);
+    requireGrant(authenticated.session.grants, scopeId, "read");
+    const collection = decodePathSegment(readBundleRoute[2]);
+    const id = decodePathSegment(readBundleRoute[3]);
+    const scope = await runtime.scope(scopeId);
+    try {
+      const bundle = await readPointBundle(
+        engineFor(runtime, scope, collection),
+        collection,
+        id,
+      );
+      return json(
+        bundle,
+        200,
+        new Headers({
+          "x-thimble-bundle-objects": String(
+            bundle.objects.length,
+          ),
+        }),
+      );
+    } catch (error) {
+      if (error instanceof BoundedReadError) {
+        throw new AuthError(
+          413,
+          "read_bundle_unavailable",
+          error.message,
+        );
+      }
+      throw error;
+    }
   }
 
   if (
@@ -1024,6 +1096,9 @@ async function createRuntime(
     : configuredCollectionIndexes(env);
   const studioEnabled =
     options.studio ?? env.THIMBLE_STUDIO === "true";
+  const readBundlesEnabled =
+    options.readBundles ??
+    env.THIMBLE_READ_BUNDLES === "true";
   const collections = studioEnabled
     ? studioCollectionCatalog({
         collections:
@@ -1072,6 +1147,7 @@ async function createRuntime(
     layoutGeneration,
     maintenanceMode: env.THIMBLE_MAINTENANCE_MODE === "true",
     studioEnabled,
+    readBundlesEnabled,
     studioOrigin:
       options.studioOrigin ??
       env.THIMBLE_STUDIO_ORIGIN ??

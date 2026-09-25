@@ -6,6 +6,23 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 3.1.0 - 2026-09-25
+
+- Added opt-in bounded point-read bundles that reduce cold trie and snapshot
+  reads to one browser request when the authority advertises the endpoint.
+- Kept automatic fallback to the existing encrypted-object path for older
+  authorities, legacy metadata, and bundles above the four-object or 4 MiB
+  decoded limits.
+- Added explicit covering fields to declared secondary indexes.
+- Bounded each covering projection to 64 KiB and every immutable index page to
+  4 MiB before changed document objects are written.
+- Added typed query projections through `.select(...)`; covered queries can
+  return declared fields from the index without loading full documents.
+- Kept full-document reads for ordinary queries and whenever a predicate,
+  ordering field, or selected field is not covered.
+- Documented embedded and separately deployed authority topologies and their
+  operational tradeoffs.
+
 ## 3.0.0 - 2026-09-25
 
 - Added the optional ThimbleDB Studio management frontend to the npm package.

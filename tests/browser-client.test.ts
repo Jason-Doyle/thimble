@@ -11,6 +11,7 @@ import {
 import { ThimbleClient } from "../src/browser/client.js";
 import type {
   JsonObjectReader,
+  PointReadBundleReader,
   RemoteJsonObject,
 } from "../src/browser/remote-reader.js";
 import { HttpObjectReadError } from "../src/browser/remote-reader.js";
@@ -25,6 +26,80 @@ import {
 } from "../src/trie-protocol.js";
 
 describe("ThimbleDB browser client", () => {
+  it("uses one cold read bundle and reuses its cached objects", async () => {
+    const fixture = trieFixture("products", "product-bundle");
+    const bundleReader = new FakeBundleReader({
+      status: "found",
+      bytes: 512,
+      bundle: {
+        collection: "products",
+        id: fixture.id,
+        revision: 1,
+        document: fixture.document,
+        objects: [...fixture.objects].map(([key, object]) => ({
+          key,
+          etag: object.etag,
+          value: structuredClone(object.value),
+        })),
+        layout: "trie",
+      },
+    });
+    const objectReader = new FakeReader(fixture.objects);
+    const cache = cacheFor("content", uniqueName());
+    const client = new ThimbleClient({
+      reader: objectReader,
+      bundleReader,
+      cache,
+      headTtlMs: 10_000,
+      channelName: uniqueName(),
+    });
+
+    await expect(
+      client.get("products", fixture.id),
+    ).resolves.toEqual(fixture.document);
+    await expect(
+      client.get("products", fixture.id),
+    ).resolves.toEqual(fixture.document);
+
+    expect(bundleReader.calls).toBe(1);
+    expect(objectReader.calls).toBe(0);
+    expect(client.metrics()).toMatchObject({
+      remoteReads: 1,
+      remoteBytes: 512,
+      bundleReads: 1,
+      bundleBytes: 512,
+      bundleFallbacks: 0,
+    });
+  });
+
+  it("falls back to individual objects when a bundle is unavailable", async () => {
+    const fixture = trieFixture("products", "product-fallback");
+    const bundleReader = new FakeBundleReader({
+      status: "fallback",
+    });
+    const objectReader = new FakeReader(fixture.objects);
+    const cache = cacheFor("content", uniqueName());
+    const client = new ThimbleClient({
+      reader: objectReader,
+      bundleReader,
+      cache,
+      headTtlMs: 10_000,
+      channelName: uniqueName(),
+    });
+
+    await expect(
+      client.get("products", fixture.id),
+    ).resolves.toEqual(fixture.document);
+
+    expect(bundleReader.calls).toBe(1);
+    expect(objectReader.calls).toBe(4);
+    expect(client.metrics()).toMatchObject({
+      remoteReads: 5,
+      bundleReads: 1,
+      bundleFallbacks: 1,
+    });
+  });
+
   it("serves warm content reads from memory and revalidates HEAD", async () => {
     const fixture = trieFixture("products", "product-00001");
     const reader = new FakeReader(fixture.objects);
@@ -956,6 +1031,7 @@ class FakeReader implements JsonObjectReader {
     if (this.offline) {
       throw new Error("offline");
     }
+
     if (this.error) {
       throw this.error;
     }
@@ -977,6 +1053,25 @@ class FakeReader implements JsonObjectReader {
       value: structuredClone(object.value),
       bytes: Buffer.byteLength(JSON.stringify(object.value)),
     };
+  }
+}
+
+class FakeBundleReader implements PointReadBundleReader {
+  calls = 0;
+
+  constructor(
+    private readonly result:
+      | {
+          status: "found";
+          bundle: import("../src/trie-protocol.js").TrieReadBundle;
+          bytes: number;
+        }
+      | { status: "fallback" },
+  ) {}
+
+  get() {
+    this.calls += 1;
+    return Promise.resolve(structuredClone(this.result));
   }
 }
 

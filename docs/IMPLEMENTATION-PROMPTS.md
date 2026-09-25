@@ -7,13 +7,14 @@ grant the tool access to cloud credentials or production secrets.
 ## Integrate ThimbleDB into an existing web application
 
 ```text
-Integrate ThimbleDB 1.x into this existing TypeScript web application.
+Integrate ThimbleDB 3.x into this existing TypeScript web application.
 
 Application context:
 - Framework: [framework]
 - Package manager: [package manager]
 - OIDC provider: [Entra/Auth0/other]
 - Authority platform: [Cloudflare/Node]
+- Authority topology: [embedded deployment/separate service behind same-origin route]
 - Collections: [collection list]
 - Scope model: [per-user/per-tenant/both]
 
@@ -23,13 +24,16 @@ Requirements:
 3. Use external OIDC authentication. Do not add local passwords, password hashes, recovery tokens, passkey storage, or MFA secrets to ThimbleDB.
 4. Exchange the provider access token at `/api/auth/oidc/<provider>/session`.
 5. Build the browser client from `/api/config` and the scope key grant.
-6. Keep provider credentials and object-storage credentials server-side.
-7. Keep scope keys memory-only as non-extractable CryptoKeys.
-8. Pass `collectionLayouts`, `layoutGeneration`, and `configurationUrl` to `ThimbleClient`.
-9. Preserve CSRF and `x-thimble-layout-generation` headers on mutations.
-10. Add typed helpers for get, scan, write, delete, restore, and logout.
-11. Add tests for authentication failure, scope isolation, stale layout generation, deletion/restore, and logout cache clearing.
-12. Update the application's setup documentation with non-secret configuration only.
+6. Preserve one public browser origin whether the authority is embedded or
+   separately deployed.
+7. Keep provider credentials and object-storage credentials server-side.
+8. Keep scope keys memory-only as non-extractable CryptoKeys.
+9. Pass `collectionLayouts`, `layoutGeneration`, and `configurationUrl` to `ThimbleClient`.
+10. Preserve CSRF and `x-thimble-layout-generation` headers on mutations.
+11. Use explicit covering fields and `.select(...)` only for bounded projections that avoid full-document reads.
+12. Add typed helpers for get, scan, write, delete, restore, and logout.
+13. Add tests for authentication failure, scope isolation, stale layout generation, read-bundle fallback, deletion/restore, and logout cache clearing.
+14. Update the application's setup documentation with non-secret configuration only.
 
 Do not expose R2/S3/Blob directly to the browser. Do not auto-link identities by email. Do not use undocumented package internals.
 
@@ -39,7 +43,7 @@ Run the smallest applicable tests, type-check, and production build. Report exac
 ## Deploy the Cloudflare authority
 
 ```text
-Deploy ThimbleDB 1.x as a Cloudflare Worker with private R2 storage.
+Deploy ThimbleDB 3.x as a Cloudflare Worker with private R2 storage.
 
 Inputs:
 - Worker name: [name]
@@ -61,8 +65,9 @@ Requirements:
 7. Configure 30-day deletion retention, 7-day purge grace, and maintenance mode off.
 8. Apply lifecycle expiration only to auth sessions and rate-limit records.
 9. Do not apply age-based deletion to application data objects.
-10. Keep bindings, routes, and infrastructure placeholders disabled until real values are supplied.
-11. Deploy, then verify session exchange, encrypted object reads, conditional HEAD, write, delete, restore, logout revocation, and stale layout rejection.
+10. Enable bounded read bundles only after accepting the documented trusted-authority plaintext boundary.
+11. Keep bindings, routes, and infrastructure placeholders disabled until real values are supplied.
+12. Deploy, then verify session exchange, bounded bundle and fallback reads, encrypted object reads, conditional HEAD, write, delete, restore, logout revocation, and stale layout rejection.
 
 Do not invent account IDs, bucket names, tenant IDs, audiences, routes, or secrets. Stop and report any missing non-secret value instead of deploying a placeholder.
 ```
@@ -89,8 +94,9 @@ Requirements:
 8. If source IP cannot be verified, disable IP limits and retain subject limits.
 9. Keep the master key and provider credentials in the platform secret store.
 10. Expose only the authority HTTP port.
-11. Add health, authentication, indexed query, write, deletion, and logout smoke tests.
-12. Document backup, logical export, key rotation, retention maintenance, index migration, and layout migration.
+11. Enable bounded read bundles only after accepting the documented trusted-authority plaintext boundary.
+12. Add health, authentication, bundled point read, indexed projection, write, deletion, and logout smoke tests.
+13. Document backup, logical export, key rotation, retention maintenance, index migration, and layout migration.
 
 Do not create a second authentication system. Do not store passwords or provider access tokens.
 For machine access, prefer an OIDC service principal with explicit roles. Do

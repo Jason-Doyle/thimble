@@ -14,6 +14,10 @@
   Workers.
 - Real R2 conditional writes, external sessions, retained deletion, and
   snapshot migration work on the tested Cloudflare reference deployment.
+- Automated browser tests verify that an enabled bounded read bundle reduces
+  an eligible cold trie point read from four browser requests to one.
+- Unit tests verify that an explicit covered projection can avoid loading the
+  full snapshot page and that uncovered fields fall back to full documents.
 
 ## Not established by the published evidence
 
@@ -23,6 +27,8 @@
 - Safe key rotation at useful scale.
 - Reliable production behaviour under multi-region write contention.
 - A meaningful reduction in coding-agent database mistakes.
+- A production latency improvement from read bundles; updated live
+  multi-region measurements have not yet been published.
 
 ## Costs introduced by this design
 

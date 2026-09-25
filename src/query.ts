@@ -91,7 +91,19 @@ export function pointReadId<T extends { id: string }>(
   ) {
     return where.value;
   }
+
   return null;
+}
+
+export function queryFieldNames<T extends { id: string }>(
+  query: ThimbleQuery<T>,
+): string[] {
+  const fields = new Set<string>();
+  collectExpressionFields(query.where, fields);
+  for (const order of query.orderBy ?? []) {
+    fields.add(order.field);
+  }
+  return [...fields];
 }
 
 export function validateThimbleQuery<T extends { id: string }>(
@@ -154,10 +166,12 @@ function validateExpression(
   if (depth > 12) {
     throw new Error("Query expression nesting exceeds 12 levels");
   }
+
   state.nodes += 1;
   if (state.nodes > 500) {
     throw new Error("Query expression exceeds 500 nodes");
   }
+
   if (!isRecord(expression)) {
     throw new Error("Query expression is malformed");
   }
@@ -225,6 +239,32 @@ function validateExpression(
     return;
   }
   validateExpression(expression.not, depth + 1, state);
+}
+
+function collectExpressionFields<T extends { id: string }>(
+  expression: QueryExpression<T> | undefined,
+  fields: Set<string>,
+): void {
+  if (!expression) {
+    return;
+  }
+  if ("field" in expression) {
+    fields.add(expression.field);
+    return;
+  }
+  if ("and" in expression) {
+    expression.and.forEach((child) =>
+      collectExpressionFields(child, fields),
+    );
+    return;
+  }
+  if ("or" in expression) {
+    expression.or.forEach((child) =>
+      collectExpressionFields(child, fields),
+    );
+    return;
+  }
+  collectExpressionFields(expression.not, fields);
 }
 
 function evaluateExpression<T extends { id: string }>(
