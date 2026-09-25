@@ -5,10 +5,9 @@ export const prerender = true;
 export function GET() {
   return new Response(
     [
-      "# ThimbleDB permits search indexing, real-time AI input, and model training.",
+      "# ThimbleDB permits crawling and search indexing.",
       "User-agent: *",
       "Allow: /",
-      "Content-Signal: search=yes, ai-input=yes, ai-train=yes",
       `Sitemap: ${site.url}/sitemap-index.xml`,
       "",
     ].join("\n"),
