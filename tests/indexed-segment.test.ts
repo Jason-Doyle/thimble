@@ -169,6 +169,10 @@ describe("experimental indexed segment", () => {
     expect(unindexed.blocksRead).toBe(
       unindexed.blocksConsidered,
     );
+
+    source.resetMetrics();
+    expect(await reader.scan()).toHaveLength(documents.length);
+    expect(source.reads).toBe(1);
   });
 
   it("round-trips compressed blocks and preserves special IDs", async () => {

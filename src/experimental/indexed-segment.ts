@@ -56,6 +56,7 @@ const MAX_RANGE_RESPONSE_BYTES = Math.max(
   MAX_STORED_ID_INDEX_BYTES,
   MAX_STORED_FOOTER_BYTES,
 );
+const MAX_COALESCED_RANGE_BYTES = 8 * 1024 * 1024;
 const UTF8_ENCODER = new TextEncoder();
 const UTF8_DECODER = new TextDecoder("utf-8", {
   fatal: true,
@@ -214,7 +215,7 @@ implements IndexedSegmentSource {
       );
     }
     headers.set("range", `bytes=-${prefetchBytes}`);
-    const response = await fetcher(url, {
+    const response = await fetcher.call(globalThis, url, {
       method: "GET",
       headers,
       credentials: options.credentials ?? "include",
@@ -280,11 +281,15 @@ implements IndexedSegmentSource {
       "range",
       `bytes=${offset}-${offset + length - 1}`,
     );
-    const response = await this.fetcher(this.url, {
+    const response = await this.fetcher.call(
+      globalThis,
+      this.url,
+      {
       method: "GET",
       headers,
       credentials: this.credentials,
-    });
+      },
+    );
     if (response.status !== 206) {
       throw new Error(
         `Indexed segment range request returned ${response.status}; expected 206`,
@@ -772,7 +777,7 @@ export class IndexedSegmentReader {
           )
         : null;
     const documents: JsonDocument[] = [];
-    let blocksRead = 0;
+    const selectedBlocks: number[] = [];
     let blocksSkipped = 0;
     for (const [blockIndex, block] of this.footer.blocks.entries()) {
       if (
@@ -786,8 +791,16 @@ export class IndexedSegmentReader {
         blocksSkipped += 1;
         continue;
       }
-      blocksRead += 1;
-      const decodedBlock = await this.readBlock(blockIndex);
+      selectedBlocks.push(blockIndex);
+    }
+    const loadedBlocks = await this.readBlocks(selectedBlocks);
+    for (const blockIndex of selectedBlocks) {
+      const decodedBlock = loadedBlocks.get(blockIndex);
+      if (!decodedBlock) {
+        throw new Error(
+          "Indexed segment selected block was not loaded",
+        );
+      }
       for (
         let index = 0;
         index < decodedBlock.records.length;
@@ -807,7 +820,7 @@ export class IndexedSegmentReader {
               documents,
               plan: canFilter ? "block-filter" : "scan",
               blocksConsidered: this.footer.blocks.length,
-              blocksRead,
+              blocksRead: selectedBlocks.length,
               blocksSkipped,
             };
           }
@@ -818,7 +831,7 @@ export class IndexedSegmentReader {
       documents,
       plan: canFilter ? "block-filter" : "scan",
       blocksConsidered: this.footer.blocks.length,
-      blocksRead,
+      blocksRead: selectedBlocks.length,
       blocksSkipped,
     };
   }
@@ -872,6 +885,83 @@ export class IndexedSegmentReader {
       descriptor.offset,
       descriptor.storedLength,
     );
+    return this.decodeStoredBlock(index, descriptor, stored);
+  }
+
+  private async readBlocks(
+    indexes: number[],
+  ): Promise<Map<number, ParsedBlock>> {
+    const loaded = new Map<number, ParsedBlock>();
+    const pending: number[] = [];
+    for (const index of indexes) {
+      const cached = this.blockCache.get(index);
+      if (cached) {
+        loaded.set(index, cached);
+      } else {
+        pending.push(index);
+      }
+    }
+    let cursor = 0;
+    while (cursor < pending.length) {
+      const firstIndex = pending[cursor]!;
+      const first = this.footer.blocks[firstIndex]!;
+      let end = first.offset + first.storedLength;
+      let next = cursor + 1;
+      while (next < pending.length) {
+        const nextIndex = pending[next]!;
+        const descriptor = this.footer.blocks[nextIndex]!;
+        const nextEnd =
+          descriptor.offset + descriptor.storedLength;
+        if (
+          descriptor.offset !== end ||
+          nextEnd - first.offset >
+            MAX_COALESCED_RANGE_BYTES
+        ) {
+          break;
+        }
+        end = nextEnd;
+        next += 1;
+      }
+      const combined = await this.source.read(
+        first.offset,
+        end - first.offset,
+      );
+      for (
+        let position = cursor;
+        position < next;
+        position += 1
+      ) {
+        const index = pending[position]!;
+        const descriptor = this.footer.blocks[index]!;
+        const start = descriptor.offset - first.offset;
+        const stored = combined.slice(
+          start,
+          start + descriptor.storedLength,
+        );
+        loaded.set(
+          index,
+          await this.decodeStoredBlock(
+            index,
+            descriptor,
+            stored,
+          ),
+        );
+      }
+      cursor = next;
+    }
+    return loaded;
+  }
+
+  private async decodeStoredBlock(
+    index: number,
+    descriptor: BlockDescriptor,
+    stored: Uint8Array,
+  ): Promise<ParsedBlock> {
+    if (stored.byteLength !== descriptor.storedLength) {
+      throw new Error(
+        "Indexed segment stored block length mismatch",
+      );
+    }
     const hash = (await sha256(stored)).slice(
       0,
       INTEGRITY_HASH_BYTES,
