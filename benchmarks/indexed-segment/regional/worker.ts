@@ -1,3 +1,11 @@
+import type {
+  JsonDocument,
+  JsonPrimitive,
+  JsonValue,
+  ObjectStore,
+  PutConditions,
+  StoredObject,
+} from "../../../src/core.js";
 import {
   base64ToBytes,
   importAesGcmKey,
@@ -6,11 +14,30 @@ import { EnvelopeObjectStore } from "../../../src/envelope-store.js";
 import {
   ContentAddressedTrieEngine,
 } from "../../../src/engines/content-trie.js";
+import {
+  ImmutableSnapshotEngine,
+} from "../../../src/engines/immutable-snapshot.js";
+import {
+  IndexedSegmentReader,
+  type IndexedSegmentPredicate,
+  type IndexedSegmentSource,
+} from "../../../src/experimental/indexed-segment.js";
 import { PrefixObjectStore } from "../../../src/prefix-store.js";
 import {
   R2ObjectStore,
   type R2BucketBinding,
 } from "../../../src/cloudflare/r2-object-store.js";
+import {
+  ownValue,
+} from "../../../src/shared-utils.js";
+
+type R2Range =
+  | Headers
+  | {
+      offset?: number;
+      length?: number;
+      suffix?: number;
+    };
 
 type RangeObject = {
   body: ReadableStream<Uint8Array>;
@@ -20,6 +47,7 @@ type RangeObject = {
     offset: number;
     length: number;
   };
+  arrayBuffer(): Promise<ArrayBuffer>;
 };
 
 type BenchmarkBucket = R2BucketBinding & {
@@ -29,7 +57,7 @@ type BenchmarkBucket = R2BucketBinding & {
   } | null>;
   get(
     key: string,
-    options?: { range?: Headers },
+    options?: { range?: R2Range },
   ): Promise<RangeObject | null>;
 };
 
@@ -42,39 +70,50 @@ type Env = {
   BENCHMARK_KEY_ID: string;
   BENCHMARK_CONTEXT: string;
   BENCHMARK_DOCUMENTS: string;
+  BENCHMARK_EXPERIMENTAL_BYTES: string;
 };
 
-let bundleEngine:
-  | Promise<ContentAddressedTrieEngine>
-  | undefined;
+type KeyMaterial = {
+  key: CryptoKey;
+  fingerprintKey: CryptoKey;
+};
+
+type RunMetrics = {
+  documents: number;
+  storageReads: number;
+  storageBytes: number;
+};
+
+let keyMaterialPromise: Promise<KeyMaterial> | undefined;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/benchmark-config.json") {
-      return json({
-        documents: Number(env.BENCHMARK_DOCUMENTS),
-        keyBase64: env.BENCHMARK_KEY_BASE64,
-        keyId: env.BENCHMARK_KEY_ID,
-        context: env.BENCHMARK_CONTEXT,
-        pointIds: Array.from(
-          { length: 100 },
-          (_, index) =>
-            `note-${String(
-              (index * 977) %
-                Number(env.BENCHMARK_DOCUMENTS),
-            ).padStart(6, "0")}`,
-        ),
-        clusteredCategory: "rare",
-        distributedBucket: "bucket-07",
-        rangeLower: Math.floor(
-          Number(env.BENCHMARK_DOCUMENTS) * 0.7,
-        ),
-        rangeUpper:
-          Math.floor(
-            Number(env.BENCHMARK_DOCUMENTS) * 0.7,
-          ) + 24,
-      });
+      return json(benchmarkConfig(env));
+    }
+
+    if (url.pathname === "/run") {
+      try {
+        return json(
+          await runCase(
+            request,
+            env,
+            url.searchParams.get("case") ?? "",
+            url.searchParams.get("id"),
+          ),
+        );
+      } catch (error) {
+        return json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : String(error),
+          },
+          500,
+        );
+      }
     }
 
     if (url.pathname.startsWith("/data/")) {
@@ -86,8 +125,8 @@ export default {
         url.pathname,
       );
     if (request.method === "GET" && bundleMatch?.[1]) {
-      const engine = await getBundleEngine(env);
-      const bundle = await engine.readBundle(
+      const engine = await createTrieEngine(env);
+      const bundle = await engine.engine.readBundle(
         "notes",
         decodeURIComponent(bundleMatch[1]),
         {
@@ -101,6 +140,302 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+async function runCase(
+  request: Request,
+  env: Env,
+  caseName: string,
+  requestedId: string | null,
+): Promise<unknown> {
+  const config = benchmarkConfig(env);
+  const id = requestedId ?? config.pointIds[0]!;
+  const started = performance.now();
+  let metrics: RunMetrics;
+
+  if (caseName === "point-experimental") {
+    metrics = await experimentalPoint(env, id);
+  } else if (caseName === "point-snapshot") {
+    metrics = await oldPoint(env, "snapshot", id);
+  } else if (caseName === "point-trie") {
+    metrics = await oldPoint(env, "trie", id);
+  } else if (caseName === "point-bundle") {
+    metrics = await oldBundle(env, id);
+  } else if (caseName === "clustered-experimental") {
+    metrics = await experimentalQuery(env, {
+      field: "category",
+      operator: "eq",
+      value: config.clusteredCategory,
+    });
+  } else if (caseName === "clustered-snapshot") {
+    metrics = await snapshotQuery(env, {
+      field: "category",
+      operator: "eq",
+      value: config.clusteredCategory,
+    });
+  } else if (caseName === "range-experimental") {
+    metrics = await experimentalQuery(env, {
+      field: "lastModified",
+      operator: "between",
+      lower: config.rangeLower,
+      upper: config.rangeUpper,
+    });
+  } else if (caseName === "range-snapshot") {
+    metrics = await snapshotQuery(env, {
+      field: "lastModified",
+      operator: "between",
+      lower: config.rangeLower,
+      upper: config.rangeUpper,
+    });
+  } else if (caseName === "distributed-experimental") {
+    metrics = await experimentalQuery(env, {
+      field: "bucket",
+      operator: "eq",
+      value: config.distributedBucket,
+    });
+  } else if (caseName === "distributed-snapshot") {
+    metrics = await snapshotQuery(env, {
+      field: "bucket",
+      operator: "eq",
+      value: config.distributedBucket,
+    });
+  } else if (caseName === "scan-experimental") {
+    metrics = await experimentalScan(env);
+  } else if (caseName === "scan-snapshot") {
+    metrics = await snapshotScan(env);
+  } else {
+    throw new Error(`Unknown benchmark case ${caseName}`);
+  }
+
+  return {
+    case: caseName,
+    requestedId: caseName.startsWith("point-") ? id : null,
+    colo:
+      (
+        request as Request & {
+          cf?: { colo?: string };
+        }
+      ).cf?.colo ?? null,
+    workerElapsedMs: round(performance.now() - started),
+    ...metrics,
+  };
+}
+
+async function experimentalPoint(
+  env: Env,
+  id: string,
+): Promise<RunMetrics> {
+  const { reader, source } = await experimentalReader(env);
+  const document = await reader.get(id);
+  requireDocument(document, id, "experimental");
+  return sourceMetrics(source, 1);
+}
+
+async function experimentalQuery(
+  env: Env,
+  predicate: IndexedSegmentPredicate,
+): Promise<RunMetrics> {
+  const { reader, source } = await experimentalReader(env);
+  const result = await reader.query(predicate);
+  return sourceMetrics(source, result.documents.length);
+}
+
+async function experimentalScan(
+  env: Env,
+): Promise<RunMetrics> {
+  const { reader, source } = await experimentalReader(env);
+  const documents = await reader.scan();
+  requireCount(
+    documents.length,
+    Number(env.BENCHMARK_DOCUMENTS),
+    "experimental scan",
+  );
+  return sourceMetrics(source, documents.length);
+}
+
+async function experimentalReader(
+  env: Env,
+): Promise<{
+  reader: IndexedSegmentReader;
+  source: R2IndexedSegmentSource;
+}> {
+  const keys = await getKeyMaterial(env);
+  const source = await R2IndexedSegmentSource.open(
+    env.BENCHMARK_BUCKET,
+    "experimental/notes.tis",
+    Number(env.BENCHMARK_EXPERIMENTAL_BYTES),
+  );
+  return {
+    source,
+    reader: await IndexedSegmentReader.open(source, {
+      cacheBlocks: false,
+      security: {
+        resolveKey: (keyId) =>
+          keyId === env.BENCHMARK_KEY_ID
+            ? keys.key
+            : null,
+        fingerprintKey: keys.fingerprintKey,
+        context: env.BENCHMARK_CONTEXT,
+      },
+    }),
+  };
+}
+
+async function oldPoint(
+  env: Env,
+  layout: "snapshot" | "trie",
+  id: string,
+): Promise<RunMetrics> {
+  const runtime =
+    layout === "snapshot"
+      ? await createSnapshotEngine(env)
+      : await createTrieEngine(env);
+  const document = await runtime.engine.get("notes", id);
+  requireDocument(document, id, layout);
+  return storeMetrics(runtime.store, 1);
+}
+
+async function oldBundle(
+  env: Env,
+  id: string,
+): Promise<RunMetrics> {
+  const runtime = await createTrieEngine(env);
+  const bundle = await runtime.engine.readBundle(
+    "notes",
+    id,
+    {
+      maxObjects: 4,
+      maxDecodedBytes: 4 * 1024 * 1024,
+    },
+  );
+  requireDocument(bundle.document, id, "bundle");
+  return storeMetrics(runtime.store, 1);
+}
+
+async function snapshotQuery(
+  env: Env,
+  predicate: IndexedSegmentPredicate,
+): Promise<RunMetrics> {
+  const runtime = await createSnapshotEngine(env);
+  const documents = (await runtime.engine.scan("notes")).filter(
+    (document) => documentMatches(document, predicate),
+  );
+  return storeMetrics(runtime.store, documents.length);
+}
+
+async function snapshotScan(env: Env): Promise<RunMetrics> {
+  const runtime = await createSnapshotEngine(env);
+  const documents = await runtime.engine.scan("notes");
+  requireCount(
+    documents.length,
+    Number(env.BENCHMARK_DOCUMENTS),
+    "snapshot scan",
+  );
+  return storeMetrics(runtime.store, documents.length);
+}
+
+async function createSnapshotEngine(env: Env): Promise<{
+  engine: ImmutableSnapshotEngine;
+  store: CountingObjectStore;
+}> {
+  const key = (await getKeyMaterial(env)).key;
+  const storage = countingEncryptedStore(
+    env,
+    "snapshot",
+    key,
+  );
+  return {
+    store: storage.counting,
+    engine: new ImmutableSnapshotEngine(storage.encrypted),
+  };
+}
+
+async function createTrieEngine(env: Env): Promise<{
+  engine: ContentAddressedTrieEngine;
+  store: CountingObjectStore;
+}> {
+  const key = (await getKeyMaterial(env)).key;
+  const storage = countingEncryptedStore(
+    env,
+    "trie",
+    key,
+  );
+  return {
+    store: storage.counting,
+    engine: new ContentAddressedTrieEngine(
+      storage.encrypted,
+    ),
+  };
+}
+
+function countingEncryptedStore(
+  env: Env,
+  prefix: string,
+  key: CryptoKey,
+): {
+  counting: CountingObjectStore;
+  encrypted: EnvelopeObjectStore;
+} {
+  const counting = new CountingObjectStore(
+    new PrefixObjectStore(
+        new R2ObjectStore(
+          env.BENCHMARK_BUCKET as unknown as R2BucketBinding,
+        ),
+        prefix,
+    ),
+  );
+  return {
+    counting,
+    encrypted: new EnvelopeObjectStore(counting, {
+      key,
+      keyId: env.BENCHMARK_KEY_ID,
+    }),
+  };
+}
+
+async function getKeyMaterial(env: Env): Promise<KeyMaterial> {
+  keyMaterialPromise ??= (async () => {
+    const raw = base64ToBytes(env.BENCHMARK_KEY_BASE64);
+    const fingerprintRaw = new Uint8Array(
+      new ArrayBuffer(raw.byteLength),
+    );
+    fingerprintRaw.set(raw);
+    return {
+      key: await importAesGcmKey(raw, ["decrypt"]),
+      fingerprintKey: await crypto.subtle.importKey(
+        "raw",
+        fingerprintRaw,
+        {
+          name: "HMAC",
+          hash: "SHA-256",
+        },
+        false,
+        ["sign"],
+      ),
+    };
+  })();
+  return keyMaterialPromise;
+}
+
+function benchmarkConfig(env: Env) {
+  const documents = Number(env.BENCHMARK_DOCUMENTS);
+  return {
+    documents,
+    keyBase64: env.BENCHMARK_KEY_BASE64,
+    keyId: env.BENCHMARK_KEY_ID,
+    context: env.BENCHMARK_CONTEXT,
+    pointIds: Array.from(
+      { length: 100 },
+      (_, index) =>
+        `note-${String(
+          (index * 977) % documents,
+        ).padStart(6, "0")}`,
+    ),
+    clusteredCategory: "rare",
+    distributedBucket: "bucket-07",
+    rangeLower: Math.floor(documents * 0.7),
+    rangeUpper: Math.floor(documents * 0.7) + 24,
+  };
+}
 
 async function serveObject(
   request: Request,
@@ -120,10 +455,7 @@ async function serveObject(
     }
     return new Response(null, {
       status: 200,
-      headers: objectHeaders(
-        object.size,
-        object.etag,
-      ),
+      headers: objectHeaders(object.size, object.etag),
     });
   }
   if (request.method !== "GET") {
@@ -159,10 +491,133 @@ async function serveObject(
   return new Response(object.body, { status, headers });
 }
 
-function objectHeaders(
-  size: number,
-  etag: string,
-): Headers {
+class R2IndexedSegmentSource
+implements IndexedSegmentSource {
+  reads = 0;
+  bytesRead = 0;
+
+  private constructor(
+    private readonly bucket: BenchmarkBucket,
+    private readonly key: string,
+    readonly byteLength: number,
+    private readonly prefetchedOffset: number,
+    private readonly prefetchedBytes: Uint8Array,
+  ) {}
+
+  static async open(
+    bucket: BenchmarkBucket,
+    key: string,
+    byteLength: number,
+  ): Promise<R2IndexedSegmentSource> {
+    const suffix = Math.min(64 * 1024, byteLength);
+    const object = await bucket.get(key, {
+      range: { suffix },
+    });
+    if (!object) {
+      throw new Error("Experimental segment is missing");
+    }
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    if (bytes.byteLength !== suffix) {
+      throw new Error(
+        "Experimental suffix range length is invalid",
+      );
+    }
+    const source = new R2IndexedSegmentSource(
+      bucket,
+      key,
+      byteLength,
+      byteLength - suffix,
+      bytes,
+    );
+    source.reads = 1;
+    source.bytesRead = bytes.byteLength;
+    return source;
+  }
+
+  async read(
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array> {
+    if (
+      offset >= this.prefetchedOffset &&
+      offset + length <=
+        this.prefetchedOffset + this.prefetchedBytes.byteLength
+    ) {
+      const start = offset - this.prefetchedOffset;
+      return this.prefetchedBytes.slice(start, start + length);
+    }
+    const object = await this.bucket.get(this.key, {
+      range: { offset, length },
+    });
+    if (!object) {
+      throw new Error("Experimental range is missing");
+    }
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    if (bytes.byteLength !== length) {
+      throw new Error(
+        "Experimental range length is invalid",
+      );
+    }
+    this.reads += 1;
+    this.bytesRead += bytes.byteLength;
+    return bytes;
+  }
+
+}
+
+class CountingObjectStore implements ObjectStore {
+  reads = 0;
+  bytesRead = 0;
+
+  constructor(private readonly delegate: ObjectStore) {}
+
+  async get(key: string): Promise<StoredObject | null> {
+    const object = await this.delegate.get(key);
+    this.reads += 1;
+    this.bytesRead += object?.bytes.byteLength ?? 0;
+    return object;
+  }
+
+  put(
+    key: string,
+    bytes: Uint8Array,
+    conditions?: PutConditions,
+  ): Promise<{ etag: string }> {
+    return this.delegate.put(key, bytes, conditions);
+  }
+
+  delete(key: string): Promise<void> {
+    return this.delegate.delete(key);
+  }
+
+  list(prefix: string): Promise<string[]> {
+    return this.delegate.list(prefix);
+  }
+}
+
+function sourceMetrics(
+  source: R2IndexedSegmentSource,
+  documents: number,
+): RunMetrics {
+  return {
+    documents,
+    storageReads: source.reads,
+    storageBytes: source.bytesRead,
+  };
+}
+
+function storeMetrics(
+  store: CountingObjectStore,
+  documents: number,
+): RunMetrics {
+  return {
+    documents,
+    storageReads: store.reads,
+    storageBytes: store.bytesRead,
+  };
+}
+
+function objectHeaders(size: number, etag: string): Headers {
   return new Headers({
     "accept-ranges": "bytes",
     "cache-control": "no-store",
@@ -172,28 +627,45 @@ function objectHeaders(
   });
 }
 
-async function getBundleEngine(
-  env: Env,
-): Promise<ContentAddressedTrieEngine> {
-  bundleEngine ??= (async () => {
-    const key = await importAesGcmKey(
-      base64ToBytes(env.BENCHMARK_KEY_BASE64),
-      ["decrypt"],
+function documentMatches(
+  document: JsonDocument,
+  predicate: IndexedSegmentPredicate,
+): boolean {
+  const value = ownValue(
+    document as Record<string, JsonValue>,
+    predicate.field,
+  );
+  if (predicate.operator === "eq") {
+    return value === predicate.value;
+  }
+  return (
+    typeof value === typeof predicate.lower &&
+    (typeof value === "string" || typeof value === "number") &&
+    value >= predicate.lower &&
+    value <= predicate.upper
+  );
+}
+
+function requireDocument(
+  document: JsonDocument | null,
+  id: string,
+  label: string,
+): void {
+  if (!document || document.id !== id) {
+    throw new Error(`${label} missed ${id}`);
+  }
+}
+
+function requireCount(
+  actual: number,
+  expected: number,
+  label: string,
+): void {
+  if (actual !== expected) {
+    throw new Error(
+      `${label} returned ${actual}; expected ${expected}`,
     );
-    const root = new PrefixObjectStore(
-      new R2ObjectStore(
-        env.BENCHMARK_BUCKET as unknown as R2BucketBinding,
-      ),
-      "trie",
-    );
-    return new ContentAddressedTrieEngine(
-      new EnvelopeObjectStore(root, {
-        key,
-        keyId: env.BENCHMARK_KEY_ID,
-      }),
-    );
-  })();
-  return bundleEngine;
+  }
 }
 
 function quoteEtag(etag: string): string {
@@ -201,8 +673,13 @@ function quoteEtag(etag: string): string {
   return `"${raw}"`;
 }
 
-function json(value: unknown): Response {
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
+    status,
     headers: {
       "cache-control": "no-store",
       "content-type": "application/json; charset=utf-8",
