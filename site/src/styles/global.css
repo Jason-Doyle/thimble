@@ -736,6 +736,60 @@ summary {
   font-size: 1.02rem;
 }
 
+.studio-section {
+  background:
+    radial-gradient(circle at 88% 10%, rgb(12 114 255 / 0.12), transparent 28rem),
+    linear-gradient(180deg, #f7faff, #edf4ff) !important;
+}
+
+.studio-preview {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid #b9cbe3;
+  border-radius: 1.35rem;
+  background: #071a35;
+  box-shadow: 0 30px 80px rgb(5 30 65 / 0.2);
+}
+
+.studio-preview > a {
+  display: block;
+  padding: clamp(0.45rem, 1.2vw, 0.9rem);
+}
+
+.studio-preview picture,
+.studio-preview img {
+  display: block;
+  width: 100%;
+}
+
+.studio-preview img {
+  height: auto;
+  border-radius: 0.8rem;
+}
+
+.studio-preview figcaption {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  padding: 0.95rem 1.2rem 1.1rem;
+  color: #c9dcf5;
+  background: #06162f;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.studio-preview figcaption > span {
+  border: 1px solid rgb(120 178 245 / 0.22);
+  border-radius: 999px;
+  padding: 0.35rem 0.6rem;
+  background: rgb(255 255 255 / 0.05);
+}
+
+.studio-preview figcaption .text-link {
+  margin-left: auto;
+  color: #78ddff;
+}
+
 .fit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1657,6 +1711,16 @@ summary {
   margin: 1rem 0;
 }
 
+.prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.5rem 0;
+  border: 1px solid var(--slate-200);
+  border-radius: 0.9rem;
+  box-shadow: var(--shadow-md);
+}
+
 .prose h1 + p {
   color: var(--slate-600);
   font-size: 1.1rem;
@@ -2242,6 +2306,15 @@ summary {
     display: grid;
     align-items: start;
     gap: 1.4rem;
+  }
+
+  .studio-preview figcaption {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .studio-preview figcaption .text-link {
+    margin-left: 0;
   }
 
   .section-heading h2,
