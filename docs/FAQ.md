@@ -159,6 +159,20 @@ and exposes guarded maintenance operations.
 Studio starts read-only and never receives object-storage credentials. See
 [ThimbleDB Studio](STUDIO.md).
 
+## How do I report a bug or documentation problem?
+
+Use the [GitHub issue tracker](https://github.com/Jason-Doyle/thimble/issues)
+for reproducible defects, documentation corrections, and feature proposals.
+Do not include credentials, tokens, private application data, or other
+sensitive information in a public issue.
+
+## Does thimbledb.com use analytics cookies?
+
+The static documentation site uses Cloudflare Web Analytics. Cloudflare
+describes that service as privacy-first analytics that does not use cookies or
+collect visitors' personal data. The site has no user accounts, comments, or
+contact forms. See [Website privacy](WEBSITE-PRIVACY.md).
+
 ## What licence does ThimbleDB use?
 
 ThimbleDB is available under the Apache License 2.0.

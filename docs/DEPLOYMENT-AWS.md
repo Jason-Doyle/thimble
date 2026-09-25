@@ -59,12 +59,27 @@ Generate the recommended Entra delegated scope and application roles with
 machine access, use a service principal and required application role rather
 than a static global key.
 
-To serve the package-owned Studio from the same authority, set
-`THIMBLE_STUDIO=true` and configure the exact public origin in
-`THIMBLE_STUDIO_ORIGIN`.
+## Template capability
 
-Set `THIMBLE_READ_BUNDLES=true` to advertise the bounded cold point-read
-optimization.
+The checked-in CloudFormation template exposes the core provider, OIDC, key
+version, collection-layout, and retention settings. It does not currently
+expose:
+
+- `THIMBLE_COLLECTION_INDEXES`
+- `THIMBLE_COLLECTIONS`
+- `THIMBLE_HEAD_TTL_MS`
+- `THIMBLE_STUDIO` or `THIMBLE_STUDIO_ORIGIN`
+- `THIMBLE_READ_BUNDLES`
+
+The supplied deployment therefore leaves Studio, covering indexes, and read
+bundles disabled. Use a reviewed derived template or another Node deployment
+configuration when those optional features are required. Setting variables
+only in the deployment shell does not pass them into the Lambda function.
+
+The template still passes its legacy `RetiredCollectionLayouts` value into
+the Lambda environment. The authority runtime does not perform retired-layout
+cleanup. Pass `THIMBLE_RETIRED_COLLECTION_LAYOUTS` to the separate quiescent
+retention command when cleanup is required.
 
 For key rotation, deploy `KeyVersion` as the current write version and
 `ReadKeyVersions` as the comma-separated historical versions that remain

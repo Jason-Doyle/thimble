@@ -66,7 +66,7 @@ On first local startup:
 2. It derives one scope encryption key and one node-address HMAC key.
 3. A validated external identity is mapped to a stable internal user UUID.
 4. The browser receives an HttpOnly opaque session cookie.
-5. The authorised key endpoint returns the scope key once.
+5. The authorised key endpoint returns the current readable scope-key grant.
 6. The browser imports it as a non-extractable memory-only CryptoKey.
 7. Persistent cache values are encrypted with a separate non-extractable
    browser device key.

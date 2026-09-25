@@ -212,8 +212,8 @@ roles. See [Machine and service access](SERVICE-ACCESS.md).
 ## Compatibility commitments
 
 - Semantic versioning applies from package version `1.0.0`.
-- TDB1 envelopes and committed protocol fixtures remain readable throughout
-  the 1.x line.
+- TDB1 envelopes and committed protocol fixtures remain readable in every
+  release that claims TDB1 compatibility.
 - New optional object layouts may be added in a minor release.
 - Removing or changing an exported symbol, authority endpoint, stored field,
   or required configuration value is a major-version change.

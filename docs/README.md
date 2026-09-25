@@ -4,10 +4,13 @@
 | --- | --- |
 | [Quickstart](QUICKSTART.md) | Package, authority, browser client, and verification setup |
 | [Local development](DEVELOPMENT.md) | Scaffolding, development identity, and production transition |
+| [Configuration reference](CONFIGURATION.md) | Authority options, environment variables, provider settings, defaults, and template coverage |
 | [Queries and indexes](QUERIES-INDEXES.md) | Typed collections, bounded predicates, query plans, and declared indexes |
 | [Logical migration](MIGRATION.md) | Portable archives and JSON, CSV, lowdb, SQLite, PostgreSQL, and Firestore adapters |
 | [Vibe-coded app fit guide](VIBE-CODED-APPS.md) | Exact workload decision criteria for AI-assisted small apps |
 | [Implementation prompts](IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
+| [Starter examples](EXAMPLES.md) | Checked-in examples, generated application, and maintained starter repositories |
+| [Frequently asked questions](FAQ.md) | Direct answers about fit, providers, identity, performance, and limits |
 | [npm publishing](NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
 | [Use cases](USE-CASES.md) | Fit criteria and application-specific guides |
 | [Database comparisons](COMPARISONS.md) | Workload comparisons with D1, SQLite, Firestore, lowdb, and direct object storage |
@@ -22,7 +25,7 @@
 | [Deletion and retention](DELETION-RETENTION.md) | Tombstones, restore windows, scope erasure, and quiescent collection |
 | [Adaptive layouts](ADAPTIVE-LAYOUTS.md) | Snapshot/trie evidence, recommendations, and migration |
 | [Protocol](PROTOCOL.md) | Binary envelope and object layout |
-| [Versioning](VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
+| [Versioning](VERSIONING.md) | Package, protocol, key, and release compatibility rules |
 | [Public API](PUBLIC-API.md) | Stable package exports and authority integration |
 | [Evaluation harness](EVALUATION.md) | Browser harness, sample store, and benchmark usage |
 | [Benchmarks](BENCHMARKS.md) | R2 browser methodology, results, and limitations |
@@ -31,3 +34,4 @@
 | [Azure deployment](DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
 | [AWS deployment](DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
 | [Operations](OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
+| [Website privacy](WEBSITE-PRIVACY.md) | Static-site data handling and Cloudflare Web Analytics disclosure |

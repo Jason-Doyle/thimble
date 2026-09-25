@@ -73,7 +73,7 @@ tombstone every user collection through the administrator scope-erasure API.
 ## Scaffold prompt
 
 ```text
-Add a per-user workspace to this application using ThimbleDB 1.x.
+Add a per-user workspace to this application using ThimbleDB 3.x.
 
 Store profile, preferences, drafts, and saved items in the signed-in user's
 `user:<uuid>` scope. Use snapshot layout for profile and preferences. Start

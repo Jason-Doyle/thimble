@@ -28,8 +28,11 @@ The generated app includes:
 - browser memory and IndexedDB caches
 - typed notes collection
 - equality and range indexes
+- an explicit covering projection for indexed title lookup
+- opt-in bounded point-read bundles
 - fluent queries
 - deletion and restore
+- packaged same-origin Studio
 - Vite frontend
 
 Run:

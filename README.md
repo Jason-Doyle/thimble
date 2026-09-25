@@ -9,9 +9,11 @@
 </h1>
 
 ThimbleDB is a Cloudflare-first database for small, read-heavy web
-applications. Browsers read encrypted immutable objects through an
-authenticated storage broker and retain them in memory and IndexedDB caches.
-Writes and key grants use the same small authority.
+applications. Browsers read through an authenticated authority and retain
+scope-separated data in memory and encrypted IndexedDB caches. The default
+read path returns encrypted immutable objects; deployments can explicitly
+enable bounded decoded read bundles for eligible cold point reads. Writes and
+key grants use the same small authority.
 
 Cloudflare Workers and R2 are the reference deployment. Azure Blob Storage,
 Amazon S3, and a local filesystem adapter implement the same provider-neutral
@@ -36,8 +38,8 @@ flowchart LR
     Client --> ScopeKey
   end
 
-  subgraph ReadPath["Brokered private-read boundary"]
-    Domain["Authenticated object endpoint"]
+  subgraph ReadPath["Authenticated read boundary"]
+    Domain["Ciphertext-object and decoded-bundle endpoint"]
     Objects["TDB1 gzip + AES-GCM envelopes"]
     Domain --> Objects
   end
@@ -50,7 +52,7 @@ flowchart LR
     Auth --> Write
   end
 
-  Client -- "Session-authorised ciphertext reads" --> Domain
+  Client -- "Ciphertext objects or opt-in bounded bundles" --> Domain
   Client -- "Mutations" --> Auth
   Grant -- "Memory-only CryptoKey" --> ScopeKey
   Write -- "Encrypted objects" --> Objects
@@ -251,6 +253,7 @@ layout decision thresholds.
 | Document | Purpose |
 | --- | --- |
 | [Quickstart](docs/QUICKSTART.md) | Package, authority, browser client, and verification setup |
+| [Configuration reference](docs/CONFIGURATION.md) | Authority options, environment variables, provider settings, defaults, and template coverage |
 | [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
 | [npm publishing](docs/NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
 | [Use cases](docs/USE-CASES.md) | Fit criteria and application-specific guides |
@@ -263,7 +266,7 @@ layout decision thresholds.
 | [Deletion and retention](docs/DELETION-RETENTION.md) | Tombstones, restoration, scope erasure, and physical collection |
 | [Adaptive layouts](docs/ADAPTIVE-LAYOUTS.md) | Snapshot/trie recommendations and explicit migration |
 | [Protocol](docs/PROTOCOL.md) | Binary envelope and object layout |
-| [Versioning](docs/VERSIONING.md) | Package, protocol, key, and v1 compatibility rules |
+| [Versioning](docs/VERSIONING.md) | Package, protocol, key, and release compatibility rules |
 | [Public API](docs/PUBLIC-API.md) | Stable package exports and authority integration |
 | [Evaluation harness](docs/EVALUATION.md) | Browser harness, sample application, and benchmark usage |
 | [Benchmarks](docs/BENCHMARKS.md) | R2 browser methodology, results, and limitations |
@@ -272,6 +275,7 @@ layout decision thresholds.
 | [Azure deployment](docs/DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
 | [AWS deployment](docs/DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
 | [Operations](docs/OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
+| [Website privacy](docs/WEBSITE-PRIVACY.md) | Static-site data handling and Cloudflare Web Analytics disclosure |
 
 ## When to use ThimbleDB
 

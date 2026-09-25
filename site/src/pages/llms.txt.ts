@@ -23,6 +23,7 @@ scope and one collection.
 - [Should you use ThimbleDB for a vibe-coded app?](${site.url}/vibe-coded-apps/): Exact fit and rejection criteria for AI-assisted small apps.
 - [Quickstart](${site.url}/docs/quickstart/): Install the package and configure Cloudflare, Node, and browser clients.
 - [Local development](${site.url}/docs/development/): Scaffold a complete local app with the safe development identity.
+- [Configuration reference](${site.url}/docs/configuration/): Authority options, environment variables, defaults, provider settings, and template coverage.
 - [ThimbleDB Studio](${site.url}/docs/studio/): Package-owned management UI for explicit scopes, bounded queries, index health, exports, and guarded operations.
 - [Starter examples](${site.url}/examples/): Local notes and Cloudflare authority examples.
 - [Node starter repository](https://github.com/Jason-Doyle/thimbledb-node-starter): Local-first authenticated notes application.
@@ -47,6 +48,7 @@ scope and one collection.
 - [Tradeoffs](${site.url}/docs/tradeoffs/): Verified behaviour, unknowns, and poor-fit workloads.
 - [R2 browser benchmarks](${site.url}/benchmarks/): Multi-region evidence and limitations.
 - [Public package API](${site.url}/docs/public-api/): Stable package exports.
+- [Website privacy](${site.url}/docs/website-privacy/): Static-site data handling and Cloudflare Web Analytics disclosure.
 - [GitHub repository](${site.repository}): Source, tests, examples, fixtures, and raw evidence.
 - [npm package](${site.npm}): Published package.
 

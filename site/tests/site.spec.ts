@@ -38,6 +38,15 @@ test("homepage presents the product and complete SEO metadata", async ({
   });
   await studioImage.scrollIntoViewIfNeeded();
   await expect(studioImage).toHaveJSProperty("complete", true);
+  await expect(
+    page.getByRole("link", { name: "Privacy", exact: true }),
+  ).toHaveAttribute("href", "/docs/website-privacy/");
+  await expect(
+    page.getByRole("link", { name: "Issues", exact: true }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/Jason-Doyle/thimble/issues",
+  );
   await assertNoHorizontalOverflow(page);
 });
 
@@ -93,6 +102,19 @@ test("repository documentation renders with rewritten internal links", async ({
     }),
   ).toBeVisible();
   await assertNoHorizontalOverflow(page);
+
+  await page.goto("/docs/website-privacy/");
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Website privacy",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: "Cloudflare Web Analytics",
+    }),
+  ).toBeVisible();
 });
 
 test("documentation search returns relevant repository pages", async ({
@@ -152,6 +174,8 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(llmsText).toContain("Logical migration");
   expect(llmsText).toContain("Machine and service access");
   expect(llmsText).toContain("ThimbleDB Studio");
+  expect(llmsText).toContain("Authority deployment modes");
+  expect(llmsText).toContain("Configuration reference");
 
   const full = await request.get("/llms-full.txt");
   expect(full.ok()).toBe(true);
@@ -161,6 +185,10 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(fullText).toContain("# Logical migration");
   expect(fullText).toContain("# Machine and service access");
   expect(fullText).toContain("# ThimbleDB Studio");
+  expect(fullText).toContain("# Authority deployment modes");
+  expect(fullText).toContain("# Configuration reference");
+  expect(fullText).toContain("# Website privacy");
+  expect(fullText).toContain("## 3.1.0");
 
   await page.goto("/vibe-coded-apps/");
   await expect(

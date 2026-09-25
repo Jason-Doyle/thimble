@@ -8,7 +8,11 @@ export const prerender = true;
 const includedIds = docs.map((doc) => doc.id);
 
 export async function GET() {
-  const entries = await getCollection("docs");
+  const [documentation, project] = await Promise.all([
+    getCollection("docs"),
+    getCollection("project"),
+  ]);
+  const entries = [...documentation, ...project];
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const sections = includedIds.flatMap((id) => {
     const entry = byId.get(id);

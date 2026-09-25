@@ -14,6 +14,22 @@ Package version `1.0.0` freezes the documented exports in
 [Public package API](PUBLIC-API.md). Semantic versioning applies to the root,
 auth, authority, and provider subpaths.
 
+## Version 1.0
+
+Version 1.0 provides:
+
+- Apache-2.0 licensing
+- stable documented package and authority exports
+- Node and Cloudflare authority implementations
+- Entra and generic OIDC identity mapping and administration
+- retained deletion and quiescent physical collection
+- explicit snapshot/trie recommendations and migration
+- TDB1 read compatibility fixtures
+
+Performance is not part of the compatibility guarantee. Published R2 evidence
+shows fast warm cache reads, while cold reads and external session creation can
+take seconds from distant regions.
+
 ## Version 2.0
 
 Version 2 separates cloud storage SDKs from the base package:
@@ -109,19 +125,3 @@ compatible extension.
 The `npm run migrate:keys` command rewrites selected live collections under the
 current write key. Old objects are retained until an operator-approved offline
 cleanup.
-
-## Version 1.0
-
-Version 1.0 provides:
-
-- Apache-2.0 licensing
-- stable documented package and authority exports
-- Node and Cloudflare authority implementations
-- Entra and generic OIDC identity mapping and administration
-- retained deletion and quiescent physical collection
-- explicit snapshot/trie recommendations and migration
-- TDB1 read compatibility fixtures
-
-Performance is not part of the compatibility guarantee. Published R2 evidence
-shows fast warm cache reads, while cold reads and external session creation can
-take seconds from distant regions.

@@ -48,7 +48,7 @@ await db.write("sessions", "session-2026-09-24", {
 ## Scaffold prompt
 
 ```text
-Build a private progress journal with ThimbleDB 1.x.
+Build a private progress journal with ThimbleDB 3.x.
 
 Store profile and templates as snapshots. Store sessions and milestones as
 tries in the signed-in user's `user:<uuid>` scope. Use stable IDs, structured

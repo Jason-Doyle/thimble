@@ -41,7 +41,9 @@ jobs:
         run: npm run check
 
       - name: Test
-        run: npm test
+        run: |
+          npm test
+          npm run verify:docs
 
       - name: Build package
         run: npm run build:package

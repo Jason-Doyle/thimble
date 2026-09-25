@@ -9,7 +9,7 @@
     "type": "git",
     "url": "git+https://github.com/Jason-Doyle/thimble.git"
   },
-  "homepage": "https://github.com/Jason-Doyle/thimble#readme",
+  "homepage": "https://thimbledb.com",
   "bugs": {
     "url": "https://github.com/Jason-Doyle/thimble/issues"
   },
@@ -45,24 +45,7 @@
     "LICENSE",
     "NOTICE",
     "public/thimbledb-logo.png",
-    "docs/QUICKSTART.md",
-    "docs/DEVELOPMENT.md",
-    "docs/EXAMPLES.md",
-    "docs/IMPLEMENTATION-PROMPTS.md",
-    "docs/MIGRATION.md",
-    "docs/NPM-PUBLISHING.md",
-    "docs/QUERIES-INDEXES.md",
-    "docs/SERVICE-ACCESS.md",
-    "docs/STUDIO.md",
-    "docs/USE-CASES.md",
-    "docs/use-cases",
-    "docs/ADAPTIVE-LAYOUTS.md",
-    "docs/AUTHORITY-DEPLOYMENT.md",
-    "docs/AUTHENTICATION.md",
-    "docs/DELETION-RETENTION.md",
-    "docs/PUBLIC-API.md",
-    "docs/PROTOCOL.md",
-    "docs/VERSIONING.md"
+    "docs"
   ],
   "exports": {
     ".": {
@@ -132,6 +115,7 @@
     "test:e2e": "playwright test",
     "verify:package": "node scripts/verify-package.mjs",
     "verify:scaffold": "node scripts/verify-scaffold.mjs",
+    "verify:docs": "node scripts/verify-docs.mjs",
     "site:dev": "npm --prefix site run dev",
     "site:check": "npm --prefix site run check",
     "site:build": "npm --prefix site run build",

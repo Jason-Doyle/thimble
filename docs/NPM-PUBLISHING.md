@@ -59,8 +59,10 @@ unused write-capable npm automation tokens.
 
 1. Update `package.json`, `package-lock.json`, and `CHANGELOG.md` through a
    pull request.
-2. Merge only after the protected `verify` check and required review pass.
-3. Create a matching tag such as `v2.0.1`.
+2. Merge only after the protected `verify` check passes and repository branch
+   protection requirements are satisfied. A repository administrator may use
+   the documented bypass when the sole maintainer cannot self-approve.
+3. Create a matching tag such as `vX.Y.Z`.
 4. Publish a GitHub release for that tag.
 5. The release event runs `publish.yml`.
 6. The workflow verifies that the tag matches the package version, runs
@@ -79,8 +81,8 @@ published manually before the trusted publisher exists.
 - Package dependencies and build tools run in a job without OIDC permission.
 - The workflow has read-only repository content access and `id-token: write`.
 - Publishing is tied to this repository and the exact `publish.yml` workflow.
-- Protected `main` rules require CI and code-owner approval before version
-  changes can merge.
+- Protected `main` rules require CI and review before version changes merge,
+  with an administrator bypass reserved for the sole-maintainer case.
 
 The repository is public, so npm automatically generates a signed provenance
 attestation for trusted publishes. If the repository becomes private,

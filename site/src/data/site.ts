@@ -6,6 +6,9 @@ export const site = {
   description:
     "Encrypted browser-first database for small web applications, backed by object storage.",
   repository: "https://github.com/Jason-Doyle/thimble",
+  issues: "https://github.com/Jason-Doyle/thimble/issues",
+  license:
+    "https://github.com/Jason-Doyle/thimble/blob/main/LICENSE",
   npm: "https://www.npmjs.com/package/thimbledb",
   version: packageJson.version,
   author: "Jason Doyle",

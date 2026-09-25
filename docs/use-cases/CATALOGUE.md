@@ -62,7 +62,7 @@ query.
 ## Scaffold prompt
 
 ```text
-Build a small catalogue or reference library with ThimbleDB 1.x.
+Build a small catalogue or reference library with ThimbleDB 3.x.
 
 Model JSON documents with stable IDs, category, summary, tags, active status,
 and update timestamp. Start with snapshot layout and use a 10-second HEAD TTL.

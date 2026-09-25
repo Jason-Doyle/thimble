@@ -24,7 +24,7 @@ flowchart LR
     Exchange["OIDC token exchange"]
     Session["Opaque revocable session"]
     Authorizer["Current scope-grant calculation"]
-    Broker["Authenticated encrypted-object broker"]
+    Broker["Authenticated ciphertext-object and decoded-bundle broker"]
     Mutation["Mutation validation and execution"]
 
     Exchange --> Session
@@ -50,7 +50,7 @@ flowchart LR
   end
 
   UI -- "Session cookie + CSRF + requested scope" --> Authority
-  Client -- "Brokered ciphertext reads" --> Broker
+  Client -- "Ciphertext objects or opt-in decoded bundles" --> Broker
   Broker --> Heads
   Broker --> Pages
   Mutation -- "Create immutable objects" --> Pages
