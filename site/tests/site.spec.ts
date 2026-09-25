@@ -25,7 +25,7 @@ test("homepage presents the product and complete SEO metadata", async ({
     page.locator('script[type="application/ld+json"]'),
   ).toHaveCount(2);
   await expect(
-    page.getByRole("img", { name: "ThimbleDB" }),
+    page.getByRole("img", { name: "ThimbleDB", exact: true }),
   ).toHaveJSProperty("complete", true);
   await expect(
     page.getByText("npx thimbledb@latest create my-app"),
@@ -33,11 +33,17 @@ test("homepage presents the product and complete SEO metadata", async ({
   await expect(
     page.getByText("Bounded indexed query", { exact: true }),
   ).toBeVisible();
+  const studioImage = page.getByRole("img", {
+    name: /Studio showing a read-only tenant scope/i,
+  });
+  await studioImage.scrollIntoViewIfNeeded();
+  await expect(studioImage).toHaveJSProperty("complete", true);
   await assertNoHorizontalOverflow(page);
 });
 
 test("repository documentation renders with rewritten internal links", async ({
   page,
+  request,
 }) => {
   await page.goto("/docs/quickstart/");
 
@@ -51,6 +57,20 @@ test("repository documentation renders with rewritten internal links", async ({
     }),
   ).toHaveAttribute("href", "/docs/authentication/");
   await expect(page.locator('.prose a[href$=".md"]')).toHaveCount(0);
+  await assertNoHorizontalOverflow(page);
+
+  await page.goto("/docs/studio/");
+  await expect(
+    page.getByRole("img", {
+      name: /Studio showing a read-only tenant scope/i,
+    }),
+  ).toHaveAttribute(
+    "src",
+    "https://thimbledb.com/assets/studio-1600.webp",
+  );
+  expect((await request.get("/assets/studio-1600.webp")).ok()).toBe(
+    true,
+  );
   await assertNoHorizontalOverflow(page);
 });
 

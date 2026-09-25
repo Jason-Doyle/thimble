@@ -20,6 +20,8 @@ site/public/assets/logo-320.webp
 site/public/assets/logo-384.webp
 site/public/assets/logo-640.webp
 site/public/assets/logo-96.webp
+site/public/assets/studio-960.webp
+site/public/assets/studio-1600.webp
 *.log
 .env
 .env.*

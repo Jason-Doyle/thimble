@@ -9,6 +9,11 @@ Studio never receives object-storage credentials or an authority write key.
 The `thimble.admin` role enables administrative operations but does not grant
 access to every data scope.
 
+![ThimbleDB Studio showing a read-only tenant scope, a bounded indexed query, and product documents](https://thimbledb.com/assets/studio-1600.webp)
+
+The screenshot uses demo data. Studio remains read-only until the selected
+scope ID is explicitly confirmed for that browser session.
+
 ## Capabilities
 
 Studio provides:

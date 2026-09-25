@@ -10,6 +10,12 @@ const sourceLogo = path.join(
   "public",
   "thimbledb-logo.png",
 );
+const sourceStudio = path.join(
+  repositoryRoot,
+  "docs",
+  "assets",
+  "thimbledb-studio.png",
+);
 const assetsDirectory = path.join(siteRoot, "public", "assets");
 
 await mkdir(assetsDirectory, { recursive: true });
@@ -44,6 +50,16 @@ await sharp(sourceLogo)
   .resize(96, 96)
   .webp({ quality: 84 })
   .toFile(path.join(assetsDirectory, "logo-96.webp"));
+
+await sharp(sourceStudio)
+  .resize({ width: 960, withoutEnlargement: true })
+  .webp({ quality: 86 })
+  .toFile(path.join(assetsDirectory, "studio-960.webp"));
+
+await sharp(sourceStudio)
+  .resize({ width: 1600, withoutEnlargement: true })
+  .webp({ quality: 88 })
+  .toFile(path.join(assetsDirectory, "studio-1600.webp"));
 
 const socialBackground = Buffer.from(`
   <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
