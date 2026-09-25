@@ -38,6 +38,15 @@ export const docs: DocMeta[] = [
     featured: true,
   },
   {
+    id: "configuration",
+    title: "Configuration reference",
+    description:
+      "Review authority options, environment variables, provider settings, defaults, and deployment-template coverage.",
+    group: "Start here",
+    order: 14,
+    featured: true,
+  },
+  {
     id: "use-cases",
     title: "Use cases",
     description:
@@ -48,7 +57,7 @@ export const docs: DocMeta[] = [
   },
   {
     id: "vibe-coded-apps",
-    title: "Should you use ThimbleDB?",
+    title: "Should you use ThimbleDB for a vibe-coded app?",
     description:
       "Use an exact fit check to decide whether a vibe-coded or AI-assisted small app matches ThimbleDB.",
     group: "Start here",
@@ -91,7 +100,7 @@ export const docs: DocMeta[] = [
   },
   {
     id: "use-cases/tenant-operations",
-    title: "Multi-tenant operations portal",
+    title: "Multi-tenant internal operations portal",
     description:
       "Separate tenant and user records for a read-heavy internal operations application.",
     group: "Use cases",
@@ -99,7 +108,7 @@ export const docs: DocMeta[] = [
   },
   {
     id: "use-cases/field-guide",
-    title: "Field guide and inspections",
+    title: "Offline-readable field guide and inspections",
     description:
       "Keep reference material available from browser cache while submitting connected inspection records.",
     group: "Use cases",
@@ -107,7 +116,7 @@ export const docs: DocMeta[] = [
   },
   {
     id: "use-cases/catalogue",
-    title: "Catalogue or reference library",
+    title: "Small catalogue or reference library",
     description:
       "Serve a small bounded catalogue with snapshot reads and measured growth thresholds.",
     group: "Use cases",
@@ -115,7 +124,7 @@ export const docs: DocMeta[] = [
   },
   {
     id: "use-cases/progress-journal",
-    title: "Progress or activity journal",
+    title: "Progress, training, or activity journal",
     description:
       "Store user-owned entries, summaries, and profile data without a separate database engine.",
     group: "Use cases",
@@ -123,7 +132,7 @@ export const docs: DocMeta[] = [
   },
   {
     id: "use-cases/ai-context",
-    title: "Structured AI application context",
+    title: "Structured context for an AI-assisted application",
     description:
       "Keep bounded preferences and task context separate from model prompts and provider tokens.",
     group: "Use cases",
@@ -172,7 +181,7 @@ export const docs: DocMeta[] = [
   },
   {
     id: "compare/object-storage",
-    title: "ThimbleDB and direct object storage",
+    title: "ThimbleDB and direct JSON in object storage",
     description:
       "Decide whether direct JSON objects are enough or a versioned storage protocol is justified.",
     group: "Compare",
@@ -189,9 +198,9 @@ export const docs: DocMeta[] = [
   },
   {
     id: "authority-deployment",
-    title: "Authority deployment modes",
+    title: "In-app and separate authority deployment",
     description:
-      "Choose an embedded or separately deployed authority and preserve the browser origin, secret, and operations boundaries.",
+      "Compare in-app and separate Worker or service topologies, scaling opportunities, trust boundaries, and same-origin requirements.",
     group: "Understand",
     order: 15,
     featured: true,
@@ -200,7 +209,7 @@ export const docs: DocMeta[] = [
     id: "diagrams",
     title: "System diagrams",
     description:
-      "Review trust boundaries, query and index flows, key rotation, service access, migration, and provider topology.",
+      "Review trust boundaries, deployment styles, read and write flows, deletion, key rotation, migration, and provider topology.",
     group: "Understand",
     order: 20,
   },
@@ -362,6 +371,14 @@ export const docs: DocMeta[] = [
       "Review package releases and user-visible changes across the ThimbleDB project.",
     group: "Reference",
     order: 50,
+  },
+  {
+    id: "website-privacy",
+    title: "Website privacy",
+    description:
+      "Understand what the static documentation site collects and how Cloudflare Web Analytics is used.",
+    group: "Reference",
+    order: 55,
   },
   {
     id: "faq",

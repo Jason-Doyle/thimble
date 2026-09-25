@@ -1,23 +1,31 @@
-# Authority deployment modes
+# In-app and separate authority deployment
 
 ThimbleDB separates the browser client from the authenticated authority. The
-authority can run in the application's deployment or as a separately operated
-Worker, container, or function.
+authority can run in-app inside the application's deployment or as a separately
+operated Worker, container, function, or Node service.
 
 This is a process and deployment choice. In both modes, expose application and
 authority routes through one public browser origin unless an independently
 reviewed cross-origin session design replaces the default Strict cookie
 contract.
 
+The browser API, object format, collection definitions, and storage-provider
+contract stay the same. The choice changes the runtime trust boundary,
+deployment lifecycle, failure isolation, and which workloads can scale
+independently. See the
+[in-app topology](DIAGRAMS.md#in-app-embedded-authority-deployment) and
+[separate-service topology](DIAGRAMS.md#separate-worker-or-service-deployment)
+for the detailed request and secret boundaries.
+
 ## Decision summary
 
-| Consideration | Embedded authority | Separate authority service |
+| Consideration | In-app (embedded) authority | Separate Worker or service |
 | --- | --- | --- |
 | Deployment units | One application deployment | Application plus authority deployment |
 | Browser origin | Naturally the same | Use a gateway or path route to preserve one public origin |
 | Secrets | Application runtime also holds authority and storage secrets | Storage credentials and master key remain outside the application runtime |
 | Release cadence | Application and authority change together | Authority can be upgraded independently |
-| Scaling | Application and authority scale together | Reads, writes, and application rendering can scale separately |
+| Scaling | Application and authority capacity scale as one unit | Authority traffic and application rendering can scale independently |
 | Failure boundary | One runtime can affect both application and data API | Application and authority failures are isolated |
 | Operations | Simplest setup and observability | More routing, monitoring, version coordination, and incident paths |
 | Latency | No service-to-service hop inside the deployment | Gateway and service routing may add latency |
@@ -28,7 +36,7 @@ local files, Azure Blob Storage, S3, or R2 in either deployment model. A
 Cloudflare authority can share one Worker deployment with application assets
 or run as a dedicated routed Worker.
 
-## Embedded authority
+## In-app (embedded) authority
 
 The authority starts as part of the application deployment. The application
 and data API normally share one release, hostname, logs, and scaling policy.
@@ -62,6 +70,10 @@ Node example:
 import {
   startNodeAuthority,
 } from "thimbledb/authority/node";
+import {
+  collectionIndexes,
+  collectionLayouts,
+} from "./collections.js";
 
 await startNodeAuthority({
   studio: true,
@@ -84,9 +96,10 @@ Choose this mode when:
 - a same-origin browser path should require no additional routing layer
 
 Avoid it when a compromise of the application runtime must not expose the
-storage credential or deployment master key.
+storage credential or deployment master key, or when application rendering and
+authority traffic need different scaling or release controls.
 
-## Separate authority service
+## Separate Worker or service
 
 The authority runs in its own Worker, container, Lambda function, Container
 App, or Node service. The browser application remains a normal ThimbleDB
@@ -121,6 +134,29 @@ Choose this mode when:
 
 The additional cost is real: another deployment, route, health check, log
 stream, alert set, version boundary, and incident path must be operated.
+
+## Scaling opportunities
+
+Both modes can use a platform that scales horizontally. Separating the
+authority does not partition collection data or remove conditional-write
+contention. It creates an independent runtime and operations boundary.
+
+| Scaling pressure | In-app authority | Separate Worker or service |
+| --- | --- | --- |
+| Static assets and application rendering | Scale with authentication and data API traffic | Scale without adding authority instances |
+| Sessions, key grants, object reads, and read bundles | Compete with application work for the same runtime limits | Receive a dedicated route, limits, logs, and scaling policy |
+| Write bursts and index maintenance | Share application CPU, memory, concurrency, and rollout risk | Can use dedicated capacity and maintenance windows |
+| Regional placement | Follows the application deployment | Can run near object storage while the application uses another region or edge |
+| Failure isolation | Saturation or failure can affect the whole application | Authority saturation can be isolated from application rendering |
+| Cost and cold starts | One deployment has the lowest operating floor | A second deployment can add idle cost, cold starts, and gateway latency |
+
+Cloudflare Workers scale per request in either topology. A separate Worker is
+useful when independent routes, limits, releases, observability, or secret
+isolation matter. It is not an automatic throughput improvement.
+
+For Node deployments, use a shared cloud object store before running multiple
+authority instances. The local filesystem provider is intentionally limited to
+one process and is not a scale-out storage backend.
 
 ## Same-origin browser boundary
 
@@ -157,7 +193,7 @@ objects and sends them over HTTPS with `no-store`. Leave the capability
 disabled if the deployment requires every read response above TLS to remain a
 TDB1 envelope.
 
-An embedded authority removes one internal routing boundary. A separate
+An in-app authority removes one internal routing boundary. A separate
 authority can instead be placed near object storage and scaled independently.
 Neither choice changes the number of browser requests once the same public
 route reaches the authority.
@@ -179,7 +215,7 @@ runtime, and storage region.
 Both modes enforce the same sessions, scope grants, encryption, deletion, and
 conditional-write rules.
 
-Embedded mode has a larger runtime blast radius because application server
+In-app mode has a larger runtime blast radius because application server
 code and authority secrets coexist. Separate mode narrows that secret boundary
 but adds routing and service-to-service configuration that can itself be
 misconfigured.
@@ -195,7 +231,7 @@ In either mode:
 
 ## Recommendation
 
-Start embedded for one small application unless a concrete security,
-operations, or scaling requirement justifies a separate authority. Move the
-authority into a separate service without changing application collection
-code, storage layout, or browser query semantics.
+Start in-app for one small application unless a concrete security, operations,
+or scaling requirement justifies a separate Worker or service. Move the
+authority later without changing application collection code, storage layout,
+or browser query semantics.

@@ -43,7 +43,7 @@ const websiteSchema = {
 
 <BaseLayout
   title="ThimbleDB: An encrypted database for small web apps"
-  description="ThimbleDB is an encrypted, browser-first database for small web apps, backed by Cloudflare R2, S3, Azure Blob Storage, or local files."
+  description="ThimbleDB is an encrypted browser-first JSON database for small web apps, backed by R2, S3, Azure Blob Storage, or local files with an in-app or separate authority."
   pathname="/"
   schemas={[softwareSchema, websiteSchema]}
 >
@@ -350,6 +350,74 @@ const websiteSchema = {
         <span>Amazon S3</span>
         <span>Azure Blob Storage</span>
         <span>Local filesystem</span>
+      </div>
+
+      <div class="deployment-choice">
+        <div class="deployment-choice-heading">
+          <div>
+            <p class="eyebrow light">Two deployment styles</p>
+            <h3>Keep the authority in-app, or give it its own boundary.</h3>
+          </div>
+          <p>
+            The browser API and stored data stay the same. The choice controls
+            secret isolation, release ownership, failure containment, and
+            which traffic can scale independently.
+          </p>
+        </div>
+
+        <div class="deployment-choice-grid">
+          <article>
+            <header>
+              <h4>In-app authority</h4>
+              <strong>One deployment</strong>
+            </header>
+            <div
+              class="topology-line"
+              role="img"
+              aria-label="Browser connects to one application and authority deployment, which connects to private object storage"
+            >
+              <span>Browser</span>
+              <i aria-hidden="true">→</i>
+              <span class="accent-node">App + authority</span>
+              <i aria-hidden="true">→</i>
+              <span>Storage</span>
+            </div>
+            <p>
+              Lowest operating overhead. Application and authority share
+              secrets, releases, failures, logs, limits, and scaling.
+            </p>
+          </article>
+
+          <article>
+            <header>
+              <h4>Separate authority</h4>
+              <strong>Independent runtime</strong>
+            </header>
+            <div
+              class="topology-split"
+              role="img"
+              aria-label="Browser connects through one public origin that routes application requests to the app and API requests to a separate authority connected to private object storage"
+            >
+              <div class="topology-line">
+                <span>Browser</span>
+                <i aria-hidden="true">→</i>
+                <span>One origin</span>
+              </div>
+              <div class="topology-branches" aria-hidden="true">
+                <span>/ → App</span>
+                <span>/api/* → Authority → Storage</span>
+              </div>
+            </div>
+            <p>
+              Separate secrets, releases, limits, logs, failures, regions, and
+              scaling. Adds routing and another service to operate.
+            </p>
+          </article>
+        </div>
+
+        <a class="text-link light-link" href="/docs/authority-deployment/">
+          Compare deployment and scaling tradeoffs <span aria-hidden="true">→</span>
+        </a>
       </div>
     </div>
   </section>

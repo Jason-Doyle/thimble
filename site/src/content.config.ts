@@ -6,6 +6,8 @@ const docs = defineCollection({
     pattern: [
       "**/*.md",
       "!README.md",
+      // Contributor release operations are public repository documentation,
+      // but not application-user documentation for the product website.
       "!NPM-PUBLISHING.md",
     ],
     base: new URL("../../docs", import.meta.url),

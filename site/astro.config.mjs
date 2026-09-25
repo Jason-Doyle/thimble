@@ -2,9 +2,13 @@ import { fileURLToPath } from "node:url";
 import sitemap from "@astrojs/sitemap";
 import { unified } from "@astrojs/markdown-remark";
 import { defineConfig } from "astro/config";
+import remarkMermaidDiagrams from "./src/lib/remark-mermaid-diagrams.js";
 import remarkRepositoryLinks from "./src/lib/remark-repository-links.js";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+const diagramsDirectory = fileURLToPath(
+  new URL("./public/diagrams", import.meta.url),
+);
 
 export default defineConfig({
   site: "https://thimbledb.com",
@@ -18,6 +22,12 @@ export default defineConfig({
   markdown: {
     processor: unified({
       remarkPlugins: [
+        [
+          remarkMermaidDiagrams,
+          {
+            publicDirectory: diagramsDirectory,
+          },
+        ],
         [
           remarkRepositoryLinks,
           {

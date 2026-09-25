@@ -36,18 +36,20 @@ includes a Node authority with local filesystem, Azure Blob Storage, Amazon
 S3, and S3-compatible adapters. The stored protocol remains the same across
 providers.
 
-## Does the authority run inside the application?
+## Can the authority run in-app or as a separate Worker?
 
-It can. The authority can share the application deployment or run as a
-separate Worker, container, function, or Node service. A separate process
-should normally remain behind the same public browser origin through
-path-based routing so Strict cookies, CSRF, Studio, browser caches, and logout
-coordination retain the documented behaviour.
+Both are supported. The authority can run in-app inside the application
+deployment or as a separate Worker, container, function, or Node service. A
+separate process should normally remain behind the same public browser origin
+through path-based routing so Strict cookies, CSRF, Studio, browser caches,
+and logout coordination retain the documented behaviour.
 
-Use an embedded authority for the smallest operational surface. Use a separate
+Use an in-app authority for the smallest operational surface. Use a separate
 authority when storage-secret isolation, independent release control, failure
-isolation, or independent scaling justifies another service. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+isolation, regional placement, or independent scaling justifies another
+service. Separation creates a scaling boundary; it does not remove collection
+write contention. See
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md).
 
 ## Does ThimbleDB store passwords?
 
@@ -158,6 +160,20 @@ and exposes guarded maintenance operations.
 
 Studio starts read-only and never receives object-storage credentials. See
 [ThimbleDB Studio](STUDIO.md).
+
+## How do I report a bug or documentation problem?
+
+Use the [GitHub issue tracker](https://github.com/Jason-Doyle/thimble/issues)
+for reproducible defects, documentation corrections, and feature proposals.
+Do not include credentials, tokens, private application data, or other
+sensitive information in a public issue.
+
+## Does thimbledb.com use analytics cookies?
+
+The static documentation site uses Cloudflare Web Analytics. Cloudflare
+describes that service as privacy-first analytics that does not use cookies or
+collect visitors' personal data. The site has no user accounts, comments, or
+contact forms. See [Website privacy](WEBSITE-PRIVACY.md).
 
 ## What licence does ThimbleDB use?
 

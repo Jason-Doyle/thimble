@@ -7,8 +7,8 @@ storage abstraction.
 
 See [System diagrams](DIAGRAMS.md) for trust boundaries, request sequences,
 scope separation, and provider layouts.
-See [Authority deployment modes](AUTHORITY-DEPLOYMENT.md) for embedded and
-separately deployed authority choices.
+See [In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md) for
+placement, scaling, secret-boundary, and same-origin choices.
 See [Storage providers](STORAGE-PROVIDERS.md) for the provider contract and
 conformance requirements.
 

@@ -58,7 +58,7 @@ the application also defines conflict and retry semantics.
 
 ```text
 Build an offline-readable field guide and inspection workflow with ThimbleDB
-1.x.
+3.x.
 
 Use snapshot layout for sites and inspection templates, trie for assets and
 inspection records, and content caching in the browser. Show last-checked time

@@ -106,9 +106,9 @@ account security version, provider, expiry, CSRF token, and issued scope
 grants. Cookies use HttpOnly, SameSite=Strict, and Secure outside local
 development.
 
-Embedded and separately deployed authorities should normally remain behind one
+In-app and separately deployed authorities should normally remain behind one
 public browser origin. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md).
 
 On every authenticated request the authority reloads the current internal user
 record and recalculates grants. Role or tenant removal observed during a later

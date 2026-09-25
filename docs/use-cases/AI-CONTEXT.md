@@ -70,7 +70,7 @@ controls. A model should not silently create permanent records.
 
 ```text
 Add user-controlled structured context to this AI-assisted application with
-ThimbleDB 1.x.
+ThimbleDB 3.x.
 
 Use the signed-in user's scope. Store preferences and tool settings as
 snapshots; sources, checkpoints, and approved facts as tries. Require explicit

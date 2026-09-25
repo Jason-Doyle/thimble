@@ -28,8 +28,11 @@ The generated app includes:
 - browser memory and IndexedDB caches
 - typed notes collection
 - equality and range indexes
+- an explicit covering projection for indexed title lookup
+- opt-in bounded point-read bundles
 - fluent queries
 - deletion and restore
+- packaged same-origin Studio
 - Vite frontend
 
 Run:
@@ -96,3 +99,19 @@ Before deployment:
 6. Run authentication, logout, scope, and deletion tests.
 
 The authority refuses to start with the development identity in production.
+
+## Documentation diagrams
+
+Mermaid remains the source format in repository Markdown. The static website
+uses content-addressed SVGs so diagram pages require no client-side rendering
+runtime.
+
+After changing a Mermaid block under `docs`, regenerate the website assets:
+
+```powershell
+npm run site:diagrams
+npm run site:build
+```
+
+The generator pins Mermaid CLI 12.0.0, omits embedded font data, removes stale
+diagram assets, and writes only files referenced by the current Markdown.

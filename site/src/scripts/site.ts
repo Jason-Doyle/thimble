@@ -2,7 +2,11 @@ const copyLabel = "Copy";
 
 for (const block of document.querySelectorAll<HTMLElement>(".prose pre")) {
   const code = block.querySelector("code");
-  if (!code || block.parentElement?.classList.contains("code-shell")) {
+  if (
+    !code ||
+    block.dataset.language === "mermaid" ||
+    block.parentElement?.classList.contains("code-shell")
+  ) {
     continue;
   }
   const shell = document.createElement("div");

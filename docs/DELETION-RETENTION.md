@@ -1,6 +1,9 @@
 # Deletion and retention
 
 ThimbleDB uses retained logical deletion before physical collection.
+See the
+[retained deletion flow](DIAGRAMS.md#retained-deletion-restore-and-physical-collection)
+for the document, restore, purge, and quiescent-maintenance boundaries.
 
 ## Document lifecycle
 

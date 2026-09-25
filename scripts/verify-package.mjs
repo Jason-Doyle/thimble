@@ -146,6 +146,24 @@ try {
       "index.html",
     ),
   );
+  for (const documentationPath of [
+    ["docs", "ARCHITECTURE.md"],
+    ["docs", "AUTHORITY-DEPLOYMENT.md"],
+    ["docs", "CONFIGURATION.md"],
+    ["docs", "SECURITY.md"],
+    ["docs", "WEBSITE-PRIVACY.md"],
+    ["docs", "compare", "CLOUDFLARE-D1.md"],
+    ["docs", "use-cases", "CATALOGUE.md"],
+  ]) {
+    await assertPresent(
+      path.join(
+        consumer,
+        "node_modules",
+        "thimbledb",
+        ...documentationPath,
+      ),
+    );
+  }
   runCliVersion(consumer, rootPackage.version);
 
   runNode(

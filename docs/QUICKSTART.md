@@ -12,12 +12,14 @@ The browser API is the same for every authority.
 
 Choose one deployment shape:
 
-- embed the authority in the application deployment
-- run the authority in a separate Worker, container, function, or Node service
+- run the authority in-app inside the application deployment for the smallest
+  operational surface
+- run the authority as a separate Worker, container, function, or Node service
+  for independent secret, release, failure, and scaling boundaries
 
 In either case, preserve one public browser origin through the application
 server or a path-based gateway. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md).
 
 ## Fast local evaluation
 
@@ -65,8 +67,8 @@ For a Node authority backed by Amazon S3 or R2 through the S3 API:
 npm install @aws-sdk/client-s3
 ```
 
-Cloudflare Worker, browser-only, and local Node deployments do not need either
-provider SDK.
+Browser clients, Cloudflare Worker deployments, and local-file Node
+authorities do not need either cloud provider SDK.
 
 ## Cloudflare Worker and R2
 
@@ -109,7 +111,6 @@ Use a Wrangler configuration with caller-owned resources:
     "THIMBLE_READ_BUNDLES": "true",
     "THIMBLE_COLLECTION_LAYOUTS": "",
     "THIMBLE_COLLECTION_INDEXES": "{}",
-    "THIMBLE_RETIRED_COLLECTION_LAYOUTS": "",
     "THIMBLE_DELETE_RETENTION_DAYS": "30",
     "THIMBLE_DELETE_GRACE_DAYS": "7",
     "THIMBLE_MAINTENANCE_MODE": "false",
@@ -193,6 +194,13 @@ records under `.thimble-auth`. It is intended for one Node process.
 Before selecting `azure`, install `@azure/storage-blob`. Before selecting `s3`
 or `r2`, install `@aws-sdk/client-s3`. For provider environment variables,
 trusted proxy, and secure-cookie configuration, use the deployment guides.
+For the complete option and environment-variable matrix, see
+[Configuration reference](CONFIGURATION.md).
+
+Both authority examples explicitly enable read bundles. This lets the trusted
+authority return bounded decoded cache values over HTTPS. Disable the option
+if every application-data response above TLS must remain a TDB1 envelope. See
+[Security](SECURITY.md).
 
 ## Browser client
 

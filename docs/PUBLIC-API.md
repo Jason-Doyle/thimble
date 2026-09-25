@@ -110,8 +110,8 @@ authentication, object broker, key grant, write, deletion, linking,
 administration, retention, and layout-migration endpoints used by the
 reference deployment.
 
-See [Authority deployment modes](AUTHORITY-DEPLOYMENT.md) before choosing one
-application deployment or a separately operated authority service.
+See [In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md) before
+choosing an in-app authority or a separately operated Worker or service.
 
 ### `thimbledb/authority/cloudflare`
 
@@ -212,8 +212,8 @@ roles. See [Machine and service access](SERVICE-ACCESS.md).
 ## Compatibility commitments
 
 - Semantic versioning applies from package version `1.0.0`.
-- TDB1 envelopes and committed protocol fixtures remain readable throughout
-  the 1.x line.
+- TDB1 envelopes and committed protocol fixtures remain readable in every
+  release that claims TDB1 compatibility.
 - New optional object layouts may be added in a minor release.
 - Removing or changing an exported symbol, authority endpoint, stored field,
   or required configuration value is a major-version change.

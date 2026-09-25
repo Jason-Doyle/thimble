@@ -40,6 +40,7 @@ jobs:
       - name: Test
         run: |
           npm test
+          npm run verify:docs
           npm run examples:check
           npm run benchmark:compare:local
 

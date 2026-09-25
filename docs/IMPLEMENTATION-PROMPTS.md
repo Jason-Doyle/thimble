@@ -14,7 +14,7 @@ Application context:
 - Package manager: [package manager]
 - OIDC provider: [Entra/Auth0/other]
 - Authority platform: [Cloudflare/Node]
-- Authority topology: [embedded deployment/separate service behind same-origin route]
+- Authority topology: [in-app deployment/separate Worker or service behind same-origin route]
 - Collections: [collection list]
 - Scope model: [per-user/per-tenant/both]
 
@@ -24,8 +24,8 @@ Requirements:
 3. Use external OIDC authentication. Do not add local passwords, password hashes, recovery tokens, passkey storage, or MFA secrets to ThimbleDB.
 4. Exchange the provider access token at `/api/auth/oidc/<provider>/session`.
 5. Build the browser client from `/api/config` and the scope key grant.
-6. Preserve one public browser origin whether the authority is embedded or
-   separately deployed.
+6. Preserve one public browser origin whether the authority runs in-app or as
+   a separately deployed Worker or service.
 7. Keep provider credentials and object-storage credentials server-side.
 8. Keep scope keys memory-only as non-extractable CryptoKeys.
 9. Pass `collectionLayouts`, `layoutGeneration`, and `configurationUrl` to `ThimbleClient`.

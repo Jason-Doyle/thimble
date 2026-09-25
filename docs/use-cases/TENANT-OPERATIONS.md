@@ -69,7 +69,7 @@ Do not reuse a user-scope client for tenant data.
 ## Scaffold prompt
 
 ```text
-Add a small multi-tenant operations portal using ThimbleDB 1.x.
+Add a small multi-tenant operations portal using ThimbleDB 3.x.
 
 Map OIDC tenant and role claims to `tenant:<id>` scopes. Store procedures and
 checklist templates as snapshots, equipment and inspections as tries, and

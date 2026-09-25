@@ -11,7 +11,8 @@ The Bicep template is `deploy/azure/main.bicep`.
 
 The Container App authority can share an application deployment boundary or
 run independently behind Front Door or another same-origin gateway. See
-[Authority deployment modes](AUTHORITY-DEPLOYMENT.md).
+[In-app and separate authority deployment](AUTHORITY-DEPLOYMENT.md) for the
+scaling and operations tradeoffs.
 
 ## Prerequisites
 
@@ -83,12 +84,21 @@ Generate the recommended Entra delegated scope and application roles with
 fragment with the existing application registration rather than replacing
 unrelated entries.
 
-To serve the package-owned Studio from the same Container App, set
-`THIMBLE_STUDIO=true` and set `THIMBLE_STUDIO_ORIGIN` to the exact public
-authority origin.
+## Template capability
 
-Set `THIMBLE_READ_BUNDLES=true` to advertise the bounded cold point-read
-optimization.
+The checked-in Bicep template exposes the core provider, OIDC, key-version,
+collection-layout, and retention settings. It does not currently expose:
+
+- `THIMBLE_COLLECTION_INDEXES`
+- `THIMBLE_COLLECTIONS`
+- `THIMBLE_HEAD_TTL_MS`
+- `THIMBLE_STUDIO` or `THIMBLE_STUDIO_ORIGIN`
+- `THIMBLE_READ_BUNDLES`
+
+The supplied deployment therefore leaves Studio, covering indexes, and read
+bundles disabled. Use a reviewed derived template or another Container Apps
+configuration when those optional features are required. Setting variables
+only in the deployment shell does not add them to the Container App.
 
 For key rotation, set `keyVersion` to the current write version and
 `readKeyVersions` to the comma-separated historical versions that remain
