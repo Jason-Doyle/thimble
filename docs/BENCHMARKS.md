@@ -17,8 +17,8 @@ aaaf60ab263dd0165dd89205f83f9e54e2638277
 
 Raw artifacts:
 
-- [Complete JSON evidence](/evidence/r2-current-layout-multiregion-2026-09-25.json)
-- [Compact CSV summary](/evidence/r2-current-layout-summary-2026-09-25.csv)
+- [Complete JSON evidence](https://thimbledb.com/evidence/r2-current-layout-multiregion-2026-09-25.json)
+- [Compact CSV summary](https://thimbledb.com/evidence/r2-current-layout-summary-2026-09-25.csv)
 - `evidence/r2-current-layout-multiregion-2026-09-25.json`
 - `evidence/r2-current-layout-summary-2026-09-25.csv`
 
@@ -71,7 +71,7 @@ The object counts include HEAD, document data, and both secondary-index pages.
 
 ## Cold point reads
 
-![Cold point-read p95 by collection size](/benchmarks/point-p95-by-scale.svg)
+![Cold point-read p95 by collection size](https://thimbledb.com/benchmarks/point-p95-by-scale.svg)
 
 | Profile | Path | p50 | p95 | Success | Network reads | Network bytes | R2 reads | R2 bytes |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -115,7 +115,7 @@ in the raw evidence and is excluded from successful-operation percentiles.
 
 ## Regional large point-read p95
 
-![Large-profile cold point-read p95 by region](/benchmarks/regional-large-point-p95.svg)
+![Large-profile cold point-read p95 by region](https://thimbledb.com/benchmarks/regional-large-point-p95.svg)
 
 | Region | Snapshot | Trie | Trie bundle | Snapshot bundle fallback |
 | --- | ---: | ---: | ---: | ---: |
@@ -133,7 +133,7 @@ Southeast Asia had the highest tail latency for every point-read path.
 
 ## Secondary indexes
 
-![Large-profile read p95 by operation](/benchmarks/large-read-p95.svg)
+![Large-profile read p95 by operation](https://thimbledb.com/benchmarks/large-read-p95.svg)
 
 ### Covered equality
 
@@ -225,7 +225,7 @@ comparison and must be included in layout decisions.
 Seven callers started five snapshot updates and five trie updates against the
 same large collection generation in each of two replicates.
 
-![Large-profile write p95](/benchmarks/write-p95.svg)
+![Large-profile write p95](https://thimbledb.com/benchmarks/write-p95.svg)
 
 | Layout | p50 | p95 among successes | Success | Mean CAS retries | Mean R2 reads | Mean R2 writes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

@@ -1848,12 +1848,12 @@ summary {
   box-shadow: var(--shadow-md);
 }
 
-.prose p:has(> img[src^="/benchmarks/"]) {
+.prose p:has(> img[src*="/benchmarks/"]) {
   overflow-x: auto;
   padding-bottom: 0.4rem;
 }
 
-.prose img[src^="/benchmarks/"] {
+.prose img[src*="/benchmarks/"] {
   width: 860px;
   max-width: none;
 }
