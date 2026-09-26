@@ -242,31 +242,52 @@ function summariseCases(cases) {
 }
 
 function summariseRead(samples) {
+  const successful = samples.filter(
+    (sample) => sample.success !== false,
+  );
   const client = sorted(
-    samples.map((sample) => sample.clientElapsedMs),
+    successful.map((sample) => sample.clientElapsedMs),
   );
   return {
     operations: samples.length,
+    successful: successful.length,
+    failed: samples.length - successful.length,
+    successRatePercent: Number(
+      ((successful.length / samples.length) * 100).toFixed(2),
+    ),
     clientP50Ms: percentile(client, 0.5),
     clientP95Ms: percentile(client, 0.95),
     clientMeanMs: mean(client),
     meanNetworkReads: mean(
-      samples.map((sample) => sample.networkReads),
+      successful.map((sample) => sample.networkReads),
     ),
     meanNetworkBytes: Math.round(
-      mean(samples.map((sample) => sample.networkBytes)),
+      mean(successful.map((sample) => sample.networkBytes)),
     ),
     meanObjectReads: mean(
-      samples.map((sample) => sample.objectReads),
+      successful.map((sample) => sample.objectReads),
     ),
     meanObjectBytes: Math.round(
-      mean(samples.map((sample) => sample.objectBytes)),
+      mean(successful.map((sample) => sample.objectBytes)),
     ),
     meanDocuments: mean(
-      samples.map((sample) => sample.documents),
+      successful.map((sample) => sample.documents),
     ),
     meanScannedDocuments: mean(
-      samples.map((sample) => sample.scannedDocuments),
+      successful.map((sample) => sample.scannedDocuments),
+    ),
+    failureMessages: Object.fromEntries(
+      Object.entries(
+        samples
+          .filter((sample) => sample.success === false)
+          .reduce((counts, sample) => {
+            const message = sample.error ?? "Unknown error";
+            counts[message] = (counts[message] ?? 0) + 1;
+            return counts;
+          }, {}),
+      ).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
     ),
   };
 }

@@ -4,6 +4,7 @@ import type {
   PutConditions,
   StoredObject,
 } from "../../src/core.js";
+import { BoundedReadError } from "../../src/core.js";
 import {
   ContentAddressedTrieEngine,
 } from "../../src/engines/content-trie.js";
@@ -228,11 +229,22 @@ async function serveBundle(
     `read/${profile}/${layout}`,
     layout,
   );
-  const bundle = await readPointBundle(
-    runtime.engine,
-    BENCHMARK_COLLECTION,
-    id,
-  );
+  let bundle;
+  try {
+    bundle = await readPointBundle(
+      runtime.engine,
+      BENCHMARK_COLLECTION,
+      id,
+    );
+  } catch (error) {
+    if (error instanceof BoundedReadError) {
+      return withColo(
+        json({ error: error.message }, 413),
+        request,
+      );
+    }
+    throw error;
+  }
   const body = JSON.stringify(bundle);
   return withColo(
     new Response(body, {

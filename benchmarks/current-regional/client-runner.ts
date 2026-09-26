@@ -361,10 +361,7 @@ async function runReadCase(
                 ],
               },
               limit: 25,
-              maxScanDocuments: Math.max(
-                profileConfig.expected.rangeMatches,
-                25,
-              ),
+              maxScanDocuments: profileConfig.documents,
             }
           : {
               version: 1 as const,
@@ -420,11 +417,46 @@ async function runReadCase(
       profile,
       layout,
       operation,
+      success: true,
       requestedId: id ?? null,
       clientElapsedMs,
       documents,
       plan,
       scannedDocuments,
+      networkReads:
+        metrics.remoteReads + metrics.bundleReads,
+      networkBytes:
+        metrics.remoteBytes + metrics.bundleBytes,
+      objectReads:
+        bundle
+          ? runtime.bundleReader?.lastStorageReads ?? 0
+          : metrics.remoteReads,
+      objectBytes:
+        bundle
+          ? runtime.bundleReader?.lastStorageBytes ?? 0
+          : metrics.remoteBytes,
+      cache: metrics.cache,
+      bundleFallbacks: metrics.bundleFallbacks,
+    };
+  } catch (error) {
+    const metrics = runtime.client.metrics();
+    return {
+      case: caseName,
+      profile,
+      layout,
+      operation,
+      success: false,
+      requestedId: id ?? null,
+      clientElapsedMs: round(
+        performance.now() - started,
+      ),
+      error:
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error),
+      documents: 0,
+      plan: null,
+      scannedDocuments: 0,
       networkReads:
         metrics.remoteReads + metrics.bundleReads,
       networkBytes:
