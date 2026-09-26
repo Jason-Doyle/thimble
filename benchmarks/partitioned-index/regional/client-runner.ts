@@ -89,19 +89,6 @@ const rawKey = base64ToBytes(config.keyBase64);
 const key = await importAesGcmKey(rawKey, ["decrypt"]);
 rawKey.fill(0);
 
-let result: unknown;
-if (mode === "read") {
-  result = await runReadBenchmark();
-} else if (mode === "write") {
-  result = await runWriteBenchmark();
-} else if (mode === "contention") {
-  result = await runContentionBenchmark();
-} else {
-  throw new Error(`Unknown benchmark mode ${mode}`);
-}
-await storeResult(result);
-console.log(`THIMBLE_RESULT=${JSON.stringify(result)}`);
-
 async function runReadBenchmark() {
   const iterations = integerValue(
     process.env.QUERY_ITERATIONS,
@@ -664,3 +651,16 @@ function integerValue(
 function round(value: number): number {
   return Number(value.toFixed(3));
 }
+
+let result: unknown;
+if (mode === "read") {
+  result = await runReadBenchmark();
+} else if (mode === "write") {
+  result = await runWriteBenchmark();
+} else if (mode === "contention") {
+  result = await runContentionBenchmark();
+} else {
+  throw new Error(`Unknown benchmark mode ${mode}`);
+}
+await storeResult(result);
+console.log(`THIMBLE_RESULT=${JSON.stringify(result)}`);
