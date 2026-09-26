@@ -4,19 +4,26 @@ import type {
   StoredObject,
 } from "./core.js";
 import {
+  DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES,
   decodeEnvelope,
   encodeEnvelope,
   type EnvelopeEncodeOptions,
 } from "./envelope.js";
 
 export class EnvelopeObjectStore implements ObjectStore {
+  private readonly maximumDecodedBytes: number;
+
   constructor(
     private readonly delegate: ObjectStore,
     private readonly envelope: EnvelopeEncodeOptions & {
       objectKeyPrefix?: string;
       decryptionKeys?: ReadonlyMap<string, CryptoKey>;
     },
-  ) {}
+  ) {
+    this.maximumDecodedBytes =
+      envelope.maximumDecodedBytes ??
+      DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES;
+  }
 
   async get(key: string): Promise<StoredObject | null> {
     const object = await this.delegate.get(key);
@@ -38,6 +45,9 @@ export class EnvelopeObjectStore implements ObjectStore {
             }
           : undefined,
         this.additionalData(key),
+        {
+          maximumDecodedBytes: this.maximumDecodedBytes,
+        },
       ),
     };
   }
@@ -52,6 +62,7 @@ export class EnvelopeObjectStore implements ObjectStore {
       await encodeEnvelope(bytes, {
         ...this.envelope,
         additionalData: this.additionalData(key),
+        maximumDecodedBytes: this.maximumDecodedBytes,
       }),
       conditions,
     );

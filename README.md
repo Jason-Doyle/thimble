@@ -322,25 +322,32 @@ Start with [Deploy to Cloudflare](docs/DEPLOYMENT-CLOUDFLARE.md).
 
 ## Performance characteristics
 
-Published evidence includes live multi-region browser results against a
-private Cloudflare Worker and R2 deployment:
+Published evidence includes a 3,808-operation current-layout run from seven
+Azure regions against a temporary Cloudflare Worker and R2 bucket:
 
-- `evidence/r2-browser-multiregion-trie-2026-09-24.json`
-- `evidence/r2-browser-multiregion-snapshot-2026-09-24.json`
+- `evidence/r2-current-layout-multiregion-2026-09-25.json`
+- `evidence/r2-current-layout-summary-2026-09-25.csv`
 
 The measurements show:
 
-- full-content caching dominates repeated-read latency
-- location-only caching greatly reduces trie point-read bytes
-- a single mutable collection root performs poorly under bursty concurrent
-  writes
-- monolithic compressed snapshots remain credible for small, rarely changed
-  collections
-- moving the 128-document product catalogue from trie to snapshot reduced
-  measured cold reads by 29-53 percent across three Azure regions
-- a 10-second HEAD TTL reduced warm snapshot p95 to 1.6-8.3 ms in those runs
-- cold reads and external session creation still miss the original latency
-  targets and remain documented limitations
+- snapshots had lower pooled cold point-read p95 than tries at 128, 5,000,
+  and 25,000 documents
+- trie point reads transferred far fewer bytes but required four sequential
+  requests without a bundle
+- Trie bundle improved medium and large trie point-read p95, but did not make
+  Trie faster than Snapshot overall
+- covering indexes kept equality and range queries to two network reads
+- large uncovered snapshot queries and trie scans exposed clear rejection
+  boundaries
+- all single-writer operations succeeded, while simultaneous seven-region
+  writes produced failures and very high tail latency for both layouts
+- all 14 regional runs rejected a gzip envelope that expanded beyond the
+  16 MiB decoded-object limit
+
+The earlier authenticated Chromium evidence remains checked in:
+
+- `evidence/r2-browser-multiregion-trie-2026-09-24.json`
+- `evidence/r2-browser-multiregion-snapshot-2026-09-24.json`
 
 These results do not establish better cost or latency than D1, Durable Objects,
 Turso, Firestore, or another managed database. See
@@ -368,7 +375,7 @@ layout decision thresholds.
 | [Versioning](docs/VERSIONING.md) | Package, protocol, key, and release compatibility rules |
 | [Public API](docs/PUBLIC-API.md) | Stable package exports and authority integration |
 | [Evaluation harness](docs/EVALUATION.md) | Browser harness, sample application, and benchmark usage |
-| [Benchmarks](docs/BENCHMARKS.md) | R2 browser methodology, results, and limitations |
+| [Benchmarks](docs/BENCHMARKS.md) | Multi-region R2 methodology, tables, graphs, raw evidence, and limitations |
 | [Tradeoffs](docs/TRADEOFFS.md) | Proven, expected, and unsuitable use cases |
 | [Cloudflare deployment](docs/DEPLOYMENT-CLOUDFLARE.md) | Worker and R2 reference deployment |
 | [Azure deployment](docs/DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |

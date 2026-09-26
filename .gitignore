@@ -22,6 +22,7 @@ site/public/assets/logo-640.webp
 site/public/assets/logo-96.webp
 site/public/assets/studio-960.webp
 site/public/assets/studio-1600.webp
+site/public/evidence/
 *.log
 .env
 .env.*

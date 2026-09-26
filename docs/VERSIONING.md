@@ -117,6 +117,11 @@ Changing the envelope header, authentication data, compression interpretation,
 or key identifier rules requires a new protocol version or an explicitly
 compatible extension.
 
+Decoded-size enforcement does not change the TDB1 wire format. A reader may
+reject an otherwise valid envelope when its decoded payload exceeds the
+reader's configured safety limit. Normal ThimbleDB authority and browser
+wrappers default to 16 MiB per decoded object.
+
 ## Key versions
 
 `THIMBLE_KEY_VERSION` selects the write key. Historical versions listed in

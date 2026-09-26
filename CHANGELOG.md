@@ -6,6 +6,14 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+- Bounded normal authority and browser envelope reads to 16 MiB decoded by
+  default, with explicit per-wrapper overrides for advanced integrations.
+- Rejected oversized writes before storage and stopped gzip decompression as
+  soon as the configured decoded limit is exceeded.
+- Published a 3,808-operation current-layout benchmark across seven regions,
+  three collection sizes, read bundles, indexes, scans, writes, and
+  simultaneous multi-region contention.
+
 ## 3.1.0 - 2026-09-25
 
 - Added opt-in bounded point-read bundles that reduce cold trie and snapshot

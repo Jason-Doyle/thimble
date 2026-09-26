@@ -187,8 +187,35 @@ command arguments or source files.
 
 ## Published evidence
 
-Published benchmark artifacts cover live multi-region browser runs against the
-Cloudflare/R2 reference deployment.
+Published benchmark artifacts cover:
+
+- authenticated multi-region Chromium runs against the Cloudflare/R2
+  reference deployment
+- a temporary seven-region current-layout run covering three collection
+  sizes, read bundles, covering indexes, scans, writes, contention, and the
+  decoded-envelope limit
+
+The current-layout harness is under:
+
+```text
+benchmarks/current-regional
+```
+
+Generate deterministic fixtures and the regional Node runner with:
+
+```powershell
+$env:THIMBLE_BENCHMARK_SOURCE_COMMIT = "<tested commit>"
+$env:THIMBLE_BENCHMARK_HARNESS_COMMIT = "<harness commit>"
+npm run benchmark:current-regional:generate
+npm run benchmark:current-regional:build
+```
+
+After collecting the documented result directory structure:
+
+```powershell
+npm run benchmark:current-regional:aggregate
+npm run benchmark:current-regional:publish
+```
 
 See [Benchmarks](BENCHMARKS.md) for the measured table, interpretation,
 limitations, and layout decision thresholds.

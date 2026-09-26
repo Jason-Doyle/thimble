@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES,
   decodeEnvelope,
   encodeEnvelope,
   importAesGcmKey,
@@ -115,5 +116,52 @@ describe("ThimbleDB binary envelope", () => {
     const compressed = await encodeEnvelope(repetitive);
     expect(inspectEnvelope(compressed).compressed).toBe(true);
     await expect(decodeEnvelope(compressed)).resolves.toEqual(repetitive);
+  });
+
+  it("rejects decoded payloads above an explicit limit", async () => {
+    const plaintext = new TextEncoder().encode(
+      "bounded-output".repeat(100_000),
+    );
+    const envelope = await encodeEnvelope(plaintext);
+    expect(inspectEnvelope(envelope).compressed).toBe(true);
+
+    await expect(
+      decodeEnvelope(
+        envelope,
+        undefined,
+        undefined,
+        { maximumDecodedBytes: 64 * 1024 },
+      ),
+    ).rejects.toThrow("exceeds");
+    await expect(
+      decodeEnvelope(
+        envelope,
+        undefined,
+        undefined,
+        { maximumDecodedBytes: plaintext.byteLength },
+      ),
+    ).resolves.toEqual(plaintext);
+  });
+
+  it("validates decoded limits before encoding or decoding", async () => {
+    const plaintext = new TextEncoder().encode('{"ok":true}');
+    const envelope = await encodeEnvelope(plaintext);
+
+    expect(DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES).toBe(
+      16 * 1024 * 1024,
+    );
+    await expect(
+      encodeEnvelope(plaintext, {
+        maximumDecodedBytes: plaintext.byteLength - 1,
+      }),
+    ).rejects.toThrow("exceeds");
+    await expect(
+      decodeEnvelope(
+        envelope,
+        undefined,
+        undefined,
+        { maximumDecodedBytes: -1 },
+      ),
+    ).rejects.toThrow("non-negative safe integer");
   });
 });

@@ -91,4 +91,28 @@ describe("HttpJsonObjectReader", () => {
       "scopes/user/content-trie/items/HEAD.json",
     ]);
   });
+
+  it("rejects browser envelope output above the configured limit", async () => {
+    const plaintext = new TextEncoder().encode("x".repeat(2_048));
+    const envelope = await encodeEnvelope(plaintext);
+    const bytes: ByteObjectReader = {
+      get(objectKey) {
+        return Promise.resolve({
+          status: "found",
+          key: objectKey,
+          etag: '"etag"',
+          bytes: envelope,
+        });
+      },
+    };
+    const reader = new EnvelopeJsonObjectReader(
+      bytes,
+      undefined,
+      1_024,
+    );
+
+    await expect(reader.get("oversized.json")).rejects.toThrow(
+      "exceeds",
+    );
+  });
 });

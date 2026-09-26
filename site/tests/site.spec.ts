@@ -345,6 +345,45 @@ test("mobile navigation remains usable without horizontal overflow", async ({
   await assertNoHorizontalOverflow(page);
 });
 
+test("benchmark page publishes tables, graphs, and raw evidence", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/benchmarks/");
+
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Cloud benchmark evidence",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /^Snapshot was the fastest direct point-read layout at every tested size\./,
+    ),
+  ).toBeVisible();
+  await expect(
+    page.locator('.prose img[src^="/benchmarks/"]'),
+  ).toHaveCount(4);
+  await expect(page.locator(".prose table")).toHaveCount(10);
+
+  const jsonResponse = await request.get(
+    "/evidence/r2-current-layout-multiregion-2026-09-25.json",
+  );
+  const csvResponse = await request.get(
+    "/evidence/r2-current-layout-summary-2026-09-25.csv",
+  );
+  expect(jsonResponse.ok()).toBe(true);
+  expect(csvResponse.ok()).toBe(true);
+  expect(jsonResponse.headers()["content-type"]).toContain(
+    "application/json",
+  );
+  expect(csvResponse.headers()["content-type"]).toMatch(
+    /text\/csv|application\/octet-stream/,
+  );
+  await assertNoHorizontalOverflow(page);
+});
+
 async function assertNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(
     () =>

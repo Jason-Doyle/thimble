@@ -20,6 +20,12 @@ scopes/<scope-id>/
 The `.json` suffix is retained for recognisable object names. The object body
 is a binary ThimbleDB envelope, not plaintext JSON.
 
+Normal authority and browser wrappers limit each decoded envelope to 16 MiB.
+The limit is checked before writes and while gzip output is streamed during
+reads, so a compressed object cannot expand without a bound. Direct package
+users can set a different explicit `maximumDecodedBytes` value when they
+construct an envelope wrapper or reader. The TDB1 wire format is unchanged.
+
 Collection names contain 1 to 128 ASCII letters, numbers, `.`, `_`, or `-`.
 The path segments `.` and `..` are rejected so provider adapters produce the
 same object layout.

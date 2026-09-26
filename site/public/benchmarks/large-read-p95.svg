@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="535" viewBox="0 0 1080 535" role="img" aria-labelledby="title desc">
+  <title id="title">Large-profile read p95 by operation</title>
+  <desc id="desc">Twenty-five-thousand-document profile. Lower is better. Failed operations are reported separately in the benchmark tables.</desc>
+  <style>
+    text { font-family: Inter, Arial, sans-serif; fill: #1e293b; }
+    .title { font-size: 24px; font-weight: 700; }
+    .description { font-size: 13px; fill: #475569; }
+    .legend, .category, .value, .axis { font-size: 12px; }
+    .category { font-weight: 600; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="24" y="30" class="title">Large-profile read p95 by operation</text>
+  <text x="24" y="48" class="description">Twenty-five-thousand-document profile. Lower is better. Failed operations are reported separately in the benchmark tables.</text>
+  <rect x="190" y="76" width="16" height="16" rx="3" fill="#2563eb"/><text x="214" y="89" class="legend">Snapshot</text><rect x="380" y="76" width="16" height="16" rx="3" fill="#0891b2"/><text x="404" y="89" class="legend">Trie</text>
+  <line x1="190" y1="105" x2="190" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="190" y="507" text-anchor="middle" class="axis">0</text>
+  <line x1="344" y1="105" x2="344" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="344" y="507" text-anchor="middle" class="axis">10,000</text>
+  <line x1="498" y1="105" x2="498" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="498" y="507" text-anchor="middle" class="axis">20,000</text>
+  <line x1="652" y1="105" x2="652" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="652" y="507" text-anchor="middle" class="axis">30,000</text>
+  <line x1="806" y1="105" x2="806" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="806" y="507" text-anchor="middle" class="axis">40,000</text>
+  <line x1="960" y1="105" x2="960" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="960" y="507" text-anchor="middle" class="axis">50,000</text>
+  <text x="174" y="141" text-anchor="end" class="category">Point</text>
+  <rect x="190" y="125" width="24.9045258" height="18" rx="4" fill="#2563eb"/>
+  <text x="222.9045258" y="139" class="value">1,617 ms</text>
+  <rect x="190" y="151" width="49.7392434" height="18" rx="4" fill="#0891b2"/>
+  <text x="247.7392434" y="165" class="value">3,230 ms</text>
+  <text x="174" y="221" text-anchor="end" class="category">Covered equality</text>
+  <rect x="190" y="205" width="26.056168600000003" height="18" rx="4" fill="#2563eb"/>
+  <text x="224.0561686" y="219" class="value">1,692 ms</text>
+  <rect x="190" y="231" width="31.740154599999997" height="18" rx="4" fill="#0891b2"/>
+  <text x="229.74015459999998" y="245" class="value">2,061 ms</text>
+  <text x="174" y="301" text-anchor="end" class="category">Uncovered equality</text>
+  <rect x="190" y="285" width="472.7945838" height="18" rx="4" fill="#2563eb"/>
+  <text x="670.7945838" y="299" class="value">30,701 ms</text>
+  <rect x="190" y="311" width="137.515455" height="18" rx="4" fill="#0891b2"/>
+  <text x="335.515455" y="325" class="value">8,930 ms</text>
+  <text x="174" y="381" text-anchor="end" class="category">Full scan</text>
+  <rect x="190" y="365" width="16.733532200000003" height="18" rx="4" fill="#2563eb"/>
+  <text x="214.7335322" y="379" class="value">1,087 ms</text>
+  <rect x="190" y="391" width="113.2646746" height="18" rx="4" fill="#0891b2"/>
+  <text x="311.26467460000003" y="405" class="value">7,355 ms</text>
+  <text x="575" y="529" text-anchor="middle" class="axis">milliseconds</text>
+</svg>

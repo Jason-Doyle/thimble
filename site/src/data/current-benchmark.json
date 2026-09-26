@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-09-26T03:54:59.436Z",
+  "sourceCommit": "aaaf60ab263dd0165dd89205f83f9e54e2638277",
+  "evidence": "/evidence/r2-current-layout-multiregion-2026-09-25.json",
+  "regions": 7,
+  "measuredOperations": 3808,
+  "profiles": {
+    "small": 128,
+    "medium": 5000,
+    "large": 25000
+  },
+  "largePointP95Ms": {
+    "snapshot": 1617.177,
+    "trie": 3229.821,
+    "trieBundle": 2685.031
+  },
+  "largeScanP95Ms": {
+    "snapshot": 1086.593,
+    "trie": 7354.849
+  },
+  "singleWriteP95Ms": {
+    "snapshot": 16754.829,
+    "trie": 20177.484
+  },
+  "contentionSuccessRatePercent": {
+    "snapshot": 94.29,
+    "trie": 98.57
+  }
+}

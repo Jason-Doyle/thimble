@@ -66,4 +66,33 @@ describe("EnvelopeObjectStore", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("rejects objects above its decoded read and write limit", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "thimbledb-envelope-limit-"),
+    );
+    try {
+      const delegate = new LocalObjectStore(directory);
+      const bounded = new EnvelopeObjectStore(delegate, {
+        compression: "gzip",
+        maximumDecodedBytes: 1_024,
+      });
+      const oversized = new TextEncoder().encode("x".repeat(2_048));
+
+      await expect(
+        bounded.put("oversized.bin", oversized),
+      ).rejects.toThrow("exceeds");
+
+      const permissive = new EnvelopeObjectStore(delegate, {
+        compression: "gzip",
+        maximumDecodedBytes: oversized.byteLength,
+      });
+      await permissive.put("oversized.bin", oversized);
+      await expect(
+        bounded.get("oversized.bin"),
+      ).rejects.toThrow("exceeds");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

@@ -68,13 +68,30 @@ maintenance drops its entire retired prefix. Open browser clients periodically
 check the layout generation and reload before they can read or mutate through
 a retired layout.
 
-## Example decision from measured R2 results
+## Decisions from measured R2 results
 
-A multi-region run used trie for a 128-product catalogue. Cold reads required
-four sequential broker requests and took 2.55-4.84 seconds from the tested
-regions. Switching `products` and `customers` to snapshots reduced product
-cold-read time by 29-53 percent. With a 10-second HEAD TTL, warm product-read
-p95 was 1.6-8.3 ms.
+Current seven-region evidence covers 128, 5,000, and 25,000-document
+collections with two declared secondary indexes.
 
-For a similar small, mostly idle catalogue, start with snapshot. Measure before
-using the same choice for a write-heavy or much larger collection.
+- Snapshot cold point-read p95 was 37-50 percent lower than direct trie p95
+  across all three sizes.
+- Trie point reads transferred 95-99 percent fewer bytes at medium and large
+  sizes, but required four sequential requests.
+- A trie read bundle reduced medium and large trie p95 by 9 and 17 percent,
+  respectively. It increased small-profile p95.
+- Snapshot scans were 72-85 percent faster at p95.
+- At 25,000 documents, an uncovered equality query was much faster through
+  Trie than Snapshot, despite 117 network reads.
+- With two indexes, single-writer snapshot latency was lower than trie latency
+  in this run, although Snapshot wrote more than twice as many bytes.
+- Simultaneous seven-region writes produced failures and very high tail
+  latency for both layouts.
+
+These results strengthen snapshot as the default for small and scan-heavy
+collections. They also show why document count alone is not enough to choose a
+layout. Query coverage, request count, decoded snapshot size, write bytes, and
+writer geography all matter.
+
+The earlier authenticated Chromium run remains useful for browser cache and
+session measurements. See [Cloud benchmark evidence](BENCHMARKS.md) for both
+methods and their limitations.
