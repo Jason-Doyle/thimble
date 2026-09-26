@@ -72,6 +72,12 @@ canonical JSON
 Encryption before compression would remove useful redundancy and produce no
 meaningful compression.
 
+Normal authority and browser object readers enforce a 16 MiB decoded-envelope
+limit. Gzip output is counted while it is streamed, and decoding stops once
+the limit is exceeded. The same wrapper rejects an oversized decoded payload
+before writing it, which prevents an authority from publishing an object that
+its normal read path cannot decode.
+
 ## Browser cache protection
 
 Decoded values exist in memory while the application uses them. Persistent

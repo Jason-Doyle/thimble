@@ -75,6 +75,11 @@ Connections created by `createThimbleClient()` use an advertised bounded
 point-read bundle endpoint on cold cache misses. They automatically retain the
 individual object path for older or oversized deployments.
 
+`EnvelopeObjectStore` and `EnvelopeJsonObjectReader` limit decoded objects to
+16 MiB by default. Advanced direct integrations can provide an explicit
+`maximumDecodedBytes` value. Raw `encodeEnvelope()` and `decodeEnvelope()`
+calls accept the same optional bound.
+
 ### `thimbledb/auth`
 
 The auth export contains:

@@ -1,5 +1,6 @@
 import type { JsonValue } from "../core.js";
 import {
+  DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES,
   decodeEnvelope,
   type EnvelopeKeyResolver,
 } from "../envelope.js";
@@ -207,6 +208,8 @@ export class EnvelopeJsonObjectReader implements JsonObjectReader {
   constructor(
     private readonly delegate: ByteObjectReader,
     private readonly resolveKey?: EnvelopeKeyResolver,
+    private readonly maximumDecodedBytes =
+      DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES,
   ) {}
 
   async get(
@@ -221,6 +224,9 @@ export class EnvelopeJsonObjectReader implements JsonObjectReader {
       result.bytes,
       this.resolveKey,
       new TextEncoder().encode(key),
+      {
+        maximumDecodedBytes: this.maximumDecodedBytes,
+      },
     );
     return {
       status: "found",
