@@ -343,6 +343,9 @@ The measurements show:
   writes produced failures and very high tail latency for both layouts
 - all 14 regional runs rejected a gzip envelope that expanded beyond the
   16 MiB decoded-object limit
+- cold reads and large indexed writes remain too slow for latency-sensitive
+  request paths; production fit depends on warm browser cache hits dominating
+  user activity
 
 The earlier authenticated Chromium evidence remains checked in:
 

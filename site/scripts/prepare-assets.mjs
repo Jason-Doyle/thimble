@@ -1,4 +1,9 @@
-import { copyFile, mkdir } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -30,9 +35,14 @@ for (const file of [
   "r2-current-layout-multiregion-2026-09-25.json",
   "r2-current-layout-summary-2026-09-25.csv",
 ]) {
-  await copyFile(
+  const source = await readFile(
     path.join(repositoryRoot, "evidence", file),
+    "utf8",
+  );
+  await writeFile(
     path.join(evidenceDirectory, file),
+    source.replaceAll("\r\n", "\n"),
+    "utf8",
   );
 }
 

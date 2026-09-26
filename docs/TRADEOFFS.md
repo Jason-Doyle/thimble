@@ -18,6 +18,8 @@
   an eligible cold trie point read from four browser requests to one.
 - Unit tests verify that an explicit covered projection can avoid loading the
   full snapshot page and that uncovered fields fall back to full documents.
+- Current regional evidence shows that cold object reads and large indexed
+  writes miss normal interactive latency targets.
 
 ## Not established by the published evidence
 
@@ -72,3 +74,7 @@ Use ThimbleDB for small, mostly idle, read-heavy applications that benefit from
 encrypted browser caching and per-user or per-tenant storage scopes. Do not
 treat it as a general database replacement. Compare it with a managed database
 using the application's real workload before choosing a production data layer.
+
+Production use should assume that warm browser cache hits dominate. Avoid
+request-critical flows that depend on cold object reads or large indexed
+writes.
