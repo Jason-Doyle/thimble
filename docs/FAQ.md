@@ -97,6 +97,11 @@ queries, trie scans, and simultaneous multi-region writes exposed clear poor
 fits. These measurements describe specific Cloudflare and Azure runs. They do
 not establish general superiority over another database.
 
+Current cold reads and large indexed writes are too slow for latency-sensitive
+request paths. ThimbleDB is production-credible only where warm browser cache
+hits dominate and cold loading or writes can tolerate substantially higher
+latency.
+
 ## Is it suitable for vibe-coded applications?
 
 It can fit focused applications that use a small number of JSON record types,

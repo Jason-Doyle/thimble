@@ -253,6 +253,12 @@ ThimbleDB's small-app target.
 
 ## Current recommendation
 
+Most measured cold reads and every large write result exceed normal
+interactive latency targets. Current production use therefore depends on warm
+browser cache hits dominating user activity. Cold storage access should be
+treated as initial loading, recovery, or background work rather than a
+request-critical UI path.
+
 Use snapshots for:
 
 - small and medium collections
@@ -274,6 +280,9 @@ for the corresponding uncovered paths.
 
 Do not use either current layout for sustained multi-region writes to one
 collection root.
+
+Do not use the current release for latency-sensitive applications that require
+sub-second cold reads or interactive large indexed writes.
 
 ## Limitations
 

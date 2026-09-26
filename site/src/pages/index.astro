@@ -479,9 +479,9 @@ const websiteSchema = {
           simultaneous global writes exposed clear limits.
         </p>
         <p class="evidence-note">
-          Tables, accessible graphs, failures, and raw JSON and CSV evidence
-          are published. The results describe this workload, not universal
-          database performance.
+          Cold reads and large writes remain too slow for latency-sensitive
+          request paths. Production fit depends on warm browser cache hits
+          dominating. Tables, graphs, failures, JSON, and CSV are published.
         </p>
         <a class="button dark" href="/benchmarks/">Read the benchmark and limitations <span>→</span></a>
       </div>

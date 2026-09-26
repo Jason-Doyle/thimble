@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 test("homepage presents the product and complete SEO metadata", async ({
@@ -380,6 +381,22 @@ test("benchmark page publishes tables, graphs, and raw evidence", async ({
   );
   expect(csvResponse.headers()["content-type"]).toMatch(
     /text\/csv|application\/octet-stream/,
+  );
+  expect(
+    createHash("sha256")
+      .update(await jsonResponse.body())
+      .digest("hex")
+      .toUpperCase(),
+  ).toBe(
+    "EE93073994C8D7917D203865DEC31C433F9D3DF77C56F44AC032904CB6DA0219",
+  );
+  expect(
+    createHash("sha256")
+      .update(await csvResponse.body())
+      .digest("hex")
+      .toUpperCase(),
+  ).toBe(
+    "76210F31306CE6E7BF0E22C67BC498EA593634E08F89AD5A188A0F3D1B526DB9",
   );
   await assertNoHorizontalOverflow(page);
 });
