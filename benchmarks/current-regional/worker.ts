@@ -239,7 +239,10 @@ async function serveBundle(
   } catch (error) {
     if (error instanceof BoundedReadError) {
       return withColo(
-        json({ error: error.message }, 413),
+        withStorageMetrics(
+          json({ error: error.message }, 413),
+          runtime.store.metrics,
+        ),
         request,
       );
     }
@@ -247,18 +250,12 @@ async function serveBundle(
   }
   const body = JSON.stringify(bundle);
   return withColo(
-    new Response(body, {
+    withStorageMetrics(new Response(body, {
       headers: {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "no-store",
-        "x-benchmark-storage-reads": String(
-          runtime.store.metrics.reads,
-        ),
-        "x-benchmark-storage-bytes": String(
-          runtime.store.metrics.readBytes,
-        ),
       },
-    }),
+    }), runtime.store.metrics),
     request,
   );
 }
@@ -593,6 +590,26 @@ function withColo(response: Response, request: Request): Response {
     (
       request as Request & {
         cf?: { colo?: string };
+      }
+
+      function withStorageMetrics(
+        response: Response,
+        metrics: StoreCounters,
+      ): Response {
+        const headers = new Headers(response.headers);
+        headers.set(
+          "x-benchmark-storage-reads",
+          String(metrics.reads),
+        );
+        headers.set(
+          "x-benchmark-storage-bytes",
+          String(metrics.readBytes),
+        );
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
       }
     ).cf?.colo ?? "unknown";
   const headers = new Headers(response.headers);

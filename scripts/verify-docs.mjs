@@ -55,7 +55,17 @@ for (const file of markdownFiles) {
       target.replace(/^<|>$/g, ""),
     );
     const resolved = decoded
-      ? path.resolve(path.dirname(file), decoded)
+      ? decoded.startsWith("/") &&
+        /\.(?:csv|json|svg)$/i.test(decoded)
+        ? decoded.startsWith("/evidence/")
+          ? path.resolve(root, decoded.slice(1))
+          : path.resolve(
+              root,
+              "site",
+              "public",
+              decoded.slice(1),
+            )
+        : path.resolve(path.dirname(file), decoded)
       : file;
     if (!existsSync(resolved)) {
       errors.push(`${relative}: missing link target ${raw}`);

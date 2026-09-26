@@ -424,16 +424,20 @@ async function runReadCase(
       plan,
       scannedDocuments,
       networkReads:
-        metrics.remoteReads + metrics.bundleReads,
+        metrics.remoteReads,
       networkBytes:
-        metrics.remoteBytes + metrics.bundleBytes,
+        metrics.remoteBytes,
       objectReads:
         bundle
-          ? runtime.bundleReader?.lastStorageReads ?? 0
+          ? (runtime.bundleReader?.lastStorageReads ?? 0) +
+            (metrics.remoteReads - metrics.bundleReads)
           : metrics.remoteReads,
       objectBytes:
         bundle
-          ? runtime.bundleReader?.lastStorageBytes ?? 0
+          ? (runtime.bundleReader?.lastStorageBytes ?? 0) +
+            (metrics.bundleFallbacks > 0
+              ? metrics.remoteBytes
+              : 0)
           : metrics.remoteBytes,
       cache: metrics.cache,
       bundleFallbacks: metrics.bundleFallbacks,
@@ -458,16 +462,20 @@ async function runReadCase(
       plan: null,
       scannedDocuments: 0,
       networkReads:
-        metrics.remoteReads + metrics.bundleReads,
+        metrics.remoteReads,
       networkBytes:
-        metrics.remoteBytes + metrics.bundleBytes,
+        metrics.remoteBytes,
       objectReads:
         bundle
-          ? runtime.bundleReader?.lastStorageReads ?? 0
+          ? (runtime.bundleReader?.lastStorageReads ?? 0) +
+            (metrics.remoteReads - metrics.bundleReads)
           : metrics.remoteReads,
       objectBytes:
         bundle
-          ? runtime.bundleReader?.lastStorageBytes ?? 0
+          ? (runtime.bundleReader?.lastStorageBytes ?? 0) +
+            (metrics.bundleFallbacks > 0
+              ? metrics.remoteBytes
+              : 0)
           : metrics.remoteBytes,
       cache: metrics.cache,
       bundleFallbacks: metrics.bundleFallbacks,
@@ -549,6 +557,14 @@ class TrackedBundleReader implements PointReadBundleReader {
     const response = await fetch(url, {
       cache: "no-store",
     });
+    this.lastStorageReads = Number(
+      response.headers.get("x-benchmark-storage-reads") ??
+        "0",
+    );
+    this.lastStorageBytes = Number(
+      response.headers.get("x-benchmark-storage-bytes") ??
+        "0",
+    );
     if (
       response.status === 404 ||
       response.status === 409 ||
@@ -561,14 +577,6 @@ class TrackedBundleReader implements PointReadBundleReader {
         `Bundle request failed with ${response.status}`,
       );
     }
-    this.lastStorageReads = Number(
-      response.headers.get("x-benchmark-storage-reads") ??
-        "0",
-    );
-    this.lastStorageBytes = Number(
-      response.headers.get("x-benchmark-storage-bytes") ??
-        "0",
-    );
     const body = await response.text();
     return {
       status: "found",

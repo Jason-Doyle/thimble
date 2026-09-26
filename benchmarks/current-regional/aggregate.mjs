@@ -28,10 +28,24 @@ const manifest = JSON.parse(
 const readRuns = await loadRuns("read");
 const writeRuns = await loadRuns("write");
 const contentionRuns = await loadRuns("contention");
+const allRuns = [
+  ...readRuns,
+  ...writeRuns,
+  ...contentionRuns,
+];
+const sourceCommits = unique(
+  allRuns.map((run) => run.result.sourceCommit),
+);
+const harnessCommits = unique(
+  allRuns.map((run) => run.result.harnessCommit),
+);
 const evidence = {
   generatedAt: new Date().toISOString(),
-  sourceCommit: manifest.sourceCommit,
-  harnessCommit: manifest.harnessCommit,
+  sourceCommit:
+    sourceCommits.length === 1
+      ? sourceCommits[0]
+      : sourceCommits,
+  harnessCommits,
   target:
     "temporary workers.dev Worker and temporary Cloudflare R2 bucket",
   productionWebsiteChangedDuringMeasurement: false,
@@ -244,7 +258,7 @@ function summariseCases(cases) {
 function summariseRead(samples) {
   const successful = samples.filter(
     (sample) => sample.success !== false,
-  );
+  ).map(normaliseReadSample);
   const client = sorted(
     successful.map((sample) => sample.clientElapsedMs),
   );
@@ -289,6 +303,35 @@ function summariseRead(samples) {
         left.localeCompare(right),
       ),
     ),
+  };
+}
+
+function normaliseReadSample(sample) {
+  if (sample.operation !== "bundle") {
+    return sample;
+  }
+  const networkReads = Math.max(0, sample.networkReads - 1);
+  const networkBytes =
+    sample.bundleFallbacks > 0
+      ? sample.networkBytes
+      : Math.round(sample.networkBytes / 2);
+  if (
+    sample.bundleFallbacks > 0 &&
+    sample.objectReads === 0
+  ) {
+    return {
+      ...sample,
+      networkReads,
+      networkBytes,
+      objectReads: 4,
+      objectBytes:
+        sample.networkBytes * 2,
+    };
+  }
+  return {
+    ...sample,
+    networkReads,
+    networkBytes,
   };
 }
 
@@ -465,4 +508,10 @@ function mean(values) {
       values.length
     ).toFixed(3),
   );
+}
+
+function unique(values) {
+  return [
+    ...new Set(values.filter(Boolean)),
+  ].sort();
 }

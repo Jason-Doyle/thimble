@@ -46,6 +46,11 @@ unless noted otherwise.
 `THIMBLE_READ_BUNDLES=true` changes the read transport trust boundary. Review
 [Security](SECURITY.md) before enabling it.
 
+Normal `EnvelopeObjectStore` and browser object-reader instances limit each
+decoded object to 16 MiB. This is a code-level safety default rather than an
+environment setting. Advanced direct integrations can supply an explicit
+`maximumDecodedBytes` override when constructing those wrappers.
+
 ## Identity settings
 
 Configure at least one production OIDC provider.

@@ -357,9 +357,9 @@ export const docs: DocMeta[] = [
   },
   {
     id: "benchmarks",
-    title: "R2 browser benchmarks",
+    title: "Cloud benchmark evidence",
     description:
-      "Read multi-region browser results, raw evidence references, limitations, and layout findings.",
+      "Read multi-region tables, graphs, raw evidence, limitations, and layout findings.",
     group: "Reference",
     order: 40,
     featured: true,

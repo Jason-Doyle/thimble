@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="375" viewBox="0 0 1080 375" role="img" aria-labelledby="title desc">
+  <title id="title">Large-profile write p95</title>
+  <desc id="desc">Single-writer and simultaneous multi-region writes. Lower is better.</desc>
+  <style>
+    text { font-family: Inter, Arial, sans-serif; fill: #1e293b; }
+    .title { font-size: 24px; font-weight: 700; }
+    .description { font-size: 13px; fill: #475569; }
+    .legend, .category, .value, .axis { font-size: 12px; }
+    .category { font-weight: 600; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="24" y="30" class="title">Large-profile write p95</text>
+  <text x="24" y="48" class="description">Single-writer and simultaneous multi-region writes. Lower is better.</text>
+  <rect x="190" y="76" width="16" height="16" rx="3" fill="#2563eb"/><text x="214" y="89" class="legend">Snapshot</text><rect x="380" y="76" width="16" height="16" rx="3" fill="#0891b2"/><text x="404" y="89" class="legend">Trie</text>
+  <line x1="190" y1="105" x2="190" y2="320" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="190" y="347" text-anchor="middle" class="axis">0</text>
+  <line x1="344" y1="105" x2="344" y2="320" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="344" y="347" text-anchor="middle" class="axis">20,000</text>
+  <line x1="498" y1="105" x2="498" y2="320" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="498" y="347" text-anchor="middle" class="axis">40,000</text>
+  <line x1="652" y1="105" x2="652" y2="320" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="652" y="347" text-anchor="middle" class="axis">60,000</text>
+  <line x1="806" y1="105" x2="806" y2="320" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="806" y="347" text-anchor="middle" class="axis">80,000</text>
+  <line x1="960" y1="105" x2="960" y2="320" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="960" y="347" text-anchor="middle" class="axis">100,000</text>
+  <text x="174" y="141" text-anchor="end" class="category">Single writer</text>
+  <rect x="190" y="125" width="129.0121833" height="18" rx="4" fill="#2563eb"/>
+  <text x="327.0121833" y="139" class="value">16,755 ms</text>
+  <rect x="190" y="151" width="155.3666268" height="18" rx="4" fill="#0891b2"/>
+  <text x="353.3666268" y="165" class="value">20,177 ms</text>
+  <text x="174" y="221" text-anchor="end" class="category">Multi-region contention</text>
+  <rect x="190" y="205" width="558.1232272" height="18" rx="4" fill="#2563eb"/>
+  <text x="756.1232272" y="219" class="value">72,484 ms</text>
+  <rect x="190" y="231" width="656.9564001000001" height="18" rx="4" fill="#0891b2"/>
+  <text x="854.9564001000001" y="245" class="value">85,319 ms</text>
+  <text x="575" y="369" text-anchor="middle" class="axis">milliseconds</text>
+</svg>

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="957" viewBox="0 0 1080 957" role="img" aria-labelledby="title desc">
+  <title id="title">Large-profile cold point-read p95 by region</title>
+  <desc id="desc">Twenty-five-thousand-document profile across two replicates. Lower is better.</desc>
+  <style>
+    text { font-family: Inter, Arial, sans-serif; fill: #1e293b; }
+    .title { font-size: 24px; font-weight: 700; }
+    .description { font-size: 13px; fill: #475569; }
+    .legend, .category, .value, .axis { font-size: 12px; }
+    .category { font-weight: 600; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="24" y="30" class="title">Large-profile cold point-read p95 by region</text>
+  <text x="24" y="48" class="description">Twenty-five-thousand-document profile across two replicates. Lower is better.</text>
+  <rect x="190" y="76" width="16" height="16" rx="3" fill="#2563eb"/><text x="214" y="89" class="legend">Snapshot</text><rect x="380" y="76" width="16" height="16" rx="3" fill="#0891b2"/><text x="404" y="89" class="legend">Trie</text><rect x="570" y="76" width="16" height="16" rx="3" fill="#7c3aed"/><text x="594" y="89" class="legend">Trie bundle</text>
+  <line x1="190" y1="105" x2="190" y2="902" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="190" y="929" text-anchor="middle" class="axis">0</text>
+  <line x1="344" y1="105" x2="344" y2="902" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="344" y="929" text-anchor="middle" class="axis">1,000</text>
+  <line x1="498" y1="105" x2="498" y2="902" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="498" y="929" text-anchor="middle" class="axis">2,000</text>
+  <line x1="652" y1="105" x2="652" y2="902" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="652" y="929" text-anchor="middle" class="axis">3,000</text>
+  <line x1="806" y1="105" x2="806" y2="902" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="806" y="929" text-anchor="middle" class="axis">4,000</text>
+  <line x1="960" y1="105" x2="960" y2="902" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="960" y="929" text-anchor="middle" class="axis">5,000</text>
+  <text x="174" y="141" text-anchor="end" class="category">East US</text>
+  <rect x="190" y="125" width="77.197428" height="18" rx="4" fill="#2563eb"/>
+  <text x="275.197428" y="139" class="value">501.3 ms</text>
+  <rect x="190" y="151" width="68.545708" height="18" rx="4" fill="#0891b2"/>
+  <text x="266.545708" y="165" class="value">445.1 ms</text>
+  <rect x="190" y="177" width="56.590842" height="18" rx="4" fill="#7c3aed"/>
+  <text x="254.590842" y="191" class="value">367.5 ms</text>
+  <text x="174" y="247" text-anchor="end" class="category">West US 2</text>
+  <rect x="190" y="231" width="78.882188" height="18" rx="4" fill="#2563eb"/>
+  <text x="276.882188" y="245" class="value">512.2 ms</text>
+  <rect x="190" y="257" width="67.35713600000001" height="18" rx="4" fill="#0891b2"/>
+  <text x="265.357136" y="271" class="value">437.4 ms</text>
+  <rect x="190" y="283" width="62.993700000000004" height="18" rx="4" fill="#7c3aed"/>
+  <text x="260.9937" y="297" class="value">409.1 ms</text>
+  <text x="174" y="353" text-anchor="end" class="category">North Europe</text>
+  <rect x="190" y="337" width="100.49038999999999" height="18" rx="4" fill="#2563eb"/>
+  <text x="298.49039" y="351" class="value">652.5 ms</text>
+  <rect x="190" y="363" width="108.108616" height="18" rx="4" fill="#0891b2"/>
+  <text x="306.108616" y="377" class="value">702 ms</text>
+  <rect x="190" y="389" width="102.997048" height="18" rx="4" fill="#7c3aed"/>
+  <text x="300.997048" y="403" class="value">668.8 ms</text>
+  <text x="174" y="459" text-anchor="end" class="category">Southeast Asia</text>
+  <rect x="190" y="443" width="304.31262399999997" height="18" rx="4" fill="#2563eb"/>
+  <text x="502.31262399999997" y="457" class="value">1,976 ms</text>
+  <rect x="190" y="469" width="673.626954" height="18" rx="4" fill="#0891b2"/>
+  <text x="871.626954" y="483" class="value">4,374 ms</text>
+  <rect x="190" y="495" width="531.07285" height="18" rx="4" fill="#7c3aed"/>
+  <text x="729.07285" y="509" class="value">3,449 ms</text>
+  <text x="174" y="565" text-anchor="end" class="category">Japan East</text>
+  <rect x="190" y="549" width="142.930172" height="18" rx="4" fill="#2563eb"/>
+  <text x="340.93017199999997" y="563" class="value">928.1 ms</text>
+  <rect x="190" y="575" width="128.49837" height="18" rx="4" fill="#0891b2"/>
+  <text x="326.49837" y="589" class="value">834.4 ms</text>
+  <rect x="190" y="601" width="135.30979" height="18" rx="4" fill="#7c3aed"/>
+  <text x="333.30979" y="615" class="value">878.6 ms</text>
+  <text x="174" y="671" text-anchor="end" class="category">Australia East</text>
+  <rect x="190" y="655" width="216.901454" height="18" rx="4" fill="#2563eb"/>
+  <text x="414.901454" y="669" class="value">1,408 ms</text>
+  <rect x="190" y="681" width="154.70254799999998" height="18" rx="4" fill="#0891b2"/>
+  <text x="352.702548" y="695" class="value">1,005 ms</text>
+  <rect x="190" y="707" width="137.81552399999998" height="18" rx="4" fill="#7c3aed"/>
+  <text x="335.815524" y="721" class="value">894.9 ms</text>
+  <text x="174" y="777" text-anchor="end" class="category">Brazil South</text>
+  <rect x="190" y="761" width="145.058144" height="18" rx="4" fill="#2563eb"/>
+  <text x="343.05814399999997" y="775" class="value">941.9 ms</text>
+  <rect x="190" y="787" width="140.69132000000002" height="18" rx="4" fill="#0891b2"/>
+  <text x="338.69132" y="801" class="value">913.6 ms</text>
+  <rect x="190" y="813" width="118.463884" height="18" rx="4" fill="#7c3aed"/>
+  <text x="316.463884" y="827" class="value">769.2 ms</text>
+  <text x="575" y="951" text-anchor="middle" class="axis">milliseconds</text>
+</svg>

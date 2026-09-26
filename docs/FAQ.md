@@ -87,15 +87,15 @@ SQL, joins, aggregation, full-text search, or vector query semantics.
 
 ## How fast is it?
 
-Warm in-memory reads were sub-millisecond at p50 in the published regional R2
-browser run. Cold object reads and external session creation took seconds in
-the tested regions. The benchmark supports browser caching and adaptive
-snapshot selection for that workload. It does not establish general
-superiority over another database.
+Warm in-memory reads were sub-millisecond at p50 in the authenticated browser
+run. The newer 3,808-operation test used seven regional Node clients and
+25,000 documents at its largest profile. Snapshot cold point-read p95 was
+1.62 seconds, Trie was 3.23 seconds, and Trie bundle was 2.69 seconds.
 
-Version 3.1 can reduce an eligible cold point read to one bounded browser
-request. The request-count reduction is tested, but updated live regional
-latency evidence has not yet been published.
+Covering indexes avoided full-document reads, while large uncovered snapshot
+queries, trie scans, and simultaneous multi-region writes exposed clear poor
+fits. These measurements describe specific Cloudflare and Azure runs. They do
+not establish general superiority over another database.
 
 ## Is it suitable for vibe-coded applications?
 

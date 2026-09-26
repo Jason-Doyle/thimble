@@ -17,9 +17,24 @@ const sourceStudio = path.join(
   "thimbledb-studio.png",
 );
 const assetsDirectory = path.join(siteRoot, "public", "assets");
+const evidenceDirectory = path.join(
+  siteRoot,
+  "public",
+  "evidence",
+);
 
 await mkdir(assetsDirectory, { recursive: true });
+await mkdir(evidenceDirectory, { recursive: true });
 await copyFile(sourceLogo, path.join(assetsDirectory, "logo.png"));
+for (const file of [
+  "r2-current-layout-multiregion-2026-09-25.json",
+  "r2-current-layout-summary-2026-09-25.csv",
+]) {
+  await copyFile(
+    path.join(repositoryRoot, "evidence", file),
+    path.join(evidenceDirectory, file),
+  );
+}
 
 await sharp(sourceLogo)
   .resize(64, 64)

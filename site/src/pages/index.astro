@@ -1,6 +1,7 @@
 ---
 import { getEntry } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
+import currentBenchmark from "../data/current-benchmark.json";
 import { getDocHref, getFeaturedDocs } from "../data/docs";
 import { site } from "../data/site";
 import { parseFaqMarkdown } from "../lib/faq";
@@ -8,6 +9,25 @@ import { parseFaqMarkdown } from "../lib/faq";
 const faqEntry = await getEntry("docs", "faq");
 const faqItems = parseFaqMarkdown(faqEntry?.body ?? "").slice(0, 6);
 const featuredDocs = getFeaturedDocs().slice(0, 8);
+const pointRows = [
+  {
+    label: "Snapshot",
+    value: currentBenchmark.largePointP95Ms.snapshot,
+  },
+  {
+    label: "Trie bundle",
+    value: currentBenchmark.largePointP95Ms.trieBundle,
+  },
+  {
+    label: "Trie",
+    value: currentBenchmark.largePointP95Ms.trie,
+  },
+];
+const maximumPointP95 = Math.max(
+  ...pointRows.map((row) => row.value),
+);
+const formatSeconds = (milliseconds: number) =>
+  `${(milliseconds / 1_000).toFixed(2)} s`;
 
 const softwareSchema = {
   "@context": "https://schema.org",
@@ -449,43 +469,42 @@ const websiteSchema = {
   <section class="section-block benchmark-section">
     <div class="section-shell benchmark-grid">
       <div>
-        <p class="eyebrow">Published R2 evidence</p>
-        <h2>Fast when warm. Honest about cold reads.</h2>
+        <p class="eyebrow">Published cloud evidence</p>
+        <h2>Measure the workload, then choose the layout.</h2>
         <p>
-          In the regional browser run, final warm p95 reads ranged from 1.6 to
-          8.3 ms. Cold product reads ranged from 1.25 to 3.44 seconds after the
-          snapshot change. External session creation remained slower.
+          Across {currentBenchmark.measuredOperations.toLocaleString("en-US")}
+          measured operations in {currentBenchmark.regions} regions, snapshots
+          had the lowest pooled cold point-read p95 at every tested size.
+          Covering indexes stayed bounded, while broad trie scans and
+          simultaneous global writes exposed clear limits.
         </p>
         <p class="evidence-note">
-          These measurements describe one tested workload. They do not claim
-          database-wide latency superiority.
+          Tables, accessible graphs, failures, and raw JSON and CSV evidence
+          are published. The results describe this workload, not universal
+          database performance.
         </p>
         <a class="button dark" href="/benchmarks/">Read the benchmark and limitations <span>→</span></a>
       </div>
-      <div class="benchmark-card" aria-label="Regional benchmark summary">
+      <div class="benchmark-card" aria-label="Large collection point-read benchmark summary">
         <div class="benchmark-header">
-          <span>Final warm p95</span>
-          <strong>1.6-8.3 ms</strong>
+          <span>25,000 documents, pooled p95</span>
+          <strong>{formatSeconds(currentBenchmark.largePointP95Ms.snapshot)}</strong>
         </div>
         <div class="benchmark-bars">
-          <div>
-            <span>North Europe</span>
-            <i style="--value: 83%"></i>
-            <strong>8.3 ms</strong>
-          </div>
-          <div>
-            <span>US East</span>
-            <i style="--value: 52%"></i>
-            <strong>5.2 ms</strong>
-          </div>
-          <div>
-            <span>Southeast Asia</span>
-            <i style="--value: 16%"></i>
-            <strong>1.6 ms</strong>
-          </div>
+          {
+            pointRows.map((row) => (
+              <div>
+                <span>{row.label}</span>
+                <i
+                  style={`--value: ${(row.value / maximumPointP95) * 100}%`}
+                ></i>
+                <strong>{formatSeconds(row.value)}</strong>
+              </div>
+            ))
+          }
         </div>
         <div class="benchmark-footer">
-          Chromium containers, private R2, authenticated broker
+          Seven Azure regions, two replicates, temporary Worker and R2
         </div>
       </div>
     </div>

@@ -27,8 +27,7 @@
 - Safe key rotation at useful scale.
 - Reliable production behaviour under multi-region write contention.
 - A meaningful reduction in coding-agent database mistakes.
-- A production latency improvement from read bundles; updated live
-  multi-region measurements have not yet been published.
+- Stable latency under sustained multi-region writes to one collection root.
 
 ## Costs introduced by this design
 
@@ -41,6 +40,11 @@
 - Encrypted object access still exposes ciphertext sizes and traffic patterns
   to the authority and storage provider.
 - Search, joins, and aggregate views require derived systems.
+
+Current seven-region evidence found that Trie bundle reduced medium and
+large cold point-read p95 relative to direct trie reads, but increased small
+profile p95. Snapshot bundles transferred decoded JSON and were not a useful
+general optimisation. See [Cloud benchmark evidence](BENCHMARKS.md).
 
 ## When to use ThimbleDB
 

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="533" viewBox="0 0 1080 533" role="img" aria-labelledby="title desc">
+  <title id="title">Cold point-read p95 by collection size</title>
+  <desc id="desc">Regional caller latency pooled across seven Azure regions and two replicates. Lower is better.</desc>
+  <style>
+    text { font-family: Inter, Arial, sans-serif; fill: #1e293b; }
+    .title { font-size: 24px; font-weight: 700; }
+    .description { font-size: 13px; fill: #475569; }
+    .legend, .category, .value, .axis { font-size: 12px; }
+    .category { font-weight: 600; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="24" y="30" class="title">Cold point-read p95 by collection size</text>
+  <text x="24" y="48" class="description">Regional caller latency pooled across seven Azure regions and two replicates. Lower is better.</text>
+  <rect x="190" y="76" width="16" height="16" rx="3" fill="#2563eb"/><text x="214" y="89" class="legend">Snapshot</text><rect x="380" y="76" width="16" height="16" rx="3" fill="#0891b2"/><text x="404" y="89" class="legend">Trie</text><rect x="570" y="76" width="16" height="16" rx="3" fill="#7c3aed"/><text x="594" y="89" class="legend">Trie bundle</text>
+  <line x1="190" y1="105" x2="190" y2="478" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="190" y="505" text-anchor="middle" class="axis">0</text>
+  <line x1="344" y1="105" x2="344" y2="478" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="344" y="505" text-anchor="middle" class="axis">1,000</text>
+  <line x1="498" y1="105" x2="498" y2="478" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="498" y="505" text-anchor="middle" class="axis">2,000</text>
+  <line x1="652" y1="105" x2="652" y2="478" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="652" y="505" text-anchor="middle" class="axis">3,000</text>
+  <line x1="806" y1="105" x2="806" y2="478" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="806" y="505" text-anchor="middle" class="axis">4,000</text>
+  <line x1="960" y1="105" x2="960" y2="478" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="960" y="505" text-anchor="middle" class="axis">5,000</text>
+  <text x="174" y="141" text-anchor="end" class="category">Small</text>
+  <rect x="190" y="125" width="222.816132" height="18" rx="4" fill="#2563eb"/>
+  <text x="420.81613200000004" y="139" class="value">1,447 ms</text>
+  <rect x="190" y="151" width="356.147484" height="18" rx="4" fill="#0891b2"/>
+  <text x="554.1474840000001" y="165" class="value">2,313 ms</text>
+  <rect x="190" y="177" width="481.874162" height="18" rx="4" fill="#7c3aed"/>
+  <text x="679.8741620000001" y="191" class="value">3,129 ms</text>
+  <text x="174" y="247" text-anchor="end" class="category">Medium</text>
+  <rect x="190" y="231" width="270.416762" height="18" rx="4" fill="#2563eb"/>
+  <text x="468.416762" y="245" class="value">1,756 ms</text>
+  <rect x="190" y="257" width="463.47454999999997" height="18" rx="4" fill="#0891b2"/>
+  <text x="661.4745499999999" y="271" class="value">3,010 ms</text>
+  <rect x="190" y="283" width="423.680488" height="18" rx="4" fill="#7c3aed"/>
+  <text x="621.680488" y="297" class="value">2,751 ms</text>
+  <text x="174" y="353" text-anchor="end" class="category">Large</text>
+  <rect x="190" y="337" width="249.045258" height="18" rx="4" fill="#2563eb"/>
+  <text x="447.045258" y="351" class="value">1,617 ms</text>
+  <rect x="190" y="363" width="497.392434" height="18" rx="4" fill="#0891b2"/>
+  <text x="695.392434" y="377" class="value">3,230 ms</text>
+  <rect x="190" y="389" width="413.494774" height="18" rx="4" fill="#7c3aed"/>
+  <text x="611.494774" y="403" class="value">2,685 ms</text>
+  <text x="575" y="527" text-anchor="middle" class="axis">milliseconds</text>
+</svg>

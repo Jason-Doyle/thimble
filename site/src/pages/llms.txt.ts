@@ -47,7 +47,7 @@ scope and one collection.
 ## Evidence and limits
 
 - [Tradeoffs](${site.url}/docs/tradeoffs/): Verified behaviour, unknowns, and poor-fit workloads.
-- [R2 browser benchmarks](${site.url}/benchmarks/): Multi-region evidence and limitations.
+- [Cloud benchmark evidence](${site.url}/benchmarks/): Multi-region tables, graphs, raw data, and limitations.
 - [Public package API](${site.url}/docs/public-api/): Stable package exports.
 - [Website privacy](${site.url}/docs/website-privacy/): Static-site data handling and Cloudflare Web Analytics disclosure.
 - [GitHub repository](${site.repository}): Source, tests, examples, fixtures, and raw evidence.

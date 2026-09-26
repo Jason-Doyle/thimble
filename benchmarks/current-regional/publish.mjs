@@ -1,4 +1,5 @@
 import {
+  copyFile,
   mkdir,
   readFile,
   writeFile,
@@ -27,14 +28,29 @@ const summaryPath = path.resolve(
   process.env.THIMBLE_CURRENT_REGIONAL_SITE_SUMMARY ??
     "site/src/data/current-benchmark.json",
 );
+const publicEvidenceRoot = path.resolve(
+  process.env.THIMBLE_CURRENT_REGIONAL_PUBLIC_EVIDENCE ??
+    "site/public/evidence",
+);
 
 await Promise.all([
   mkdir(path.dirname(csvPath), { recursive: true }),
   mkdir(chartRoot, { recursive: true }),
   mkdir(path.dirname(summaryPath), { recursive: true }),
+  mkdir(publicEvidenceRoot, { recursive: true }),
 ]);
 
 await writeFile(csvPath, createCsv(evidence));
+await Promise.all([
+  copyFile(
+    evidencePath,
+    path.join(publicEvidenceRoot, path.basename(evidencePath)),
+  ),
+  copyFile(
+    csvPath,
+    path.join(publicEvidenceRoot, path.basename(csvPath)),
+  ),
+]);
 await writeFile(
   path.join(chartRoot, "point-p95-by-scale.svg"),
   groupedBarChart({
@@ -348,7 +364,7 @@ function groupedBarChart({
   const width = 1_080;
   const left = 190;
   const right = 120;
-  const top = 100;
+  const top = 125;
   const barHeight = 18;
   const barGap = 8;
   const groupGap = 28;
@@ -396,8 +412,8 @@ function groupedBarChart({
   const legend = series.map((entry, index) => {
     const x = left + index * 190;
     return [
-      `<rect x="${x}" y="52" width="16" height="16" rx="3" fill="${entry.color}"/>`,
-      `<text x="${x + 24}" y="65" class="legend">${escapeXml(entry.label)}</text>`,
+      `<rect x="${x}" y="76" width="16" height="16" rx="3" fill="${entry.color}"/>`,
+      `<text x="${x + 24}" y="89" class="legend">${escapeXml(entry.label)}</text>`,
     ].join("");
   }).join("");
 
