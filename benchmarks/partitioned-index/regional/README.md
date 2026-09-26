@@ -69,5 +69,5 @@ The default artifact is:
 evidence/partitioned-index-regional-worker-2026-09-26.json
 ```
 
-No production Worker, bucket, route, domain, package export, or main-branch
+No production Worker, bucket, route, domain, published package, or main-branch
 storage protocol is used or changed by this experiment.
