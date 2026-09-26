@@ -237,6 +237,8 @@ for (let index = 0; index < iterations; index += 1) {
 
 const output = {
   generatedAt: new Date().toISOString(),
+  sourceCommit:
+    process.env.THIMBLE_BENCHMARK_HARNESS_COMMIT ?? null,
   documents,
   iterations,
   warning:
@@ -249,11 +251,16 @@ const output = {
   ),
   samples: results,
 };
-await mkdir("benchmark-results", { recursive: true });
 const outputPath = path.resolve(
-  "benchmark-results",
-  `manifested-write-${Date.now()}.json`,
+  process.env.THIMBLE_WRITE_EVIDENCE ??
+    path.join(
+      "benchmark-results",
+      `manifested-write-${Date.now()}.json`,
+    ),
 );
+await mkdir(path.dirname(outputPath), {
+  recursive: true,
+});
 await writeFile(
   outputPath,
   `${JSON.stringify(output, null, 2)}\n`,

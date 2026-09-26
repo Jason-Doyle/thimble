@@ -1,0 +1,391 @@
+{
+  "generatedAt": "2026-09-25T23:56:24.405Z",
+  "sourceCommit": "ddae85c7239fc82b00b1a64f8f5484cf144ebb1b",
+  "documents": 50000,
+  "iterations": 12,
+  "warning": "Local in-memory object-store evidence. It includes current codecs, encryption, compression, reads, immutable writes, and HEAD CAS, but excludes cloud network latency.",
+  "summary": {
+    "snapshot": {
+      "p50Ms": 287.754,
+      "p95Ms": 335.887,
+      "meanMs": 291.107,
+      "meanReads": 2,
+      "meanReadBytes": 628956,
+      "meanWrites": 2,
+      "meanWriteBytes": 628994
+    },
+    "trie": {
+      "p50Ms": 2.703,
+      "p95Ms": 6.679,
+      "meanMs": 3.078,
+      "meanReads": 4,
+      "meanReadBytes": 5612,
+      "meanWrites": 4,
+      "meanWriteBytes": 5633
+    },
+    "manifested": {
+      "p50Ms": 26.213,
+      "p95Ms": 59.707,
+      "meanMs": 30.597,
+      "meanReads": 2,
+      "meanReadBytes": 13601,
+      "meanWrites": 2,
+      "meanWriteBytes": 13630
+    },
+    "tis1": {
+      "p50Ms": 1977.594,
+      "p95Ms": 2052.51,
+      "meanMs": 1997.776,
+      "meanReads": 0,
+      "meanReadBytes": 0,
+      "meanWrites": 1,
+      "meanWriteBytes": 1424820
+    }
+  },
+  "samples": {
+    "snapshot": [
+      {
+        "elapsedMs": 291.748,
+        "reads": 2,
+        "readBytes": 628743,
+        "writes": 2,
+        "writeBytes": 628791
+      },
+      {
+        "elapsedMs": 284.48,
+        "reads": 2,
+        "readBytes": 628791,
+        "writes": 2,
+        "writeBytes": 628823
+      },
+      {
+        "elapsedMs": 335.887,
+        "reads": 2,
+        "readBytes": 628823,
+        "writes": 2,
+        "writeBytes": 628858
+      },
+      {
+        "elapsedMs": 287.754,
+        "reads": 2,
+        "readBytes": 628858,
+        "writes": 2,
+        "writeBytes": 628899
+      },
+      {
+        "elapsedMs": 294.326,
+        "reads": 2,
+        "readBytes": 628899,
+        "writes": 2,
+        "writeBytes": 628935
+      },
+      {
+        "elapsedMs": 290.305,
+        "reads": 2,
+        "readBytes": 628935,
+        "writes": 2,
+        "writeBytes": 628967
+      },
+      {
+        "elapsedMs": 282.204,
+        "reads": 2,
+        "readBytes": 628967,
+        "writes": 2,
+        "writeBytes": 629020
+      },
+      {
+        "elapsedMs": 282.175,
+        "reads": 2,
+        "readBytes": 629020,
+        "writes": 2,
+        "writeBytes": 629051
+      },
+      {
+        "elapsedMs": 289.962,
+        "reads": 2,
+        "readBytes": 629051,
+        "writes": 2,
+        "writeBytes": 629087
+      },
+      {
+        "elapsedMs": 289.429,
+        "reads": 2,
+        "readBytes": 629087,
+        "writes": 2,
+        "writeBytes": 629127
+      },
+      {
+        "elapsedMs": 280.448,
+        "reads": 2,
+        "readBytes": 629127,
+        "writes": 2,
+        "writeBytes": 629166
+      },
+      {
+        "elapsedMs": 284.571,
+        "reads": 2,
+        "readBytes": 629166,
+        "writes": 2,
+        "writeBytes": 629207
+      }
+    ],
+    "trie": [
+      {
+        "elapsedMs": 3.166,
+        "reads": 4,
+        "readBytes": 5955,
+        "writes": 4,
+        "writeBytes": 5973
+      },
+      {
+        "elapsedMs": 2.804,
+        "reads": 4,
+        "readBytes": 5621,
+        "writes": 4,
+        "writeBytes": 5646
+      },
+      {
+        "elapsedMs": 6.679,
+        "reads": 4,
+        "readBytes": 5693,
+        "writes": 4,
+        "writeBytes": 5709
+      },
+      {
+        "elapsedMs": 3.168,
+        "reads": 4,
+        "readBytes": 5959,
+        "writes": 4,
+        "writeBytes": 5984
+      },
+      {
+        "elapsedMs": 2.73,
+        "reads": 4,
+        "readBytes": 5748,
+        "writes": 4,
+        "writeBytes": 5770
+      },
+      {
+        "elapsedMs": 2.672,
+        "reads": 4,
+        "readBytes": 5122,
+        "writes": 4,
+        "writeBytes": 5141
+      },
+      {
+        "elapsedMs": 2.79,
+        "reads": 4,
+        "readBytes": 5392,
+        "writes": 4,
+        "writeBytes": 5414
+      },
+      {
+        "elapsedMs": 2.703,
+        "reads": 4,
+        "readBytes": 5370,
+        "writes": 4,
+        "writeBytes": 5391
+      },
+      {
+        "elapsedMs": 2.546,
+        "reads": 4,
+        "readBytes": 5926,
+        "writes": 4,
+        "writeBytes": 5949
+      },
+      {
+        "elapsedMs": 2.435,
+        "reads": 4,
+        "readBytes": 5496,
+        "writes": 4,
+        "writeBytes": 5519
+      },
+      {
+        "elapsedMs": 2.615,
+        "reads": 4,
+        "readBytes": 5298,
+        "writes": 4,
+        "writeBytes": 5319
+      },
+      {
+        "elapsedMs": 2.63,
+        "reads": 4,
+        "readBytes": 5762,
+        "writes": 4,
+        "writeBytes": 5784
+      }
+    ],
+    "manifested": [
+      {
+        "elapsedMs": 31.538,
+        "reads": 2,
+        "readBytes": 13585,
+        "writes": 2,
+        "writeBytes": 13620
+      },
+      {
+        "elapsedMs": 27.397,
+        "reads": 2,
+        "readBytes": 13560,
+        "writes": 2,
+        "writeBytes": 13594
+      },
+      {
+        "elapsedMs": 59.707,
+        "reads": 2,
+        "readBytes": 13608,
+        "writes": 2,
+        "writeBytes": 13636
+      },
+      {
+        "elapsedMs": 25.203,
+        "reads": 2,
+        "readBytes": 13619,
+        "writes": 2,
+        "writeBytes": 13654
+      },
+      {
+        "elapsedMs": 25.374,
+        "reads": 2,
+        "readBytes": 13609,
+        "writes": 2,
+        "writeBytes": 13637
+      },
+      {
+        "elapsedMs": 34.122,
+        "reads": 2,
+        "readBytes": 13756,
+        "writes": 2,
+        "writeBytes": 13776
+      },
+      {
+        "elapsedMs": 26.196,
+        "reads": 2,
+        "readBytes": 13586,
+        "writes": 2,
+        "writeBytes": 13613
+      },
+      {
+        "elapsedMs": 24.689,
+        "reads": 2,
+        "readBytes": 13553,
+        "writes": 2,
+        "writeBytes": 13580
+      },
+      {
+        "elapsedMs": 25.822,
+        "reads": 2,
+        "readBytes": 13580,
+        "writes": 2,
+        "writeBytes": 13602
+      },
+      {
+        "elapsedMs": 30.57,
+        "reads": 2,
+        "readBytes": 13540,
+        "writes": 2,
+        "writeBytes": 13565
+      },
+      {
+        "elapsedMs": 26.213,
+        "reads": 2,
+        "readBytes": 13584,
+        "writes": 2,
+        "writeBytes": 13615
+      },
+      {
+        "elapsedMs": 30.331,
+        "reads": 2,
+        "readBytes": 13635,
+        "writes": 2,
+        "writeBytes": 13665
+      }
+    ],
+    "tis1": [
+      {
+        "elapsedMs": 2011.627,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424632
+      },
+      {
+        "elapsedMs": 2042.452,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424698
+      },
+      {
+        "elapsedMs": 2052.51,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424735
+      },
+      {
+        "elapsedMs": 2008.077,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424771
+      },
+      {
+        "elapsedMs": 1974.641,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424760
+      },
+      {
+        "elapsedMs": 2010.388,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424765
+      },
+      {
+        "elapsedMs": 1977.594,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424813
+      },
+      {
+        "elapsedMs": 1960.562,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424843
+      },
+      {
+        "elapsedMs": 1963.818,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424901
+      },
+      {
+        "elapsedMs": 2027.939,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424930
+      },
+      {
+        "elapsedMs": 1976.768,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1424967
+      },
+      {
+        "elapsedMs": 1966.934,
+        "reads": 0,
+        "readBytes": 0,
+        "writes": 1,
+        "writeBytes": 1425019
+      }
+    ]
+  }
+}

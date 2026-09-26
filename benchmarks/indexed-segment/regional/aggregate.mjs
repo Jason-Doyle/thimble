@@ -9,9 +9,21 @@ const root = path.resolve(
   process.env.THIMBLE_REGIONAL_OUTPUT ??
     ".bench-data/indexed-segment-regional",
 );
+const replicateADirectory = path.resolve(
+  process.env.THIMBLE_REGIONAL_REPLICATE_A ??
+    path.join(root, "results-worker"),
+);
+const replicateBDirectory = path.resolve(
+  process.env.THIMBLE_REGIONAL_REPLICATE_B ??
+    path.join(root, "results-worker-b"),
+);
 const outputPath = path.resolve(
   process.env.THIMBLE_REGIONAL_EVIDENCE ??
     "evidence/indexed-segment-regional-worker-2026-09-25.json",
+);
+const manifestPath = path.resolve(
+  process.env.THIMBLE_REGIONAL_MANIFEST ??
+    path.join(root, "manifest.json"),
 );
 const regions = [
   "eastus",
@@ -23,14 +35,17 @@ const regions = [
 const replicates = [
   {
     name: "a",
-    directory: path.join(root, "results-worker"),
+    directory: replicateADirectory,
   },
   {
     name: "b",
-    directory: path.join(root, "results-worker-b"),
+    directory: replicateBDirectory,
   },
 ];
 const runs = [];
+const benchmarkManifest = JSON.parse(
+  await readFile(manifestPath, "utf8"),
+);
 
 for (const replicate of replicates) {
   for (const region of regions) {
@@ -66,7 +81,9 @@ const evidence = {
   target:
     "temporary workers.dev Worker and temporary Cloudflare R2 bucket",
   productionWebsiteChanged: false,
-  documents: 50_000,
+  documents: benchmarkManifest.documents,
+  artifacts: benchmarkManifest.objects,
+  workload: benchmarkManifest.expected,
   methodology: {
     execution:
       "Every measured storage read, range selection, decryption, decompression, parsing, lookup, and filtering operation executed inside the Cloudflare Worker.",
@@ -80,6 +97,8 @@ const evidence = {
       fullScanPerFormat: 4,
     },
     formats: {
+      manifested:
+        "Encrypted immutable ID-range blocks referenced by one encrypted manifest HEAD, with Bloom filters, zone maps, and copy-on-write block replacement.",
       experimental:
         "Encrypted TIS1 segment with 64 KiB suffix prefetch, sharded 64-bit HMAC ID index, coalesced block ranges, Bloom filters, and zone maps.",
       snapshot:
@@ -188,6 +207,14 @@ function aggregateRuns(selectedRuns) {
         point["point-manifested"],
         point["point-experimental"],
       ),
+      pointManifestedVsTrie: compare(
+        point["point-manifested"],
+        point["point-trie"],
+      ),
+      pointManifestedVsBundle: compare(
+        point["point-manifested"],
+        point["point-bundle"],
+      ),
       pointExperimentalVsSnapshot: compare(
         point["point-experimental"],
         point["point-snapshot"],
@@ -242,6 +269,14 @@ function aggregateRuns(selectedRuns) {
           "distributed-snapshot"
         ],
       ),
+      distributedManifestedVsTis1: compare(
+        queries.distributedEquality[
+          "distributed-manifested"
+        ],
+        queries.distributedEquality[
+          "distributed-experimental"
+        ],
+      ),
       scanExperimentalVsSnapshot: compare(
         queries.fullScan["scan-experimental"],
         queries.fullScan["scan-snapshot"],
@@ -249,6 +284,10 @@ function aggregateRuns(selectedRuns) {
       scanManifestedVsSnapshot: compare(
         queries.fullScan["scan-manifested"],
         queries.fullScan["scan-snapshot"],
+      ),
+      scanManifestedVsTis1: compare(
+        queries.fullScan["scan-manifested"],
+        queries.fullScan["scan-experimental"],
       ),
     },
   };
