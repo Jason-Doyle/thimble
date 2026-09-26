@@ -42,6 +42,11 @@ import {
   type TrieStoredDocument,
 } from "./trie-protocol.js";
 import type { ScopeGrant } from "./auth/types.js";
+import {
+  experimentalPartitionedIndexManifestFromReference,
+  mergeExperimentalPartitionedIndexPages,
+  validateExperimentalPartitionedIndexShard,
+} from "./experimental/partitioned-secondary-index.js";
 
 export const STUDIO_API_VERSION = 1;
 export const STUDIO_MAX_DELETED_DOCUMENTS = 1_000;
@@ -499,6 +504,76 @@ export async function inspectStudioIndex(options: {
       ...shallow,
       status: "oversized",
     };
+  }
+  const partitioned =
+    experimentalPartitionedIndexManifestFromReference(
+      reference,
+      options.definition,
+    );
+  if (partitioned) {
+    const pages = [];
+    let aggregateBytes = 0;
+    try {
+      for (const shard of partitioned.shards) {
+        const shardObject = await options.runtime.store.get(
+          options.layout === "snapshot"
+            ? snapshotIndexKey(
+                collection,
+                options.definition.name,
+                shard.hash,
+              )
+            : trieIndexKey(
+                collection,
+                options.definition.name,
+                shard.hash,
+              ),
+        );
+        if (!shardObject) {
+          return {
+            definition: options.definition,
+            active: true,
+            entries: null,
+            status: "missing",
+          };
+        }
+        aggregateBytes += shardObject.bytes.byteLength;
+        if (aggregateBytes > STUDIO_MAX_INDEX_TOTAL_BYTES) {
+          return {
+            definition: options.definition,
+            active: true,
+            entries: null,
+            status: "oversized",
+          };
+        }
+        const page = secondaryIndexPageFromJson(
+          decodeJson<JsonValue>(shardObject.bytes),
+        );
+        validateExperimentalPartitionedIndexShard(
+          shard,
+          page,
+          shardObject.bytes.byteLength,
+          options.definition,
+        );
+        pages.push(page);
+      }
+      const merged = mergeExperimentalPartitionedIndexPages(
+        partitioned,
+        pages,
+      );
+      return {
+        definition: options.definition,
+        active: true,
+        entries: merged.entries.length,
+        status: "ready",
+      };
+    } catch {
+      return {
+        definition: options.definition,
+        active: true,
+        entries: null,
+        status: "mismatch",
+      };
+    }
   }
   const object = await options.runtime.store.get(
     options.layout === "snapshot"
