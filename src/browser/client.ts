@@ -43,7 +43,6 @@ import {
 import {
   idsFromSecondaryIndex,
   documentsFromCoveringIndex,
-  encodeSecondaryIndexPage,
   MAX_SECONDARY_INDEX_PAGE_BYTES,
   planSecondaryIndex,
   secondaryIndexDefinitionsEqual,
@@ -54,6 +53,12 @@ import {
   type SecondaryIndexReference,
   type SecondaryIndexReferences,
 } from "../secondary-index.js";
+import {
+  experimentalPartitionedIndexManifestFromReference,
+  experimentalPartitionedIndexReferenceFromJson,
+  mergeExperimentalPartitionedIndexPages,
+  validateExperimentalPartitionedIndexShard,
+} from "../experimental/partitioned-secondary-index.js";
 import {
   type BrowserCacheMetrics,
   type CachedJsonObject,
@@ -265,17 +270,10 @@ export class ThimbleClient {
           layout,
           collection,
           indexPlan.definition.name,
-          reference.hash,
+          indexPlan.definition,
+          reference,
           generation,
         );
-        if (
-          encodeSecondaryIndexPage(page).byteLength !==
-          reference.decodedBytes
-        ) {
-          throw new Error(
-            `Secondary index ${indexPlan.definition.name} size does not match its collection head`,
-          );
-        }
         if (
           !secondaryIndexDefinitionsEqual(
             page.definition,
@@ -289,11 +287,6 @@ export class ThimbleClient {
             )) as unknown as T[],
             query,
           ), projectionFields);
-        }
-        if (reference.entries !== page.entries.length) {
-          throw new Error(
-            `Secondary index ${indexPlan.definition.name} entry count does not match its collection head`,
-          );
         }
         const ids = idsFromSecondaryIndex(page, indexPlan);
         const maximum = query.maxScanDocuments ?? 1_000;
@@ -1019,9 +1012,72 @@ export class ThimbleClient {
     layout: CollectionLayout,
     collection: string,
     indexName: string,
-    hash: string,
+    definition: SecondaryIndexPage["definition"],
+    reference: SecondaryIndexReference,
     generation: number,
   ): Promise<SecondaryIndexPage> {
+    const manifest =
+      experimentalPartitionedIndexManifestFromReference(
+        reference,
+        definition,
+      );
+    if (manifest) {
+      const pages = await Promise.all(
+        manifest.shards.map(async (shard) => {
+          const shardValue =
+            await this.readSecondaryIndexValue(
+              layout,
+              collection,
+              indexName,
+              shard.hash,
+              generation,
+            );
+          const page = secondaryIndexPageFromJson(shardValue);
+          validateExperimentalPartitionedIndexShard(
+            shard,
+            page,
+            encodeJson(shardValue).byteLength,
+            manifest.definition,
+          );
+          return page;
+        }),
+      );
+      return mergeExperimentalPartitionedIndexPages(
+        manifest,
+        pages,
+      );
+    }
+    const value = await this.readSecondaryIndexValue(
+      layout,
+      collection,
+      indexName,
+      reference.hash,
+      generation,
+    );
+    if (
+      encodeJson(value).byteLength !==
+      reference.decodedBytes
+    ) {
+      throw new Error(
+        `Secondary index ${indexName} size does not match its collection head`,
+      );
+    }
+    const page = secondaryIndexPageFromJson(value);
+    if (reference.entries !== page.entries.length) {
+      throw new Error(
+        `Secondary index ${indexName} entry count does not match its collection head`,
+      );
+    }
+    return page;
+  }
+
+  private async readSecondaryIndexValue(
+    layout: CollectionLayout,
+    collection: string,
+    indexName: string,
+    hash: string,
+    generation: number,
+  ): Promise<JsonValue> {
     const key =
       layout === "snapshot"
         ? snapshotIndexKey(collection, indexName, hash)
@@ -1029,7 +1085,7 @@ export class ThimbleClient {
     const cached = await this.options.cache.get(key);
     this.assertGeneration(generation);
     if (cached) {
-      return secondaryIndexPageFromJson(cached.value);
+      return cached.value;
     }
     const remote = await this.readImmutableRemote(key);
     this.assertGeneration(generation);
@@ -1040,7 +1096,7 @@ export class ThimbleClient {
       cacheEntryFromRemote(remote, true),
       generation,
     );
-    return secondaryIndexPageFromJson(remote.value);
+    return remote.value;
   }
 
   private async readNode<T extends TrieNode>(
@@ -1600,11 +1656,20 @@ function indexesFromValue(
         `Invalid secondary index reference: ${name}`,
       );
     }
+    const experimentalPartitions =
+      reference.experimentalPartitions === undefined
+        ? undefined
+        : experimentalPartitionedIndexReferenceFromJson(
+            reference.experimentalPartitions,
+          );
     indexes[name] = {
       hash: reference.hash,
       entries: reference.entries,
       ...(typeof reference.decodedBytes === "number"
         ? { decodedBytes: reference.decodedBytes }
+        : {}),
+      ...(experimentalPartitions
+        ? { experimentalPartitions }
         : {}),
     };
   }

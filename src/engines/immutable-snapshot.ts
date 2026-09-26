@@ -38,9 +38,21 @@ import {
   secondaryIndexDefinitionsEqual,
   secondaryIndexPageFromJson,
   type CollectionIndexConfiguration,
+  type SecondaryIndexChange,
+  type SecondaryIndexPage,
   type SecondaryIndexReference,
   type SecondaryIndexReferences,
 } from "../secondary-index.js";
+import {
+  buildExperimentalPartitionedIndex,
+  experimentalPartitionCount,
+  experimentalPartitionedIndexManifestFromReference,
+  updateExperimentalPartitionedIndex,
+  validateExperimentalPartitionedIndexShard,
+  type ExperimentalPartitionedIndexConfiguration,
+  type ExperimentalPartitionedIndexShard,
+  type ExperimentalPreparedPartitionedIndex,
+} from "../experimental/partitioned-secondary-index.js";
 
 type LoadedHead = {
   object: StoredObject | null;
@@ -48,8 +60,10 @@ type LoadedHead = {
 };
 
 type PreparedSecondaryIndex = {
-  key: string;
-  bytes: Uint8Array;
+  objects: Array<{
+    key: string;
+    bytes: Uint8Array;
+  }>;
   name: string;
   reference: SecondaryIndexReference;
 };
@@ -70,6 +84,8 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     private readonly allowQuiescentGarbageCollection = false,
     private readonly indexConfiguration: CollectionIndexConfiguration = {},
     private readonly allowIndexConfigurationChange = false,
+    private readonly experimentalPartitionedIndexes:
+      ExperimentalPartitionedIndexConfiguration = {},
   ) {}
 
   async get(
@@ -349,12 +365,36 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       (key) => key !== currentKey,
     );
     await Promise.all(stale.map((key) => this.store.delete(key)));
-    const activeIndexes = new Set(
-      Object.entries(head.state.indexes ?? {}).map(
-        ([name, reference]) =>
+    const activeIndexes = new Set<string>();
+    for (const [name, reference] of Object.entries(
+      head.state.indexes ?? {},
+    )) {
+      const definition = (
+        this.indexConfiguration[normalized] ?? []
+      ).find((candidate) => candidate.name === name);
+      if (reference.experimentalPartitions && !definition) {
+        throw new Error(
+          `Collection ${normalized} is missing configuration for experimental partitioned index ${name}`,
+        );
+      }
+      const manifest = definition
+        ? experimentalPartitionedIndexManifestFromReference(
+            reference,
+            definition,
+          )
+        : null;
+      if (manifest) {
+        for (const shard of manifest.shards) {
+          activeIndexes.add(
+            snapshotIndexKey(normalized, name, shard.hash),
+          );
+        }
+      } else {
+        activeIndexes.add(
           snapshotIndexKey(normalized, name, reference.hash),
-      ),
-    );
+        );
+      }
+    }
     const indexPrefix =
       `${snapshotCollectionPrefix(normalized)}/indexes/`;
     const staleIndexes = (
@@ -480,9 +520,38 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
 
       const page: SnapshotPage = { documents };
       const pageBytes = encodeJson(page as unknown as JsonValue);
+      const hasPartitionedIndexes = (
+        this.indexConfiguration[normalized] ?? []
+      ).some(
+        (definition) =>
+          experimentalPartitionCount(
+            this.experimentalPartitionedIndexes,
+            normalized,
+            definition.name,
+          ) !== null,
+      );
+      const indexChanges: SecondaryIndexChange[] =
+        hasPartitionedIndexes
+          ? [
+              ...new Set([
+                ...Object.keys(loaded.page.documents),
+                ...Object.keys(documents),
+              ]),
+            ].filter(
+              // Snapshot mutations replace changed values rather than
+              // mutating stored document objects in place.
+              (id) =>
+                loaded.page.documents[id] !== documents[id],
+            ).map((id) => ({
+              id,
+              document: documents[id] ?? null,
+            }))
+          : [];
       const preparedIndexes = await this.prepareIndexes(
         normalized,
+        loaded.head.state,
         Object.values(documents),
+        indexChanges,
       );
       const snapshotHash =
         Object.keys(documents).length === 0
@@ -588,11 +657,68 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
 
   private async prepareIndexes(
     collection: string,
+    head: SnapshotHead,
     documents: TrieStoredDocument[],
+    changes: SecondaryIndexChange[],
   ): Promise<PreparedSecondaryIndex[]> {
     const definitions = this.indexConfiguration[collection] ?? [];
     const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of definitions) {
+      const partitions = experimentalPartitionCount(
+        this.experimentalPartitionedIndexes,
+        collection,
+        definition.name,
+      );
+      if (partitions !== null) {
+        let partitioned:
+          | ExperimentalPreparedPartitionedIndex
+          | undefined;
+        const currentReference =
+          head.indexes?.[definition.name];
+        if (currentReference && !this.allowIndexConfigurationChange) {
+          const manifest =
+            experimentalPartitionedIndexManifestFromReference(
+              currentReference,
+              definition,
+            );
+          if (manifest) {
+            if (manifest.partitions !== partitions) {
+              throw new Error(
+                `Experimental partition count changed for ${collection}/${definition.name}`,
+              );
+            }
+            partitioned =
+              await updateExperimentalPartitionedIndex(
+                manifest,
+                definition,
+                changes,
+                (shard) =>
+                  this.loadExperimentalIndexShard(
+                    collection,
+                    definition.name,
+                    definition,
+                    shard,
+                  ),
+                this.addressSnapshot,
+              );
+          }
+        }
+        partitioned ??=
+          await buildExperimentalPartitionedIndex(
+            definition,
+            documents,
+            partitions,
+            this.addressSnapshot,
+          );
+        prepared.push(
+          this.asPreparedPartitionedIndex(
+            collection,
+            definition.name,
+            partitioned,
+          ),
+        );
+        continue;
+      }
       const page = buildSecondaryIndexPage(
         definition,
         documents,
@@ -600,12 +726,16 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressSnapshot(bytes);
       prepared.push({
-        key: snapshotIndexKey(
-          collection,
-          definition.name,
-          hash,
-        ),
-        bytes,
+        objects: [
+          {
+            key: snapshotIndexKey(
+              collection,
+              definition.name,
+              hash,
+            ),
+            bytes,
+          },
+        ],
         name: definition.name,
         reference: {
           hash,
@@ -623,20 +753,68 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     const references =
       createDictionary<SecondaryIndexReference>();
     for (const index of prepared) {
-      try {
-        await this.store.put(
-          index.key,
-          index.bytes,
-          { ifNoneMatch: true },
-        );
-      } catch (error) {
-        if (!isPreconditionFailure(error)) {
-          throw error;
+      for (const object of index.objects) {
+        try {
+          await this.store.put(
+            object.key,
+            object.bytes,
+            { ifNoneMatch: true },
+          );
+        } catch (error) {
+          if (!isPreconditionFailure(error)) {
+            throw error;
+          }
         }
       }
       references[index.name] = index.reference;
     }
     return references;
+  }
+
+  private asPreparedPartitionedIndex(
+    collection: string,
+    indexName: string,
+    prepared: ExperimentalPreparedPartitionedIndex,
+  ): PreparedSecondaryIndex {
+    return {
+      objects: prepared.objects.map((object) => ({
+        key: snapshotIndexKey(
+          collection,
+          indexName,
+          object.hash,
+        ),
+        bytes: object.bytes,
+      })),
+      name: indexName,
+      reference: prepared.reference,
+    };
+  }
+
+  private async loadExperimentalIndexShard(
+    collection: string,
+    indexName: string,
+    definition:
+      SecondaryIndexPage["definition"],
+    shard: ExperimentalPartitionedIndexShard,
+  ): Promise<SecondaryIndexPage> {
+    const object = await this.store.get(
+      snapshotIndexKey(collection, indexName, shard.hash),
+    );
+    if (!object) {
+      throw new Error(
+        `Experimental partitioned index shard ${indexName}/${shard.partition} is missing`,
+      );
+    }
+    const page = secondaryIndexPageFromJson(
+      decodeJson<JsonValue>(object.bytes),
+    );
+    validateExperimentalPartitionedIndexShard(
+      shard,
+      page,
+      object.bytes.byteLength,
+      definition,
+    );
+    return page;
   }
 
   async assertIndexConfiguration(collection: string): Promise<void> {
@@ -671,6 +849,32 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       if (!definition) {
         throw new Error(
           `Collection ${collection} has active secondary index ${name} that is missing from the supplied configuration`,
+        );
+      }
+      const partitions = experimentalPartitionCount(
+        this.experimentalPartitionedIndexes,
+        collection,
+        name,
+      );
+      const manifest =
+        experimentalPartitionedIndexManifestFromReference(
+          reference,
+          definition,
+        );
+      if (manifest) {
+        if (
+          partitions === null ||
+          manifest.partitions !== partitions
+        ) {
+          throw new Error(
+            `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
+          );
+        }
+        continue;
+      }
+      if (partitions !== null) {
+        throw new Error(
+          `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
         );
       }
       const object = await this.store.get(

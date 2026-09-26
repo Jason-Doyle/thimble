@@ -47,6 +47,16 @@ import {
   type SecondaryIndexReference,
   type SecondaryIndexReferences,
 } from "../secondary-index.js";
+import {
+  buildExperimentalPartitionedIndex,
+  experimentalPartitionCount,
+  experimentalPartitionedIndexManifestFromReference,
+  updateExperimentalPartitionedIndex,
+  validateExperimentalPartitionedIndexShard,
+  type ExperimentalPartitionedIndexConfiguration,
+  type ExperimentalPartitionedIndexShard,
+  type ExperimentalPreparedPartitionedIndex,
+} from "../experimental/partitioned-secondary-index.js";
 
 type LoadedHead = {
   object: StoredObject | null;
@@ -61,8 +71,10 @@ type TrieUpdate = {
 };
 
 type PreparedSecondaryIndex = {
-  key: string;
-  bytes: Uint8Array;
+  objects: Array<{
+    key: string;
+    bytes: Uint8Array;
+  }>;
   name: string;
   reference: SecondaryIndexReference;
 };
@@ -83,6 +95,8 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     private readonly allowQuiescentGarbageCollection = false,
     private readonly indexConfiguration: CollectionIndexConfiguration = {},
     private readonly allowIndexConfigurationChange = false,
+    private readonly experimentalPartitionedIndexes:
+      ExperimentalPartitionedIndexConfiguration = {},
   ) {}
 
   async get(
@@ -726,12 +740,36 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       return !reachable.has(hash);
     });
     await Promise.all(staleKeys.map((key) => this.store.delete(key)));
-    const activeIndexes = new Set(
-      Object.entries(head.state.indexes ?? {}).map(
-        ([name, reference]) =>
+    const activeIndexes = new Set<string>();
+    for (const [name, reference] of Object.entries(
+      head.state.indexes ?? {},
+    )) {
+      const definition = (
+        this.indexConfiguration[normalized] ?? []
+      ).find((candidate) => candidate.name === name);
+      if (reference.experimentalPartitions && !definition) {
+        throw new Error(
+          `Collection ${normalized} is missing configuration for experimental partitioned index ${name}`,
+        );
+      }
+      const manifest = definition
+        ? experimentalPartitionedIndexManifestFromReference(
+            reference,
+            definition,
+          )
+        : null;
+      if (manifest) {
+        for (const shard of manifest.shards) {
+          activeIndexes.add(
+            trieIndexKey(normalized, name, shard.hash),
+          );
+        }
+      } else {
+        activeIndexes.add(
           trieIndexKey(normalized, name, reference.hash),
-      ),
-    );
+        );
+      }
+    }
     const indexPrefix = `${this.collectionPrefix(normalized)}/indexes/`;
     const staleIndexes = (await this.store.list(indexPrefix)).filter(
       (key) => !activeIndexes.has(key),
@@ -915,6 +953,81 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of definitions) {
       const currentReference = head.indexes?.[definition.name];
+      const partitions = experimentalPartitionCount(
+        this.experimentalPartitionedIndexes,
+        collection,
+        definition.name,
+      );
+      if (partitions !== null) {
+        let partitioned:
+          | ExperimentalPreparedPartitionedIndex
+          | undefined;
+        if (currentReference && !this.allowIndexConfigurationChange) {
+          const manifest =
+            experimentalPartitionedIndexManifestFromReference(
+              currentReference,
+              definition,
+            );
+          if (manifest) {
+            if (manifest.partitions !== partitions) {
+              throw new Error(
+                `Experimental partition count changed for ${collection}/${definition.name}`,
+              );
+            }
+            partitioned =
+              await updateExperimentalPartitionedIndex(
+                manifest,
+                definition,
+                changes,
+                (shard) =>
+                  this.loadExperimentalIndexShard(
+                    collection,
+                    definition.name,
+                    definition,
+                    shard,
+                  ),
+                this.addressNode,
+              );
+          }
+        }
+        if (!partitioned) {
+          storedDocuments ??= await this.scanStoredFromHead(
+            collection,
+            head,
+          );
+          const currentDocuments = new Map(
+            storedDocuments.map((document) => [
+              document.id,
+              document,
+            ]),
+          );
+          for (const change of changes) {
+            if (change.document) {
+              currentDocuments.set(
+                change.id,
+                change.document,
+              );
+            } else {
+              currentDocuments.delete(change.id);
+            }
+          }
+          partitioned =
+            await buildExperimentalPartitionedIndex(
+              definition,
+              currentDocuments.values(),
+              partitions,
+              this.addressNode,
+            );
+        }
+        prepared.push(
+          this.asPreparedPartitionedIndex(
+            collection,
+            definition.name,
+            partitioned,
+          ),
+        );
+        continue;
+      }
       let currentPage: SecondaryIndexPage | null = null;
       if (currentReference && !this.allowIndexConfigurationChange) {
         const object = await this.store.get(
@@ -967,12 +1080,16 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressNode(bytes);
       prepared.push({
-        key: trieIndexKey(
-          collection,
-          definition.name,
-          hash,
-        ),
-        bytes,
+        objects: [
+          {
+            key: trieIndexKey(
+              collection,
+              definition.name,
+              hash,
+            ),
+            bytes,
+          },
+        ],
         name: definition.name,
         reference: {
           hash,
@@ -990,6 +1107,26 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
   ): Promise<PreparedSecondaryIndex[]> {
     const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of this.indexConfiguration[collection] ?? []) {
+      const partitions = experimentalPartitionCount(
+        this.experimentalPartitionedIndexes,
+        collection,
+        definition.name,
+      );
+      if (partitions !== null) {
+        prepared.push(
+          this.asPreparedPartitionedIndex(
+            collection,
+            definition.name,
+            await buildExperimentalPartitionedIndex(
+              definition,
+              documents,
+              partitions,
+              this.addressNode,
+            ),
+          ),
+        );
+        continue;
+      }
       const page = buildSecondaryIndexPage(
         definition,
         documents,
@@ -997,12 +1134,16 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressNode(bytes);
       prepared.push({
-        key: trieIndexKey(
-          collection,
-          definition.name,
-          hash,
-        ),
-        bytes,
+        objects: [
+          {
+            key: trieIndexKey(
+              collection,
+              definition.name,
+              hash,
+            ),
+            bytes,
+          },
+        ],
         name: definition.name,
         reference: {
           hash,
@@ -1020,20 +1161,68 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     const references =
       createDictionary<SecondaryIndexReference>();
     for (const index of prepared) {
-      try {
-        await this.store.put(
-          index.key,
-          index.bytes,
-          { ifNoneMatch: true },
-        );
-      } catch (error) {
-        if (!isPreconditionFailure(error)) {
-          throw error;
+      for (const object of index.objects) {
+        try {
+          await this.store.put(
+            object.key,
+            object.bytes,
+            { ifNoneMatch: true },
+          );
+        } catch (error) {
+          if (!isPreconditionFailure(error)) {
+            throw error;
+          }
         }
       }
       references[index.name] = index.reference;
     }
     return references;
+  }
+
+  private asPreparedPartitionedIndex(
+    collection: string,
+    indexName: string,
+    prepared: ExperimentalPreparedPartitionedIndex,
+  ): PreparedSecondaryIndex {
+    return {
+      objects: prepared.objects.map((object) => ({
+        key: trieIndexKey(
+          collection,
+          indexName,
+          object.hash,
+        ),
+        bytes: object.bytes,
+      })),
+      name: indexName,
+      reference: prepared.reference,
+    };
+  }
+
+  private async loadExperimentalIndexShard(
+    collection: string,
+    indexName: string,
+    definition:
+      SecondaryIndexPage["definition"],
+    shard: ExperimentalPartitionedIndexShard,
+  ): Promise<SecondaryIndexPage> {
+    const object = await this.store.get(
+      trieIndexKey(collection, indexName, shard.hash),
+    );
+    if (!object) {
+      throw new Error(
+        `Experimental partitioned index shard ${indexName}/${shard.partition} is missing`,
+      );
+    }
+    const page = secondaryIndexPageFromJson(
+      decodeJson<JsonValue>(object.bytes),
+    );
+    validateExperimentalPartitionedIndexShard(
+      shard,
+      page,
+      object.bytes.byteLength,
+      definition,
+    );
+    return page;
   }
 
   async assertIndexConfiguration(collection: string): Promise<void> {
@@ -1068,6 +1257,32 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       if (!definition) {
         throw new Error(
           `Collection ${collection} has active secondary index ${name} that is missing from the supplied configuration`,
+        );
+      }
+      const partitions = experimentalPartitionCount(
+        this.experimentalPartitionedIndexes,
+        collection,
+        name,
+      );
+      const manifest =
+        experimentalPartitionedIndexManifestFromReference(
+          reference,
+          definition,
+        );
+      if (manifest) {
+        if (
+          partitions === null ||
+          manifest.partitions !== partitions
+        ) {
+          throw new Error(
+            `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
+          );
+        }
+        continue;
+      }
+      if (partitions !== null) {
+        throw new Error(
+          `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
         );
       }
       const object = await this.store.get(
