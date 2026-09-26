@@ -88,6 +88,19 @@ export type SecondaryIndexReference = {
   hash: string;
   entries: number;
   decodedBytes?: number;
+  experimentalPartitions?: {
+    version: 1;
+    definition: SecondaryIndexDefinition;
+    partitions: number;
+    documents: number;
+    shards: Array<{
+      partition: number;
+      hash: string;
+      entries: number;
+      documents: number;
+      decodedBytes: number;
+    }>;
+  };
 };
 
 export type SecondaryIndexReferences = Record<
