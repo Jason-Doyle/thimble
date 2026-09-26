@@ -93,6 +93,13 @@ export default {
           request,
         );
       }
+      if (url.pathname === "/clone-single") {
+        if (request.method !== "POST") {
+          return json({ error: "Method not allowed" }, 405);
+        }
+        requireBenchmarkToken(request, env);
+        return json(await cloneSingleFixture(env, url));
+      }
       if (url.pathname === "/cleanup") {
         if (request.method !== "POST") {
           return json({ error: "Method not allowed" }, 405);
@@ -313,6 +320,67 @@ async function cleanupBucket(env: Env): Promise<unknown> {
     const keys = page.objects.map((object) => object.key);
     if (keys.length === 0) {
       break;
+    }
+
+    async function cloneSingleFixture(
+      env: Env,
+      url: URL,
+    ): Promise<unknown> {
+      const variant = requireVariant(
+        url.searchParams.get("variant"),
+      );
+      const layout = requireLayout(url.searchParams.get("layout"));
+      const region = requireRegion(
+        url.searchParams.get("region"),
+      );
+      const source = `read/${variant}/${layout}/`;
+      const target = `write/single/${region}/${variant}/${layout}/`;
+      const existing = await listKeys(env.BENCHMARK_BUCKET, target);
+      if (existing.length > 0) {
+        await env.BENCHMARK_BUCKET.delete(existing);
+      }
+      const sourceKeys = await listKeys(
+        env.BENCHMARK_BUCKET,
+        source,
+      );
+      for (let offset = 0; offset < sourceKeys.length; offset += 25) {
+        await Promise.all(
+          sourceKeys.slice(offset, offset + 25).map(async (key) => {
+            const object = await env.BENCHMARK_BUCKET.get(key);
+            if (!object) {
+              throw new Error(`Clone source object is missing: ${key}`);
+            }
+            await env.BENCHMARK_BUCKET.put(
+              `${target}${key.slice(source.length)}`,
+              new Uint8Array(await object.arrayBuffer()),
+            );
+          }),
+        );
+      }
+      return {
+        region,
+        variant,
+        layout,
+        objects: sourceKeys.length,
+      };
+    }
+
+    async function listKeys(
+      bucket: BenchmarkBucket,
+      prefix: string,
+    ): Promise<string[]> {
+      const keys: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await bucket.list({
+          prefix,
+          limit: 1_000,
+          ...(cursor ? { cursor } : {}),
+        });
+        keys.push(...page.objects.map((object) => object.key));
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+      return keys;
     }
     await env.BENCHMARK_BUCKET.delete(keys);
     deleted += keys.length;
