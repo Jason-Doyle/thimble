@@ -75,18 +75,20 @@ encryption. Private scopes use a versioned AES-256-GCM data key.
    immutable-object bundle in one browser request.
 3. Older authorities, legacy metadata, oversized bundles, and cache hits use
    the individual encrypted-object path.
-4. If a cached HEAD TTL expired, the browser revalidates it with
+4. Each individual object is decoded with a 16 MiB default safety limit before
+   JSON parsing or cache insertion.
+5. If a cached HEAD TTL expired, the browser revalidates it with
    `If-None-Match`.
-5. A 304 response keeps the current layout generation.
-6. ID equality resolves directly to one document path.
-7. A matching declared index resolves a bounded set of candidate IDs.
-8. An explicit `.select(...)` can use declared covering fields without
+6. A 304 response keeps the current layout generation.
+7. ID equality resolves directly to one document path.
+8. A matching declared index resolves a bounded set of candidate IDs.
+9. An explicit `.select(...)` can use declared covering fields without
    loading full documents.
-9. Queries without a usable index use an explicitly bounded scan.
-10. Trie HEAD points to an immutable root, branch, and leaf path.
-11. Snapshot HEAD points to one immutable collection snapshot.
-12. The browser coalesces concurrent reads of the same immutable object.
-13. It re-evaluates the complete predicate, orders, limits, and returns the
+10. Queries without a usable index use an explicitly bounded scan.
+11. Trie HEAD points to an immutable root, branch, and leaf path.
+12. Snapshot HEAD points to one immutable collection snapshot.
+13. The browser coalesces concurrent reads of the same immutable object.
+14. It re-evaluates the complete predicate, orders, limits, and returns the
     query plan with the documents.
 
 Immutable pages do not need revalidation. Their object key identifies their
@@ -101,7 +103,8 @@ private.
 
 1. The browser sends a mutation to the authority.
 2. The authority authenticates the session and resolves allowed scopes.
-3. Application validation runs before storage work.
+3. Application validation and the decoded-object limit run before storage
+   publication.
 4. Changed trie pages or the next immutable snapshot are serialised,
    gzip-compressed when useful, and encrypted.
 5. Every configured secondary index and declared covering projection is

@@ -72,21 +72,27 @@ flowchart TD
   HeadFresh -- No --> Revalidate["Authenticated HEAD revalidation<br/>with If-None-Match"]
   Revalidate --> HeadResult{"HEAD result"}
   HeadResult -- "304" --> Resolve
-  HeadResult -- "Changed" --> Objects
+  HeadResult -- "Changed" --> DecodeHead
   HeadResult -- "Network unavailable<br/>and cached HEAD usable" --> Resolve
   HeadResult -- "Network unavailable<br/>and no usable cache" --> ReadError["Return explicit read error"]
   Resolve --> ValuesCached{"Required immutable values cached?"}
   ValuesCached -- Yes --> Plan["Validate document or query plan,<br/>predicate, ordering, projection, and limit"]
-  ValuesCached -- No --> Objects
+  ValuesCached -- No --> Objects["Revalidate read grant and return<br/>missing immutable TDB1 objects"]
 
   BundleCheck -- Yes --> Bundle["Authority revalidates read grant,<br/>reads encrypted HEAD and required objects"]
   Bundle --> BundleLimit{"At most 4 objects and 4 MiB<br/>with authenticated size metadata?"}
   BundleLimit -- Yes --> Decoded["Return decoded cache values<br/>over HTTPS with no-store"]
-  BundleLimit -- No --> Objects
-  BundleCheck -- No --> Objects["Revalidate read grant and return<br/>authenticated TDB1 objects"]
-  Objects --> BrowserDecrypt["Browser decrypts and validates<br/>HEAD, index, snapshot, or trie objects"]
+  BundleLimit -- No --> FetchHead
+  BundleCheck -- No --> FetchHead["Revalidate read grant and return<br/>authenticated TDB1 HEAD"]
+  FetchHead --> DecodeHead["Browser decodes, decrypts when required,<br/>and validates HEAD within the safety limit"]
+  DecodeHead --> CacheHead["Encrypt decoded HEAD with device key<br/>and update the scoped cache"]
+  CacheHead --> Resolve
+  Objects --> BrowserDecrypt["Browser decodes, decrypts when required,<br/>and validates index, snapshot, or trie objects"]
+  BrowserDecrypt --> DecodedLimit{"Decoded object within<br/>configured safety limit?"}
+  DecodedLimit -- No --> LimitError["Return explicit decoded-size error"]
+  DecodedLimit -- Yes --> DeviceCache
   Decoded --> DeviceCache["Encrypt decoded values with device key<br/>and update the scoped cache"]
-  BrowserDecrypt --> DeviceCache --> Plan
+  DeviceCache --> Plan
   Plan --> ReadResult["Document, or bounded query result<br/>with point, index, or scan plan"]
 ```
 
@@ -96,14 +102,15 @@ flowchart TD
 2. Cold point reads can use one
    bounded decoded bundle when explicitly enabled; every ineligible or failed
    bundle falls back to authenticated TDB1 object reads.
-3. Queries remain bounded and report whether they used a point, declared
-   index, covering projection, or collection scan plan.
+3. Queries remain bounded and report a point, index, or scan plan. Explicit
+   selected fields can be served from a covering index without full-document
+   reads.
 
 ### Mutation and cache-synchronisation flow
 
 ```mermaid
 flowchart TD
-  Mutation["Create, replace, delete, restore, purge,<br/>scope erase, or index rebuild"]
+  Mutation["Create, replace, delete,<br/>or restore one document"]
   Mutation --> Request["Session + CSRF + exact Origin<br/>scope + layout generation"]
   Request --> Guards{"Operation allowed by maintenance state<br/>and generation current?"}
   Guards -- No --> Reject["Return explicit maintenance<br/>or layout-changed error"]
@@ -111,14 +118,14 @@ flowchart TD
   Grant --> Authorised{"Authorised?"}
   Authorised -- No --> Deny["Return explicit forbidden response"]
   Authorised -- Yes --> Load["Read current HEAD and affected immutable objects"]
-  Load --> Validate["Validate route, ID, document, limits,<br/>layout, and complete index configuration"]
-  Validate --> Immutable["Create immutable document, root,<br/>and index objects"]
+  Load --> Validate["Validate route, ID, document, decoded-object limit,<br/>layout, and complete index configuration"]
+  Validate --> Immutable["Create immutable layout<br/>and index objects"]
   Immutable --> Publish["Publish one HEAD with If-Match"]
   Publish --> Conflict{"ETag conflict?"}
   Conflict -- Yes --> Retry{"Bounded retry remains?"}
   Retry -- Yes --> Load
   Retry -- No --> ConflictError["Return explicit conflict"]
-  Conflict -- No --> Commit["Return committed values and new ETag"]
+  Conflict -- No --> Commit["Return committed cache-value bundle"]
   Commit --> Cache["Update the current scoped cache"]
   Cache --> Tabs["Notify other tabs through BroadcastChannel"]
   Tabs --> Result["Committed mutation result"]
@@ -128,6 +135,9 @@ flowchart TD
    index objects, and publishes their references through one conditional HEAD.
 2. Successful writes update the current cache and notify other tabs. Logout
    revokes the session and clears the affected browser cache namespace.
+3. Administrative purge, scope erase, index rebuild, and layout migration use
+   separate guarded endpoints. They do not return the ordinary document
+   mutation bundle shown here.
 
 ### Deployment, scaling, and storage flow
 

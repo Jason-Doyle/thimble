@@ -6,61 +6,60 @@ index, deletion, migration, and deployment paths.
 ## Trust boundaries
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph Browser["Browser trust boundary"]
+    direction LR
     UI["Application UI"]
     Client["ThimbleDB client"]
-    Memory["Scope-namespaced memory cache"]
-    IDB["Scope-namespaced, device-key-encrypted IndexedDB"]
+    Cache["Scope-namespaced memory<br/>and encrypted IndexedDB"]
     ReadKeys["Non-extractable decrypt-only scope keys"]
 
     UI --> Client
-    Client --> Memory
-    Client --> IDB
+    Client --> Cache
     Client --> ReadKeys
   end
 
   subgraph Authority["Application authority boundary"]
-    Exchange["OIDC token exchange"]
-    Session["Opaque revocable session"]
-    Authorizer["Current scope-grant calculation"]
+    direction LR
+    Identity["OIDC exchange<br/>and opaque session"]
+    Access["Current scope grants<br/>and key derivation"]
     Broker["Authenticated ciphertext-object and decoded-bundle broker"]
     Mutation["Mutation validation and execution"]
 
-    Exchange --> Session
-    Session --> Authorizer
-    Authorizer --> Broker
-    Authorizer --> Mutation
+    Identity --> Access
+    Access --> Broker
+    Access --> Mutation
   end
 
   subgraph DataStore["Private data object storage"]
+    direction LR
     Heads["Mutable collection HEAD records"]
     Pages["Immutable encrypted document and index pages"]
   end
 
   subgraph AuthStore["Separate private authentication storage"]
-    Identities["Identity mappings and users"]
-    Sessions["Session digests and CSRF state"]
-    Limits["Authentication rate-limit state"]
+    direction LR
+    AuthRecords["Identity mappings, session digests,<br/>CSRF, and rate-limit state"]
   end
 
   subgraph Platform["Platform secret boundary"]
+    direction LR
     Master["Deployment master key"]
     Provider["Storage credential or platform binding"]
   end
 
-  UI -- "Session cookie + CSRF + requested scope" --> Authority
-  Client -- "Ciphertext objects or opt-in decoded bundles" --> Broker
+  UI -- "OIDC token" --> Identity
+  Client -- "Mutation + CSRF" --> Mutation
+  Client -- "Read + scope" --> Broker
+  Broker -- "Ciphertext or bundle" --> Client
+  Access -- "Scope keys" --> ReadKeys
   Broker --> Heads
   Broker --> Pages
-  Mutation -- "Create immutable objects" --> Pages
-  Mutation -- "Conditional HEAD publication" --> Heads
-  Exchange --> Identities
-  Session --> Sessions
-  Exchange --> Limits
-  Master --> Mutation
-  Master --> ReadKeys
-  Master --> AuthStore
+  Mutation -- "Immutable writes" --> Pages
+  Mutation -- "CAS HEAD" --> Heads
+  Identity --> AuthRecords
+  Master -- "Derived keys" --> Access
+  Access --> AuthRecords
   Provider --> Broker
   Provider --> Mutation
 ```
@@ -175,6 +174,7 @@ flowchart TD
   Bundle{"Cold cache and bundle endpoint available?"}
   BundleRead["One bounded authority read bundle"]
   BundleValidate["Validate bundled HEAD and immutable values"]
+  BundleCache["Apply bundled values to the scoped cache"]
   Index{"Matching declared index with indexable values?"}
   PointHead["Read collection HEAD"]
   IndexHead["Read collection HEAD"]
@@ -190,8 +190,11 @@ flowchart TD
 
   Query --> Validate --> Point
   Point -- Yes --> Bundle
-  Bundle -- Yes --> BundleRead --> BundleValidate --> Result
-  Bundle -- No or fallback --> PointHead --> ReadDocs
+  Bundle -- Yes --> BundleRead --> BundleAccepted{"Bundle accepted?"}
+  BundleAccepted -- Yes --> BundleValidate --> BundleCache --> Result
+  BundleAccepted -- "Unavailable, legacy,<br/>or over limit" --> PointHead
+  Bundle -- No --> PointHead
+  PointHead --> ReadDocs
   Point -- No --> Index
   Index -- Yes --> IndexHead --> IndexPage --> Candidates --> Covered
   Covered -- Yes --> Projection --> Predicate
@@ -218,35 +221,51 @@ sequenceDiagram
   Client->>Client: Validate query and choose point, index, or scan plan
   Client->>Cache: Read collection HEAD
 
-  alt Cold point read and bundle endpoint advertised
+  alt Eligible cold point read and bundle endpoint advertised
     Client->>Broker: GET bounded point-read bundle
     Broker->>Broker: Require current read grant and enforce object/byte limits
-    Broker-->>Client: Decoded HEAD and immutable cache values over HTTPS
-    Client->>Cache: Store returned values with device-key encryption
+    alt Bundle accepted
+      Broker-->>Client: Decoded HEAD and immutable cache values over HTTPS
+      Client->>Cache: Store returned values with device-key encryption
+    else Bundle unavailable, legacy, or oversized
+      Broker-->>Client: Explicit fallback status
+      Client->>Broker: GET encrypted HEAD with session
+      Broker->>Store: Read object with ETag condition
+      Store-->>Broker: Encrypted HEAD
+      Broker-->>Client: Encrypted HEAD
+      Client->>Client: Decode TDB1 within the per-object limit
+      Client->>Cache: Store decoded value under device-key encryption
+    end
   else HEAD missing or stale
     Client->>Broker: GET encrypted HEAD with session
     Broker->>Store: Read object with ETag condition
     Store-->>Broker: Encrypted HEAD
     Broker-->>Client: Encrypted HEAD
-    Client->>Cache: Store decrypted value under device-key encryption
+    Client->>Client: Decode TDB1 within the per-object limit
+    Client->>Cache: Store decoded value under device-key encryption
+  else Fresh cached HEAD
+    Client->>Cache: Use cached HEAD
   end
 
-  alt Index plan
-    Client->>Cache: Read referenced immutable index page
-    Client->>Broker: Fetch index page on cache miss
-    Client->>Client: Resolve candidate IDs within maxScan
-    alt Explicit projection is covered
-      Client->>Client: Validate predicate and order from declared projections
-      Client->>Client: Build projected documents without full-document reads
-    else Full documents required
-      Client->>Cache: Resolve snapshot once or shared trie nodes
-      Client->>Broker: Fetch only missing immutable objects
+  opt Non-point query
+    alt Index plan
+      Client->>Cache: Read referenced immutable index page
+      Client->>Broker: Fetch index page on cache miss
+      Client->>Client: Resolve candidate IDs within maxScan
+      alt Explicit projection is covered
+        Client->>Client: Validate predicate and order from declared projections
+        Client->>Client: Build projected documents without full-document reads
+      else Full documents required
+        Client->>Cache: Resolve snapshot once or shared trie nodes
+        Client->>Broker: Fetch only missing immutable objects
+      end
+    else Scan plan
+      Client->>Client: Enforce bounded collection scan
     end
-  else Scan plan
-    Client->>Client: Enforce bounded collection scan
   end
 
-  Client->>Client: Decrypt when required, validate candidates, order, and limit
+  Client->>Client: Decode fetched TDB1 objects within the per-object limit
+  Client->>Client: Validate candidates, order, and limit
   Client-->>App: Documents plus point/index/scan plan
 ```
 
@@ -265,14 +284,19 @@ sequenceDiagram
   Authority->>Auth: Reload user and recalculate grants
   Auth-->>Authority: Current write grant or denial
   Authority->>Store: Read HEAD and affected immutable objects
-  Authority->>Authority: Validate document and update configured indexes
-  Authority->>Store: Create immutable document/root objects
+  Authority->>Authority: Validate document, decoded-object limit,<br/>and configured indexes
+  Authority->>Store: Create immutable layout objects
   Authority->>Store: Create immutable index pages
   Authority->>Store: Publish one HEAD with all document and index references using If-Match
 
   alt ETag conflict
     Store-->>Authority: Precondition failed
-    Authority->>Store: Reload current HEAD and retry
+    Authority->>Authority: Increment bounded retry count
+    alt Retry remains
+      Authority->>Store: Reload current HEAD and retry
+    else Retry exhausted
+      Authority-->>App: Explicit conflict
+    end
   else Commit
     Store-->>Authority: New HEAD ETag
     Authority-->>App: Committed object bundle
