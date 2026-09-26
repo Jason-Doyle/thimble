@@ -111,6 +111,7 @@
     "benchmark:current-regional:generate": "tsx benchmarks/current-regional/generate-data.mjs",
     "benchmark:current-regional:build": "vite build --config benchmarks/current-regional/vite.config.ts",
     "benchmark:current-regional:aggregate": "tsx benchmarks/current-regional/aggregate.mjs",
+    "benchmark:current-regional:publish": "tsx benchmarks/current-regional/publish.mjs",
     "migrate:keys": "tsx src/key-migrate.ts",
     "migrate:external-auth": "tsx src/remove-local-auth.ts",
     "advise:layout": "tsx src/layout-advisor-cli.ts",

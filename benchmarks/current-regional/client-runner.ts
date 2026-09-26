@@ -624,7 +624,17 @@ async function invokeWrite(
   const clientElapsedMs = round(
     performance.now() - started,
   );
-  const body = await response.json() as Record<string, unknown>;
+  const responseText = await response.text();
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(responseText) as Record<string, unknown>;
+  } catch {
+    body = {
+      error:
+        `Non-JSON response ${response.status}: ` +
+        responseText.slice(0, 200),
+    };
+  }
   if (!response.ok && !tolerateFailure) {
     throw new Error(
       `${layout} write returned ${response.status}: ${body.error}`,
