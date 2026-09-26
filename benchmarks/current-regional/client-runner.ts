@@ -615,12 +615,35 @@ async function invokeWrite(
   url.searchParams.set("replicate", replicate);
   url.searchParams.set("iteration", String(iteration));
   const started = performance.now();
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "x-benchmark-token": resultToken,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-benchmark-token": resultToken,
+      },
+    });
+  } catch (error) {
+    if (!tolerateFailure) {
+      throw error;
+    }
+    return {
+      layout,
+      mode: writeMode,
+      region,
+      replicate,
+      iteration,
+      success: false,
+      status: 0,
+      clientElapsedMs: round(
+        performance.now() - started,
+      ),
+      error:
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error),
+    };
+  }
   const clientElapsedMs = round(
     performance.now() - started,
   );
