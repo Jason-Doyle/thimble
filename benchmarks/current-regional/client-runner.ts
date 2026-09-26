@@ -451,7 +451,7 @@ function createClient(
   bundle: boolean,
 ) {
   const dataBaseUrl =
-    `${target}/data/${profile}/${layout}`;
+    `${target}/data/read/${profile}/${layout}`;
   const reader = new ScopedJsonObjectReader(
     new EnvelopeJsonObjectReader(
       new HttpByteObjectReader(
