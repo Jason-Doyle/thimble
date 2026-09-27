@@ -22,6 +22,9 @@ import {
 } from "../../../src/cloudflare/r2-object-store.js";
 import { scopeStoragePrefix } from "../../../src/trie-protocol.js";
 import {
+  readExperimentalPartitionedIndexBundle,
+} from "../../../src/experimental/partitioned-index-bundle.js";
+import {
   BENCHMARK_COLLECTION,
   BENCHMARK_INDEXES,
   BENCHMARK_KEY_ID,
@@ -110,6 +113,10 @@ export default {
       if (url.pathname.startsWith("/data/")) {
         return serveObject(request, env, url.pathname.slice(6));
       }
+      if (url.pathname.startsWith("/index-bundle/")) {
+        requireBenchmarkToken(request, env);
+        return serveIndexBundle(request, env, url);
+      }
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
       }
@@ -193,6 +200,62 @@ async function serveObject(
   );
 }
 
+async function serveIndexBundle(
+  request: Request,
+  env: Env,
+  url: URL,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return json({ error: "Method not allowed" }, 405);
+  }
+  const match =
+    /^\/index-bundle\/(baseline|partitioned)\/(snapshot|trie)\/notes\/(by-category|by-last-modified)$/.exec(
+      url.pathname,
+    );
+  if (!match) {
+    return json({ error: "Invalid index bundle path" }, 400);
+  }
+  const variant = requireVariant(match[1]);
+  const layout = requireLayout(match[2]);
+  const definition = BENCHMARK_INDEXES[
+    BENCHMARK_COLLECTION
+  ]!.find((candidate) => candidate.name === match[3]);
+  if (!definition) {
+    return json({ error: "Index is not configured" }, 404);
+  }
+  const runtime = await createEngine(
+    env,
+    `read/${variant}/${layout}`,
+    variant,
+    layout,
+  );
+  const encoded =
+    await readExperimentalPartitionedIndexBundle(
+      runtime.decodedStore,
+      layout,
+      BENCHMARK_COLLECTION,
+      definition,
+    );
+  const compressed = await gzipBytes(encoded.bytes);
+  return withColo(
+    withStorageMetrics(
+      new Response(compressed, {
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-encoding": "gzip",
+          "content-length": String(compressed.byteLength),
+          "cache-control": "no-store",
+          "x-benchmark-response-bytes": String(
+            compressed.byteLength,
+          ),
+        },
+      }),
+      runtime.store.metrics,
+    ),
+    request,
+  );
+}
+
 async function runWrite(
   request: Request,
   env: Env,
@@ -219,6 +282,7 @@ async function runWrite(
   ) {
     throw new Error("Invalid write benchmark request");
   }
+
   if (mode === "contention" && !replicate) {
     throw new Error("Contention writes require a replicate");
   }
@@ -434,7 +498,11 @@ async function createEngine(
           false,
           partitionConfiguration,
         );
-  return { engine, store: counting };
+  return {
+    engine,
+    store: counting,
+    decodedStore: store,
+  };
 }
 
 function benchmarkKey(env: Env): Promise<CryptoKey> {
@@ -573,6 +641,26 @@ function withColo(response: Response, request: Request): Response {
   });
 }
 
+function withStorageMetrics(
+  response: Response,
+  metrics: StoreCounters,
+): Response {
+  const headers = new Headers(response.headers);
+  headers.set(
+    "x-benchmark-storage-reads",
+    String(metrics.reads),
+  );
+  headers.set(
+    "x-benchmark-storage-bytes",
+    String(metrics.readBytes),
+  );
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function json(value: unknown, status = 200): Response {
   return Response.json(value, {
     status,
@@ -580,6 +668,15 @@ function json(value: unknown, status = 200): Response {
       "cache-control": "no-store",
     },
   });
+}
+
+async function gzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(
+    await new Response(stream).arrayBuffer(),
+  );
 }
 
 function round(value: number): number {

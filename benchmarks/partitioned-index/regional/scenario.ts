@@ -28,7 +28,7 @@ export {
 };
 
 export const PARTITIONED_INDEX_DOCUMENTS = 25_000;
-export const PARTITIONED_INDEX_SHARDS = 8;
+export const PARTITIONED_INDEX_SHARDS = 4;
 export const PARTITIONED_INDEX_VARIANTS = [
   "baseline",
   "partitioned",

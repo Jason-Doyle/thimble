@@ -1,8 +1,8 @@
 # Partitioned secondary-index regional experiment
 
 This harness compares current monolithic secondary-index pages with an
-experimental eight-shard layout on the isolated
-`experiment/partitioned-secondary-indexes` branch.
+experimental four-shard layout and an authority-side bounded index bundle on
+the isolated `experiment/partitioned-index-bundle` branch.
 
 The candidate keeps collection HEAD publication atomic:
 
@@ -14,8 +14,9 @@ collection HEAD
 ```
 
 Each document ID maps deterministically to one shard. A document mutation
-rewrites one shard per configured index. Queries read all eight shards in
-parallel and merge them before applying the existing index plan.
+rewrites one shard per configured index. Direct queries read all four shards
+in parallel. Bundled queries ask the temporary authority to read and validate
+HEAD plus index pages, merge the index, and return one no-store response.
 
 ## Workload
 
@@ -26,11 +27,13 @@ parallel and merge them before applying the existing index plan.
 - covered equality
 - uncovered equality
 - covered range
+- bundled covered equality
+- bundled covered range
 - warm re-query after invalidating HEAD and one index object
 - single-writer updates
 - simultaneous seven-region writes
 
-The warm re-query case preloads all index objects, removes the cached HEAD and
+The warm re-query case preloads all index objects, removes cached HEAD and
 one index object, then repeats the query. It measures the expected fetch after
 one partition changes without mutating the shared read fixture.
 

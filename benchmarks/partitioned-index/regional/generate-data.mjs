@@ -23,6 +23,9 @@ import { encodeJson } from "../../../src/shared-utils.ts";
 import { LocalObjectStore } from "../../../src/stores.ts";
 import { scopeStoragePrefix } from "../../../src/trie-protocol.ts";
 import {
+  readExperimentalPartitionedIndexBundle,
+} from "../../../src/experimental/partitioned-index-bundle.ts";
+import {
   BENCHMARK_COLLECTION,
   BENCHMARK_INDEXES,
   BENCHMARK_KEY_ID,
@@ -67,13 +70,16 @@ for (const variant of PARTITIONED_INDEX_VARIANTS) {
       variant,
       layout,
     );
-    await writeLayout(
+    const bundles = await writeLayout(
       directory,
       variant,
       layout,
       documents,
     );
-    layouts[variant][layout] = await inventory(directory);
+    layouts[variant][layout] = {
+      ...(await inventory(directory)),
+      bundles,
+    };
     for (const replicate of ["a", "b"]) {
       await cp(
         directory,
@@ -170,6 +176,31 @@ async function writeLayout(
           partitionConfiguration,
         );
   await engine.putMany(BENCHMARK_COLLECTION, values);
+  return Object.fromEntries(
+    await Promise.all(
+      BENCHMARK_INDEXES[BENCHMARK_COLLECTION]!.map(
+        async (definition) => {
+          const encoded =
+            await readExperimentalPartitionedIndexBundle(
+              store,
+              layout,
+              BENCHMARK_COLLECTION,
+              definition,
+            );
+          return [
+            definition.name,
+            {
+              decodedBytes: encoded.bytes.byteLength,
+              sourceObjects:
+                encoded.bundle.sourceObjects,
+              sourceDecodedBytes:
+                encoded.bundle.sourceDecodedBytes,
+            },
+          ];
+        },
+      ),
+    ),
+  );
 }
 
 async function inventory(directory) {

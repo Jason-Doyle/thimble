@@ -96,7 +96,7 @@ const iterations = Number(
   process.env.THIMBLE_PARTITIONED_ITERATIONS ?? "6",
 );
 const partitionCount = Number(
-  process.env.THIMBLE_PARTITIONED_SHARDS ?? "8",
+  process.env.THIMBLE_PARTITIONED_SHARDS ?? "4",
 );
 const rawKey = Uint8Array.from(
   { length: 32 },

@@ -47,14 +47,17 @@ const evidence = {
     singleWriteIterationsPerCase: 8,
     contentionIterationsPerCase: 3,
     candidate:
-      "Eight immutable index shards selected by document ID, with shard metadata embedded atomically in the collection HEAD.",
+      "Four immutable index shards selected by document ID, with shard metadata embedded atomically in the collection HEAD.",
+    bundle:
+      "A protected temporary authority endpoint reads HEAD plus index objects, validates them, and returns one gzip-compressed no-store bundle. The caller validates HEAD, shard metadata, and index definitions before query evaluation.",
     baseline:
       "Current one-page immutable secondary index per definition.",
     primaryLatency:
       "clientElapsedMs measured around the complete regional operation",
   },
   limitations: [
-    "The fixed ID partitions require every query to read all eight shards.",
+    "Direct fixed-ID partition queries require all four shards; bundled queries still perform five R2 reads but use one caller request.",
+    "Bundle payload bytes are measured after gzip compression; direct object bytes are stored encrypted-envelope bytes.",
     "The candidate is experimental and is not a public package export or production protocol.",
     "Azure regions approximate geography and do not represent residential last-mile networks.",
     "One Cloudflare account and one R2 bucket placement were used.",
@@ -137,8 +140,8 @@ function aggregateReadRuns(runs) {
   );
   return {
     cases: summary,
-    comparisons: Object.fromEntries(
-      [
+    comparisons: Object.fromEntries([
+      ...[
         "covered-equality",
         "uncovered-equality",
         "covered-range",
@@ -155,7 +158,35 @@ function aggregateReadRuns(runs) {
           ];
         }),
       ),
-    ),
+      ...[
+        "covered-equality",
+        "covered-range",
+      ].flatMap((operation) =>
+        ["snapshot", "trie"].flatMap((layout) => [
+          [
+            `bundle-baseline-${operation}-${layout}`,
+            compare(
+              summary[`bundle-${operation}-baseline-${layout}`],
+              summary[`${operation}-baseline-${layout}`],
+            ),
+          ],
+          [
+            `bundle-partitioned-${operation}-${layout}`,
+            compare(
+              summary[`bundle-${operation}-partitioned-${layout}`],
+              summary[`${operation}-baseline-${layout}`],
+            ),
+          ],
+          [
+            `bundle-vs-direct-partitioned-${operation}-${layout}`,
+            compare(
+              summary[`bundle-${operation}-partitioned-${layout}`],
+              summary[`${operation}-partitioned-${layout}`],
+            ),
+          ],
+        ]),
+      ),
+    ]),
   };
 }
 
@@ -223,6 +254,20 @@ function summariseRead(samples) {
     meanNetworkBytes: Math.round(
       mean(successful.map((sample) => sample.networkBytes)),
     ),
+    meanStorageReads: mean(
+      successful.map(
+        (sample) =>
+          sample.storageReads ?? sample.networkReads,
+      ),
+    ),
+    meanStorageBytes: Math.round(
+      mean(
+        successful.map(
+          (sample) =>
+            sample.storageBytes ?? sample.networkBytes,
+        ),
+      ),
+    ),
     meanScannedDocuments: mean(
       successful.map((sample) => sample.scannedDocuments),
     ),
@@ -289,6 +334,14 @@ function compare(candidate, baseline) {
     readBytesChangePercent: change(
       candidate.meanNetworkBytes ?? candidate.meanReadBytes,
       baseline.meanNetworkBytes ?? baseline.meanReadBytes,
+    ),
+    storageReadCountChangePercent: change(
+      candidate.meanStorageReads ?? candidate.meanReads,
+      baseline.meanStorageReads ?? baseline.meanReads,
+    ),
+    storageBytesChangePercent: change(
+      candidate.meanStorageBytes ?? candidate.meanReadBytes,
+      baseline.meanStorageBytes ?? baseline.meanReadBytes,
     ),
     writeCountChangePercent: change(
       candidate.meanWrites,

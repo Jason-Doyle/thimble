@@ -30,7 +30,18 @@ import {
 import {
   experimentalPartitionedIndexReferenceFromJson,
 } from "../../../src/experimental/partitioned-secondary-index.js";
-import type { JsonValue } from "../../../src/core.js";
+import {
+  pageFromExperimentalPartitionedIndexBundle,
+  type ExperimentalPartitionedIndexBundle,
+} from "../../../src/experimental/partitioned-index-bundle.js";
+import {
+  evaluateThimbleQuery,
+  type ThimbleQuery,
+} from "../../../src/query.js";
+import {
+  documentsFromCoveringIndex,
+  planSecondaryIndex,
+} from "../../../src/secondary-index.js";
 
 type BenchmarkConfig = {
   sourceCommit: string;
@@ -189,42 +200,20 @@ async function runContentionBenchmark() {
 }
 
 async function runQueryCase(caseName: string) {
-  const { operation, variant, layout } =
+  const { operation, variant, layout, bundled } =
     parseQueryCase(caseName);
+  if (bundled) {
+    return runBundledQueryCase(
+      caseName,
+      operation,
+      variant,
+      layout,
+    );
+  }
   const runtime = createClient(variant, layout);
   let started = performance.now();
   try {
-    const query =
-      operation === "covered-range"
-        ? {
-            version: 1 as const,
-            where: {
-              and: [
-                {
-                  field: "lastModified",
-                  operator: "gte" as const,
-                  value: config.expected.rangeLower,
-                },
-                {
-                  field: "lastModified",
-                  operator: "lte" as const,
-                  value: config.expected.rangeUpper,
-                },
-              ],
-            },
-            limit: 25,
-            maxScanDocuments: config.documents,
-          }
-        : {
-            version: 1 as const,
-            where: {
-              field: "category",
-              operator: "eq" as const,
-              value: config.expected.rareCategory,
-            },
-            limit: 25,
-            maxScanDocuments: config.expected.rareMatches,
-          };
+    const query = queryFor(operation);
     const execute = () =>
       operation === "uncovered-equality"
         ? runtime.client.queryDocuments<BenchmarkNote>(
@@ -271,6 +260,8 @@ async function runQueryCase(caseName: string) {
       scannedDocuments: result.scannedDocuments,
       networkReads: metrics.remoteReads,
       networkBytes: metrics.remoteBytes,
+      storageReads: metrics.remoteReads,
+      storageBytes: metrics.remoteBytes,
       cache: metrics.cache,
     };
   } catch (error) {
@@ -292,10 +283,134 @@ async function runQueryCase(caseName: string) {
       scannedDocuments: 0,
       networkReads: metrics.remoteReads,
       networkBytes: metrics.remoteBytes,
+      storageReads: metrics.remoteReads,
+      storageBytes: metrics.remoteBytes,
       cache: metrics.cache,
     };
   } finally {
     runtime.client.close();
+  }
+}
+
+async function runBundledQueryCase(
+  caseName: string,
+  operation: QueryOperation,
+  variant: Variant,
+  layout: Layout,
+) {
+  const definitionName =
+    operation === "covered-range"
+      ? "by-last-modified"
+      : "by-category";
+  const definition = config.indexes[
+    config.collection
+  ]!.find((candidate) => candidate.name === definitionName)!;
+  const query = queryFor(operation);
+  const started = performance.now();
+  try {
+    const response = await fetch(
+      `${target}/index-bundle/${variant}/${layout}/${config.collection}/${definitionName}`,
+      {
+        cache: "no-store",
+        headers: {
+          "x-benchmark-token": resultToken,
+        },
+      },
+    );
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `Index bundle returned ${response.status}: ${body}`,
+      );
+    }
+    const parsed = JSON.parse(
+      body,
+    ) as ExperimentalPartitionedIndexBundle;
+    const page =
+      pageFromExperimentalPartitionedIndexBundle(
+        parsed,
+        definition,
+      );
+    const plan = planSecondaryIndex(
+      config.indexes[config.collection]!,
+      query,
+    );
+    if (!plan) {
+      throw new Error("Index bundle query has no index plan");
+    }
+    const fields =
+      operation === "covered-range"
+        ? ["title", "category"]
+        : ["title", "lastModified"];
+    const documents = documentsFromCoveringIndex(
+      page,
+      plan,
+      fields,
+    );
+    if (!documents) {
+      throw new Error(
+        "Index bundle does not cover the requested fields",
+      );
+    }
+    const result = evaluateThimbleQuery(
+      documents as BenchmarkNote[],
+      query,
+    );
+    if (result.documents.length !== 25) {
+      throw new Error(
+        `Index bundle returned ${result.documents.length} documents`,
+      );
+    }
+    return {
+      case: caseName,
+      operation,
+      variant,
+      layout,
+      bundled: true,
+      success: true,
+      clientElapsedMs: round(
+        performance.now() - started,
+      ),
+      documents: result.documents.length,
+      scannedDocuments: result.scannedDocuments,
+      networkReads: 1,
+      networkBytes: Number(
+        response.headers.get("x-benchmark-response-bytes") ??
+          "0",
+      ),
+      decodedResponseBytes:
+        new TextEncoder().encode(body).byteLength,
+      storageReads: Number(
+        response.headers.get("x-benchmark-storage-reads") ??
+          parsed.sourceObjects,
+      ),
+      storageBytes: Number(
+        response.headers.get("x-benchmark-storage-bytes") ??
+          parsed.sourceDecodedBytes,
+      ),
+    };
+  } catch (error) {
+    return {
+      case: caseName,
+      operation,
+      variant,
+      layout,
+      bundled: true,
+      success: false,
+      clientElapsedMs: round(
+        performance.now() - started,
+      ),
+      error:
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error),
+      documents: 0,
+      scannedDocuments: 0,
+      networkReads: 1,
+      networkBytes: 0,
+      storageReads: 0,
+      storageBytes: 0,
+    };
   }
 }
 
@@ -531,7 +646,7 @@ function baseResult(value: Record<string, unknown>) {
 }
 
 function queryCases(): string[] {
-  return [
+  const direct = [
     "covered-equality",
     "uncovered-equality",
     "covered-range",
@@ -543,6 +658,18 @@ function queryCases(): string[] {
       ),
     ),
   );
+  const bundled = [
+    "covered-equality",
+    "covered-range",
+  ].flatMap((operation) =>
+    config.variants.flatMap((variant) =>
+      ["snapshot", "trie"].map(
+        (layout) =>
+          `bundle-${operation}-${variant}-${layout}`,
+      ),
+    ),
+  );
+  return [...direct, ...bundled];
 }
 
 function writeCases(prefix: string): string[] {
@@ -557,11 +684,16 @@ function parseQueryCase(caseName: string): {
   operation: QueryOperation;
   variant: Variant;
   layout: Layout;
+  bundled: boolean;
 } {
-  const layout = caseName.endsWith("-snapshot")
+  const bundled = caseName.startsWith("bundle-");
+  const normalized = bundled
+    ? caseName.slice("bundle-".length)
+    : caseName;
+  const layout = normalized.endsWith("-snapshot")
     ? "snapshot"
     : "trie";
-  const withoutLayout = caseName.slice(
+  const withoutLayout = normalized.slice(
     0,
     -(layout.length + 1),
   );
@@ -572,7 +704,42 @@ function parseQueryCase(caseName: string): {
     0,
     -(variant.length + 1),
   ) as QueryOperation;
-  return { operation, variant, layout };
+  return { operation, variant, layout, bundled };
+}
+
+function queryFor(
+  operation: QueryOperation,
+): ThimbleQuery<BenchmarkNote> {
+  return operation === "covered-range"
+    ? {
+        version: 1,
+        where: {
+          and: [
+            {
+              field: "lastModified",
+              operator: "gte",
+              value: config.expected.rangeLower,
+            },
+            {
+              field: "lastModified",
+              operator: "lte",
+              value: config.expected.rangeUpper,
+            },
+          ],
+        },
+        limit: 25,
+        maxScanDocuments: config.documents,
+      }
+    : {
+        version: 1,
+        where: {
+          field: "category",
+          operator: "eq",
+          value: config.expected.rareCategory,
+        },
+        limit: 25,
+        maxScanDocuments: config.expected.rareMatches,
+      };
 }
 
 function parseWriteCase(caseName: string): {

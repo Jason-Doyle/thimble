@@ -31,6 +31,10 @@ import {
   validateExperimentalPartitionedIndexShard,
   type ExperimentalPartitionedIndexConfiguration,
 } from "../src/experimental/partitioned-secondary-index.js";
+import {
+  pageFromExperimentalPartitionedIndexBundle,
+  readExperimentalPartitionedIndexBundle,
+} from "../src/experimental/partitioned-index-bundle.js";
 import { secondaryIndexPageFromJson } from "../src/secondary-index.js";
 import { inspectStudioIndex } from "../src/studio-api.js";
 import { LocalObjectStore } from "../src/stores.js";
@@ -60,8 +64,8 @@ const indexes: CollectionIndexConfiguration = {
 };
 const partitions: ExperimentalPartitionedIndexConfiguration = {
   notes: {
-    "by-category": 8,
-    "by-last-modified": 8,
+    "by-category": 4,
+    "by-last-modified": 4,
   },
 };
 
@@ -72,7 +76,7 @@ describe("experimental partitioned secondary indexes", () => {
     const prepared = await buildExperimentalPartitionedIndex(
       definition,
       documents,
-      8,
+      4,
       address,
     );
     const manifest =
@@ -80,8 +84,8 @@ describe("experimental partitioned secondary indexes", () => {
         prepared.reference,
         definition,
       );
-    expect(manifest?.partitions).toBe(8);
-    expect(prepared.objects).toHaveLength(8);
+    expect(manifest?.partitions).toBe(4);
+    expect(prepared.objects).toHaveLength(4);
 
     const pages = prepared.objects.map((object, partition) => {
       const page = secondaryIndexPageFromJson(
@@ -113,7 +117,7 @@ describe("experimental partitioned secondary indexes", () => {
     const initial = await buildExperimentalPartitionedIndex(
       definition,
       documents,
-      8,
+      4,
       address,
     );
     const manifest =
@@ -192,10 +196,10 @@ describe("experimental partitioned secondary indexes", () => {
         )) {
           expect(
             reference.experimentalPartitions?.partitions,
-          ).toBe(8);
+          ).toBe(4);
           expect(
             reference.experimentalPartitions?.shards.length,
-          ).toBe(8);
+          ).toBe(4);
         }
         await expect(
           inspectStudioIndex({
@@ -344,6 +348,87 @@ describe("experimental partitioned secondary indexes", () => {
           ],
         });
         client.close();
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([
+    ["snapshot", false],
+    ["snapshot", true],
+    ["trie", false],
+    ["trie", true],
+  ] as const)(
+    "assembles a bounded %s index bundle with partitioned=%s",
+    async (layout, partitioned) => {
+      const directory = await mkdtemp(
+        path.join(os.tmpdir(), `thimble-index-bundle-${layout}-`),
+      );
+      try {
+        const store = new LocalObjectStore(directory);
+        const engine =
+          layout === "snapshot"
+            ? new ImmutableSnapshotEngine(
+                store,
+                40,
+                address,
+                false,
+                indexes,
+                false,
+                partitioned ? partitions : {},
+              )
+            : new ContentAddressedTrieEngine(
+                store,
+                40,
+                address,
+                false,
+                indexes,
+                false,
+                partitioned ? partitions : {},
+              );
+        const documents = notes(256);
+        await engine.putMany("notes", documents);
+        const encoded =
+          await readExperimentalPartitionedIndexBundle(
+            store,
+            layout,
+            "notes",
+            indexes.notes![0]!,
+          );
+        expect(encoded.bundle.sourceObjects).toBe(
+          partitioned ? 5 : 2,
+        );
+        expect(
+          pageFromExperimentalPartitionedIndexBundle(
+            encoded.bundle,
+            indexes.notes![0]!,
+          ),
+        ).toEqual(
+          buildSecondaryIndexPage(
+            indexes.notes![0]!,
+            documents,
+          ),
+        );
+        if (partitioned) {
+          await expect(
+            readExperimentalPartitionedIndexBundle(
+              store,
+              layout,
+              "notes",
+              indexes.notes![0]!,
+              { maxObjects: 4 },
+            ),
+          ).rejects.toThrow("exceeds 4 objects");
+          const tampered = structuredClone(encoded.bundle);
+          tampered.objects[0]!.decodedBytes += 1;
+          expect(() =>
+            pageFromExperimentalPartitionedIndexBundle(
+              tampered,
+              indexes.notes![0]!,
+            ),
+          ).toThrow("missing shard");
+        }
       } finally {
         await rm(directory, { recursive: true, force: true });
       }
