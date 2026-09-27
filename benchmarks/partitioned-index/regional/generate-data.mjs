@@ -178,7 +178,7 @@ async function writeLayout(
   await engine.putMany(BENCHMARK_COLLECTION, values);
   return Object.fromEntries(
     await Promise.all(
-      BENCHMARK_INDEXES[BENCHMARK_COLLECTION]!.map(
+      BENCHMARK_INDEXES[BENCHMARK_COLLECTION].map(
         async (definition) => {
           const encoded =
             await readExperimentalPartitionedIndexBundle(
