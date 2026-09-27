@@ -5,6 +5,8 @@
 - Browsers can read immutable object pages through the authority broker.
 - Memory and IndexedDB materially reduce repeated network reads.
 - ETag revalidation avoids downloading unchanged HEAD objects.
+- A successful HEAD response starts a new freshness interval when the response
+  completes, so slow 304 responses do not arrive already expired.
 - A server write can return enough changed pages to update browser caches.
 - Gzip before AES-GCM round-trips in Node and browser-compatible Web Crypto.
 - Private object bodies do not contain plaintext JSON.

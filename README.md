@@ -97,8 +97,9 @@ flowchart TD
 ```
 
 1. Warm reads stay in the authority-and-scope cache while the mutable HEAD is
-   fresh. Expired HEADs use conditional revalidation, and a usable cache can
-   remain available during a network failure.
+   fresh. A successful HEAD fetch or conditional revalidation starts the next
+   TTL interval when its response completes. A usable cache can remain
+   available during a network failure.
 2. Cold point reads can use one
    bounded decoded bundle when explicitly enabled; every ineligible or failed
    bundle falls back to authenticated TDB1 object reads.

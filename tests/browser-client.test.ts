@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { JsonValue } from "../src/core.js";
 import {
   IndexedDbObjectCache,
@@ -128,6 +128,57 @@ describe("ThimbleDB browser client", () => {
       await cache.clearAll();
     }
   });
+
+  it.each(["trie", "snapshot"] as const)(
+    "starts the refreshed %s HEAD TTL when a slow 304 completes",
+    async (layout) => {
+      let now = 0;
+      const nowSpy = vi
+        .spyOn(Date, "now")
+        .mockImplementation(() => now);
+      const fixture =
+        layout === "trie"
+          ? trieFixture("products", "product-slow-304")
+          : snapshotFixture(
+              "products",
+              "product-slow-304",
+            );
+      const reader = new FakeReader(
+        fixture.objects,
+        (key) => {
+          if (key.endsWith("/HEAD.json")) {
+            now += 1_500;
+          }
+        },
+      );
+      const cache = cacheFor("content", uniqueName());
+      const client = new ThimbleClient({
+        reader,
+        cache,
+        headTtlMs: 1_000,
+        collectionLayouts: {
+          products: layout,
+        },
+        channelName: uniqueName(),
+      });
+
+      try {
+        await client.get("products", fixture.id);
+        now = 1_001;
+        await client.get("products", fixture.id);
+        const callsAfterRevalidation = reader.calls;
+
+        await client.get("products", fixture.id);
+
+        expect(reader.calls).toBe(callsAfterRevalidation);
+        expect(client.metrics().notModified).toBe(1);
+      } finally {
+        nowSpy.mockRestore();
+        client.close();
+        await cache.clearAll();
+      }
+    },
+  );
 
   it("reads immutable snapshot collections through the same cache", async () => {
     const collection = "settings";
@@ -1021,6 +1072,9 @@ class FakeReader implements JsonObjectReader {
       string,
       { etag: string; value: JsonValue }
     >,
+    private readonly beforeNotModified?: (
+      key: string,
+    ) => void,
   ) {}
 
   async get(
@@ -1040,6 +1094,7 @@ class FakeReader implements JsonObjectReader {
       return { status: "missing", key };
     }
     if (ifNoneMatch === object.etag) {
+      this.beforeNotModified?.(key);
       return {
         status: "not-modified",
         key,
@@ -1126,6 +1181,48 @@ function trieFixture(collection: string, id: string) {
       [
         trieNodeKey(collection, "leaf-hash"),
         { etag: "leaf-etag", value: leaf },
+      ],
+    ]),
+  };
+}
+
+function snapshotFixture(
+  collection: string,
+  id: string,
+) {
+  const document = {
+    id,
+    name: "Cached product",
+    priceCents: 1_200,
+  };
+  return {
+    id,
+    document,
+    objects: new Map<
+      string,
+      { etag: string; value: JsonValue }
+    >([
+      [
+        snapshotHeadKey(collection),
+        {
+          etag: "snapshot-head-etag",
+          value: {
+            revision: 1,
+            snapshotHash: "snapshot-hash",
+          },
+        },
+      ],
+      [
+        snapshotPageKey(
+          collection,
+          "snapshot-hash",
+        ),
+        {
+          etag: "snapshot-page-etag",
+          value: {
+            documents: { [id]: document },
+          },
+        },
       ],
     ]),
   };
