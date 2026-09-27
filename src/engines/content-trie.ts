@@ -43,10 +43,16 @@ import {
   updateSecondaryIndexPage,
   type CollectionIndexConfiguration,
   type SecondaryIndexChange,
+  type SecondaryIndexDefinition,
   type SecondaryIndexPage,
   type SecondaryIndexReference,
   type SecondaryIndexReferences,
 } from "../secondary-index.js";
+import {
+  experimentalMapBounded,
+  experimentalWriteConcurrency,
+  type ExperimentalWritePipelineOptions,
+} from "../experimental/parallel-write-pipeline.js";
 
 type LoadedHead = {
   object: StoredObject | null;
@@ -73,6 +79,13 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
   private nodesCreated = 0;
   private reusedNodes = 0;
   private garbageCollected = 0;
+  private writeLoadMs = 0;
+  private writeIndexPrepareMs = 0;
+  private writeTreePipelineMs = 0;
+  private writeIndexCommitMs = 0;
+  private writeImmutablePipelineMs = 0;
+  private writeHeadCommitMs = 0;
+  private writeTotalMs = 0;
 
   constructor(
     private readonly store: ObjectStore,
@@ -83,6 +96,10 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     private readonly allowQuiescentGarbageCollection = false,
     private readonly indexConfiguration: CollectionIndexConfiguration = {},
     private readonly allowIndexConfigurationChange = false,
+    private readonly experimentalWritePipeline:
+      ExperimentalWritePipelineOptions = {
+        mode: "sequential",
+      },
   ) {}
 
   async get(
@@ -512,6 +529,8 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     expectedHeadEtag?: string | null,
   ): Promise<boolean> {
     const normalized = validateName(collection, "Collection");
+    this.resetWriteStageMetrics();
+    const totalStarted = performance.now();
     const collapsedChanges = [
       ...new Map(
         changes.map((change) => [change.id, change]),
@@ -534,19 +553,33 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     const attempts =
       expectedHeadEtag === undefined ? this.maxRetries : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const loadStarted = performance.now();
       const head = await this.loadHead(normalized);
       await this.requireIndexConfiguration(normalized, head.state);
+      this.writeLoadMs +=
+        performance.now() - loadStarted;
       if (
         expectedHeadEtag !== undefined &&
         (head.object?.etag ?? null) !== expectedHeadEtag
       ) {
         return false;
       }
-      const preparedIndexes = await this.prepareIndexes(
-        normalized,
-        head.state,
-        collapsedChanges,
-      );
+      const preparedIndexes =
+        await this.prepareIndexes(
+          normalized,
+          head.state,
+          collapsedChanges,
+        );
+      const immutableStarted = performance.now();
+      const indexPipeline =
+        this.experimentalWritePipeline.mode ===
+        "parallel"
+          ? this.commitIndexes(
+              preparedIndexes,
+              true,
+            )
+          : null;
+      const treeStarted = performance.now();
       const root =
         head.state.rootHash === null
           ? this.emptyRoot()
@@ -646,18 +679,27 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         Object.keys(nextRoot.children).length === 0
           ? null
           : await this.writeNode(normalized, nextRoot);
-      const indexes = await this.commitIndexes(
-        preparedIndexes,
-      );
+      this.writeTreePipelineMs +=
+        performance.now() - treeStarted;
+      const committedIndexes =
+        indexPipeline
+          ? await indexPipeline
+          : await this.commitIndexes(
+              preparedIndexes,
+              false,
+            );
+      this.writeImmutablePipelineMs +=
+        performance.now() - immutableStarted;
       const nextHead: TrieHead = {
         revision: head.state.revision + 1,
         rootHash,
-        ...(Object.keys(indexes).length > 0
-          ? { indexes }
+        ...(Object.keys(committedIndexes).length > 0
+          ? { indexes: committedIndexes }
           : {}),
       };
 
       try {
+        const headStarted = performance.now();
         await this.store.put(
           this.headKey(normalized),
           encodeJson(nextHead as unknown as JsonValue),
@@ -665,6 +707,10 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
             ? { ifNoneMatch: true }
             : { ifMatch: head.object.etag },
         );
+        this.writeHeadCommitMs +=
+          performance.now() - headStarted;
+        this.writeTotalMs =
+          performance.now() - totalStarted;
         return true;
       } catch (error) {
         if (!isPreconditionFailure(error)) {
@@ -749,6 +795,23 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       nodesCreated: this.nodesCreated,
       reusedNodes: this.reusedNodes,
       garbageCollected: this.garbageCollected,
+      writeLoadMs: roundMetric(this.writeLoadMs),
+      writeIndexPrepareMs: roundMetric(
+        this.writeIndexPrepareMs,
+      ),
+      writeTreePipelineMs: roundMetric(
+        this.writeTreePipelineMs,
+      ),
+      writeIndexCommitMs: roundMetric(
+        this.writeIndexCommitMs,
+      ),
+      writeImmutablePipelineMs: roundMetric(
+        this.writeImmutablePipelineMs,
+      ),
+      writeHeadCommitMs: roundMetric(
+        this.writeHeadCommitMs,
+      ),
+      writeTotalMs: roundMetric(this.writeTotalMs),
     };
   }
 
@@ -906,14 +969,24 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     head: TrieHead,
     changes: SecondaryIndexChange[],
   ): Promise<PreparedSecondaryIndex[]> {
+    const started = performance.now();
     const definitions = this.indexConfiguration[collection] ?? [];
     if (definitions.length === 0) {
       return [];
     }
 
-    let storedDocuments: TrieStoredDocument[] | undefined;
-    const prepared: PreparedSecondaryIndex[] = [];
-    for (const definition of definitions) {
+    let storedDocuments:
+      | Promise<TrieStoredDocument[]>
+      | undefined;
+    const allStored = () =>
+      storedDocuments ??=
+        this.scanStoredFromHead(
+          collection,
+          head,
+        );
+    const prepare = async (
+      definition: SecondaryIndexDefinition,
+    ) => {
       const currentReference = head.indexes?.[definition.name];
       let currentPage: SecondaryIndexPage | null = null;
       if (currentReference && !this.allowIndexConfigurationChange) {
@@ -940,23 +1013,17 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         ) {
           currentPage = loadedPage;
         } else {
-          storedDocuments ??= await this.scanStoredFromHead(
-            collection,
-            head,
-          );
+          const documents = await allStored();
           currentPage = buildSecondaryIndexPage(
             definition,
-            storedDocuments,
+            documents,
           );
         }
       } else {
-        storedDocuments ??= await this.scanStoredFromHead(
-          collection,
-          head,
-        );
+        const documents = await allStored();
         currentPage = buildSecondaryIndexPage(
           definition,
-          storedDocuments,
+          documents,
         );
       }
       const page = updateSecondaryIndexPage(
@@ -966,7 +1033,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       );
       const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressNode(bytes);
-      prepared.push({
+      return {
         key: trieIndexKey(
           collection,
           definition.name,
@@ -979,8 +1046,24 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           entries: page.entries.length,
           decodedBytes: bytes.byteLength,
         },
-      });
-    }
+      };
+    };
+    const prepared =
+      this.experimentalWritePipeline.mode ===
+      "parallel"
+        ? await experimentalMapBounded(
+            definitions,
+            experimentalWriteConcurrency(
+              this.experimentalWritePipeline,
+            ),
+            prepare,
+          )
+        : await sequentialMap(
+            definitions,
+            prepare,
+          );
+    this.writeIndexPrepareMs +=
+      performance.now() - started;
     return prepared;
   }
 
@@ -1016,10 +1099,14 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
 
   private async commitIndexes(
     prepared: PreparedSecondaryIndex[],
+    parallel = false,
   ): Promise<SecondaryIndexReferences> {
+    const started = performance.now();
     const references =
       createDictionary<SecondaryIndexReference>();
-    for (const index of prepared) {
+    const commit = async (
+      index: PreparedSecondaryIndex,
+    ) => {
       try {
         await this.store.put(
           index.key,
@@ -1031,8 +1118,23 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           throw error;
         }
       }
-      references[index.name] = index.reference;
+      return index;
+    };
+    const committed = parallel
+      ? await experimentalMapBounded(
+          prepared,
+          experimentalWriteConcurrency(
+            this.experimentalWritePipeline,
+          ),
+          commit,
+        )
+      : await sequentialMap(prepared, commit);
+    for (const index of committed) {
+      references[index.name] =
+        index.reference;
     }
+    this.writeIndexCommitMs +=
+      performance.now() - started;
     return references;
   }
 
@@ -1089,7 +1191,18 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
         );
       }
+
     }
+  }
+
+  private resetWriteStageMetrics(): void {
+    this.writeLoadMs = 0;
+    this.writeIndexPrepareMs = 0;
+    this.writeTreePipelineMs = 0;
+    this.writeIndexCommitMs = 0;
+    this.writeImmutablePipelineMs = 0;
+    this.writeHeadCommitMs = 0;
+    this.writeTotalMs = 0;
   }
 
   private async readStoredAtHead(
@@ -1385,6 +1498,21 @@ function assertBundleCapacity(
       `Read bundle exceeds ${limits.maxObjects} objects or ${limits.maxDecodedBytes} decoded bytes`,
     );
   }
+}
+
+async function sequentialMap<T, R>(
+  values: readonly T[],
+  operation: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (const value of values) {
+    results.push(await operation(value));
+  }
+  return results;
+}
+
+function roundMetric(value: number): number {
+  return Number(value.toFixed(3));
 }
 
 async function hashBytes(bytes: Uint8Array): Promise<string> {

@@ -38,9 +38,15 @@ import {
   secondaryIndexDefinitionsEqual,
   secondaryIndexPageFromJson,
   type CollectionIndexConfiguration,
+  type SecondaryIndexDefinition,
   type SecondaryIndexReference,
   type SecondaryIndexReferences,
 } from "../secondary-index.js";
+import {
+  experimentalMapBounded,
+  experimentalWriteConcurrency,
+  type ExperimentalWritePipelineOptions,
+} from "../experimental/parallel-write-pipeline.js";
 
 type LoadedHead = {
   object: StoredObject | null;
@@ -60,6 +66,14 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
   private snapshotsCreated = 0;
   private reusedSnapshots = 0;
   private garbageCollected = 0;
+  private writeLoadMs = 0;
+  private writePrepareMs = 0;
+  private writeIndexPrepareMs = 0;
+  private writeSnapshotCommitMs = 0;
+  private writeIndexCommitMs = 0;
+  private writeImmutablePipelineMs = 0;
+  private writeHeadCommitMs = 0;
+  private writeTotalMs = 0;
 
   constructor(
     private readonly store: ObjectStore,
@@ -70,6 +84,10 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     private readonly allowQuiescentGarbageCollection = false,
     private readonly indexConfiguration: CollectionIndexConfiguration = {},
     private readonly allowIndexConfigurationChange = false,
+    private readonly experimentalWritePipeline:
+      ExperimentalWritePipelineOptions = {
+        mode: "sequential",
+      },
   ) {}
 
   async get(
@@ -372,6 +390,26 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       snapshotsCreated: this.snapshotsCreated,
       reusedSnapshots: this.reusedSnapshots,
       garbageCollected: this.garbageCollected,
+      writeLoadMs: roundMetric(this.writeLoadMs),
+      writePrepareMs: roundMetric(
+        this.writePrepareMs,
+      ),
+      writeIndexPrepareMs: roundMetric(
+        this.writeIndexPrepareMs,
+      ),
+      writeSnapshotCommitMs: roundMetric(
+        this.writeSnapshotCommitMs,
+      ),
+      writeIndexCommitMs: roundMetric(
+        this.writeIndexCommitMs,
+      ),
+      writeImmutablePipelineMs: roundMetric(
+        this.writeImmutablePipelineMs,
+      ),
+      writeHeadCommitMs: roundMetric(
+        this.writeHeadCommitMs,
+      ),
+      writeTotalMs: roundMetric(this.writeTotalMs),
     };
   }
 
@@ -464,12 +502,18 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     ) => { changed: boolean; result: T },
   ): Promise<T> {
     const normalized = validateName(collection, "Collection");
+    this.resetWriteStageMetrics();
+    const totalStarted = performance.now();
     for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
+      const loadStarted = performance.now();
       const loaded = await this.loadCurrent(normalized);
       await this.requireIndexConfiguration(
         normalized,
         loaded.head.state,
       );
+      this.writeLoadMs +=
+        performance.now() - loadStarted;
+      const prepareStarted = performance.now();
       const documents = createDictionary(
         loaded.page.documents,
       );
@@ -480,20 +524,49 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
 
       const page: SnapshotPage = { documents };
       const pageBytes = encodeJson(page as unknown as JsonValue);
-      const preparedIndexes = await this.prepareIndexes(
-        normalized,
-        Object.values(documents),
-      );
-      const snapshotHash =
-        Object.keys(documents).length === 0
-          ? null
-          : await this.writeSnapshot(
-              normalized,
-              pageBytes,
-            );
-      const indexes = await this.commitIndexes(
-        preparedIndexes,
-      );
+      this.writePrepareMs +=
+        performance.now() - prepareStarted;
+      const preparedIndexes =
+        await this.prepareIndexes(
+          normalized,
+          Object.values(documents),
+        );
+      const immutableStarted = performance.now();
+      let snapshotHash: string | null;
+      let indexes: SecondaryIndexReferences;
+      if (
+        this.experimentalWritePipeline.mode ===
+        "parallel"
+      ) {
+        const indexPipeline =
+          this.commitIndexes(
+            preparedIndexes,
+            true,
+          );
+        [snapshotHash, indexes] = await Promise.all([
+          Object.keys(documents).length === 0
+            ? Promise.resolve(null)
+            : this.writeSnapshot(
+                normalized,
+                pageBytes,
+              ),
+          indexPipeline,
+        ]);
+      } else {
+        snapshotHash =
+          Object.keys(documents).length === 0
+            ? null
+            : await this.writeSnapshot(
+                normalized,
+                pageBytes,
+              );
+        indexes = await this.commitIndexes(
+          preparedIndexes,
+          false,
+        );
+      }
+      this.writeImmutablePipelineMs +=
+        performance.now() - immutableStarted;
       const nextHead: SnapshotHead = {
         revision: loaded.head.state.revision + 1,
         snapshotHash,
@@ -507,6 +580,7 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
           : {}),
       };
       try {
+        const headStarted = performance.now();
         await this.store.put(
           snapshotHeadKey(normalized),
           encodeJson(nextHead as unknown as JsonValue),
@@ -514,6 +588,10 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
             ? { ifMatch: loaded.head.object.etag }
             : { ifNoneMatch: true },
         );
+        this.writeHeadCommitMs +=
+          performance.now() - headStarted;
+        this.writeTotalMs =
+          performance.now() - totalStarted;
         return updateResult.result;
       } catch (error) {
         if (!isPreconditionFailure(error)) {
@@ -571,6 +649,7 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     collection: string,
     bytes: Uint8Array,
   ): Promise<string> {
+    const started = performance.now();
     const hash = await this.addressSnapshot(bytes);
     try {
       await this.store.put(snapshotPageKey(collection, hash), bytes, {
@@ -583,6 +662,8 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       }
       this.reusedSnapshots += 1;
     }
+    this.writeSnapshotCommitMs +=
+      performance.now() - started;
     return hash;
   }
 
@@ -590,16 +671,18 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     collection: string,
     documents: TrieStoredDocument[],
   ): Promise<PreparedSecondaryIndex[]> {
+    const started = performance.now();
     const definitions = this.indexConfiguration[collection] ?? [];
-    const prepared: PreparedSecondaryIndex[] = [];
-    for (const definition of definitions) {
+    const prepare = async (
+      definition: SecondaryIndexDefinition,
+    ) => {
       const page = buildSecondaryIndexPage(
         definition,
         documents,
       );
       const bytes = encodeSecondaryIndexPage(page);
       const hash = await this.addressSnapshot(bytes);
-      prepared.push({
+      return {
         key: snapshotIndexKey(
           collection,
           definition.name,
@@ -612,17 +695,37 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
           entries: page.entries.length,
           decodedBytes: bytes.byteLength,
         },
-      });
-    }
+      };
+    };
+    const prepared =
+      this.experimentalWritePipeline.mode ===
+      "parallel"
+        ? await experimentalMapBounded(
+            definitions,
+            experimentalWriteConcurrency(
+              this.experimentalWritePipeline,
+            ),
+            prepare,
+          )
+        : await sequentialMap(
+            definitions,
+            prepare,
+          );
+    this.writeIndexPrepareMs +=
+      performance.now() - started;
     return prepared;
   }
 
   private async commitIndexes(
     prepared: PreparedSecondaryIndex[],
+    parallel = false,
   ): Promise<SecondaryIndexReferences> {
+    const started = performance.now();
     const references =
       createDictionary<SecondaryIndexReference>();
-    for (const index of prepared) {
+    const commit = async (
+      index: PreparedSecondaryIndex,
+    ) => {
       try {
         await this.store.put(
           index.key,
@@ -634,8 +737,23 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
           throw error;
         }
       }
-      references[index.name] = index.reference;
+      return index;
+    };
+    const committed = parallel
+      ? await experimentalMapBounded(
+          prepared,
+          experimentalWriteConcurrency(
+            this.experimentalWritePipeline,
+          ),
+          commit,
+        )
+      : await sequentialMap(prepared, commit);
+    for (const index of committed) {
+      references[index.name] =
+        index.reference;
     }
+    this.writeIndexCommitMs +=
+      performance.now() - started;
     return references;
   }
 
@@ -692,7 +810,19 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
           `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
         );
       }
+
     }
+  }
+
+  private resetWriteStageMetrics(): void {
+    this.writeLoadMs = 0;
+    this.writePrepareMs = 0;
+    this.writeIndexPrepareMs = 0;
+    this.writeSnapshotCommitMs = 0;
+    this.writeIndexCommitMs = 0;
+    this.writeImmutablePipelineMs = 0;
+    this.writeHeadCommitMs = 0;
+    this.writeTotalMs = 0;
   }
 }
 
@@ -736,6 +866,21 @@ function assertUserDocument(document: JsonDocument): void {
       'Document field "__thimbleTombstone" is reserved',
     );
   }
+}
+
+async function sequentialMap<T, R>(
+  values: readonly T[],
+  operation: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (const value of values) {
+    results.push(await operation(value));
+  }
+  return results;
+}
+
+function roundMetric(value: number): number {
+  return Number(value.toFixed(3));
 }
 
 async function hashBytes(bytes: Uint8Array): Promise<string> {
