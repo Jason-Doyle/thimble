@@ -27,3 +27,11 @@ the same evidence for plotting and independent analysis.
 The corresponding source revisions, methodology, failures, and limitations
 are embedded in the JSON artifact and documented in
 `docs/BENCHMARKS.md`.
+
+`immutable-edge-cache-regional-worker-2026-09-27.json` contains 5,544
+measured operations across seven Azure regions and two replicates. It compares
+the current authorized R2 path with forced Cloudflare edge-cache misses and
+prewarmed colo-local encrypted immutable objects.
+
+The implementation, result tables, decision, limitations, and cleanup record
+are documented in `benchmarks/immutable-edge-cache/RESULTS.md`.

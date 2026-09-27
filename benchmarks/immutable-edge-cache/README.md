@@ -7,6 +7,9 @@ The candidate does not cache collection HEAD objects. Every request is
 authorized before cache lookup, and the browser still validates and decrypts
 the same TDB1 object bytes.
 
+The completed regional result and recommendation are in
+`RESULTS.md`.
+
 ## Measured paths
 
 - direct R2 reads through the authorization gate
