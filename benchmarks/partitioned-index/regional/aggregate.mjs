@@ -12,7 +12,7 @@ const root = path.resolve(
 );
 const outputPath = path.resolve(
   process.env.THIMBLE_PARTITIONED_REGIONAL_EVIDENCE ??
-    "evidence/partitioned-index-regional-worker-2026-09-26.json",
+    "evidence/four-shard-index-bundle-regional-worker-2026-09-26.json",
 );
 const replicates = (
   process.env.THIMBLE_PARTITIONED_REPLICATES ?? "a,b"

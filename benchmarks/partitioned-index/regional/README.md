@@ -69,7 +69,7 @@ npm run benchmark:partitioned-index:regional:aggregate
 The default artifact is:
 
 ```text
-evidence/partitioned-index-regional-worker-2026-09-26.json
+evidence/four-shard-index-bundle-regional-worker-2026-09-26.json
 ```
 
 No production Worker, bucket, route, domain, package export, or main-branch

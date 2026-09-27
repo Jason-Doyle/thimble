@@ -27,3 +27,15 @@ the same evidence for plotting and independent analysis.
 The corresponding source revisions, methodology, failures, and limitations
 are embedded in the JSON artifact and documented in
 `docs/BENCHMARKS.md`.
+
+`four-shard-index-bundle-regional-worker-2026-09-26.json` contains 2,296
+measured operations across seven Azure regions and two replicates. It compares
+the current monolithic secondary-index pages with four immutable ID-selected
+shards and a temporary authority-side bounded index bundle.
+
+`four-shard-index-bundle-local-2026-09-26.json` is the matching in-memory
+object-store preflight. Regional caller latency remains the authoritative
+timing evidence.
+
+The implementation, result tables, decision, limitations, and cleanup record
+are documented in `benchmarks/partitioned-index/RESULTS.md`.
