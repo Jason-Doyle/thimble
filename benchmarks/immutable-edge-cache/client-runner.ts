@@ -404,25 +404,43 @@ async function warmCases(
         id,
       );
     } else {
-      const result = await executeReadCase(
+      await retryWarmup(
         profile,
         definition,
         id,
-        cacheNamespace(
-          "warmup",
-          profile,
-          definition,
-          0,
-        ),
-        false,
       );
-      if (!result.success) {
-        throw new Error(
-          `Warm-up failed for ${definition.name}: ${result.error}`,
-        );
-      }
     }
   }
+}
+
+async function retryWarmup(
+  profile: string,
+  definition: ReadCase,
+  id?: string,
+) {
+  let lastError = "Unknown warm-up failure";
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const result = await executeReadCase(
+      profile,
+      definition,
+      id,
+      cacheNamespace(
+        "warmup",
+        profile,
+        definition,
+        attempt,
+      ),
+      false,
+    );
+    if (result.success) {
+      return;
+    }
+    lastError = result.error;
+    await delay(500 * (attempt + 1));
+  }
+  throw new Error(
+    `Warm-up failed for ${definition.name}: ${lastError}`,
+  );
 }
 
 async function measuredCase(
@@ -467,6 +485,7 @@ async function primeUntilWarm(
     0,
   ),
 ) {
+  let lastError = "Unknown edge-cache prime failure";
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const result = await executeReadCase(
       profile,
@@ -476,9 +495,9 @@ async function primeUntilWarm(
       false,
     );
     if (!result.success) {
-      throw new Error(
-        `Edge-cache prime failed for ${definition.name}: ${result.error}`,
-      );
+      lastError = result.error;
+      await delay(500 * (attempt + 1));
+      continue;
     }
     if (
       result.edgeCacheMisses === 0 &&
@@ -486,10 +505,12 @@ async function primeUntilWarm(
     ) {
       return;
     }
+    lastError =
+      `hits=${result.edgeCacheHits}, misses=${result.edgeCacheMisses}`;
     await delay(250 * (attempt + 1));
   }
   throw new Error(
-    `Edge cache did not warm for ${definition.name}`,
+    `Edge cache did not warm for ${definition.name}: ${lastError}`,
   );
 }
 
