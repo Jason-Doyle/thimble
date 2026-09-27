@@ -27,3 +27,15 @@ the same evidence for plotting and independent analysis.
 The corresponding source revisions, methodology, failures, and limitations
 are embedded in the JSON artifact and documented in
 `docs/BENCHMARKS.md`.
+
+`value-routed-index-regional-worker-2026-09-27.json` contains 1,736 measured
+operations across seven Azure regions and two replicates. It compares current
+monolithic secondary-index pages with four equality-value or ordered-range
+partitions selected by the query.
+
+`value-routed-index-local-2026-09-27.json` is the matching in-memory
+object-store preflight. Regional caller latency remains the authoritative
+timing evidence.
+
+The implementation, result tables, decision, limitations, and cleanup record
+are documented in `benchmarks/partitioned-index/RESULTS.md`.

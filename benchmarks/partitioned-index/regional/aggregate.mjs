@@ -52,6 +52,10 @@ const evidence = {
       "Current one-page immutable secondary index per definition.",
     primaryLatency:
       "clientElapsedMs measured around the complete regional operation",
+    fixtureIsolation:
+      "Read fixtures were immutable. Single-writer regions used separate prefixes; replicates ran sequentially with a recreated empty bucket. Each contention replicate used one shared generation and a recreated empty bucket.",
+    retainedRuns:
+      "Only the final pinned read runs and pristine-bucket write and contention runs are included. Harness smoke tests and invalid preliminary runs were discarded.",
   },
   limitations: [
     "Equality-value hashing can create skew when a few values dominate the workload.",

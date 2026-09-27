@@ -1,0 +1,262 @@
+{
+  "generatedAt": "2026-09-27T14:59:04.324Z",
+  "sourceCommit": "b0471ad20e05bd07b4a42f15bc1fc0d152fa1735",
+  "documents": 25000,
+  "iterations": 6,
+  "partitionCount": 4,
+  "warning": "Local in-memory object-store preflight. Regional cloud evidence remains authoritative for latency.",
+  "results": {
+    "snapshot-baseline": {
+      "storedObjects": 4,
+      "storedBytes": 1171514,
+      "summary": {
+        "p50Ms": 1264.965,
+        "p95Ms": 1321.982,
+        "meanMs": 1279.359,
+        "meanReads": 4,
+        "meanReadBytes": 1171586,
+        "meanWrites": 4,
+        "meanWriteBytes": 1171618
+      },
+      "samples": [
+        {
+          "elapsedMs": 1321.982,
+          "reads": 4,
+          "readBytes": 1171514,
+          "writes": 4,
+          "writeBytes": 1171534,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 1303.16,
+          "reads": 4,
+          "readBytes": 1171534,
+          "writes": 4,
+          "writeBytes": 1171564,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 1264.965,
+          "reads": 4,
+          "readBytes": 1171564,
+          "writes": 4,
+          "writeBytes": 1171600,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 1283.578,
+          "reads": 4,
+          "readBytes": 1171600,
+          "writes": 4,
+          "writeBytes": 1171638,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 1240.554,
+          "reads": 4,
+          "readBytes": 1171638,
+          "writes": 4,
+          "writeBytes": 1171665,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 1261.915,
+          "reads": 4,
+          "readBytes": 1171665,
+          "writes": 4,
+          "writeBytes": 1171708,
+          "preconditionFailures": 0
+        }
+      ]
+    },
+    "snapshot-value-routed": {
+      "storedObjects": 10,
+      "storedBytes": 1190056,
+      "summary": {
+        "p50Ms": 300.929,
+        "p95Ms": 318.277,
+        "meanMs": 302.92,
+        "meanReads": 5,
+        "meanReadBytes": 734952,
+        "meanWrites": 5,
+        "meanWriteBytes": 735000
+      },
+      "samples": [
+        {
+          "elapsedMs": 302.928,
+          "reads": 5,
+          "readBytes": 736206,
+          "writes": 5,
+          "writeBytes": 736271,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 305.859,
+          "reads": 5,
+          "readBytes": 734190,
+          "writes": 5,
+          "writeBytes": 734228,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 300.929,
+          "reads": 5,
+          "readBytes": 734233,
+          "writes": 5,
+          "writeBytes": 734278,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 292.517,
+          "reads": 5,
+          "readBytes": 734320,
+          "writes": 5,
+          "writeBytes": 734371,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 318.277,
+          "reads": 5,
+          "readBytes": 734322,
+          "writes": 5,
+          "writeBytes": 734363,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 297.009,
+          "reads": 5,
+          "readBytes": 736443,
+          "writes": 5,
+          "writeBytes": 736491,
+          "preconditionFailures": 0
+        }
+      ]
+    },
+    "trie-baseline": {
+      "storedObjects": 276,
+      "storedBytes": 1417089,
+      "summary": {
+        "p50Ms": 474.799,
+        "p95Ms": 486.343,
+        "meanMs": 476.825,
+        "meanReads": 8,
+        "meanReadBytes": 1450688,
+        "meanWrites": 6,
+        "meanWriteBytes": 727638
+      },
+      "samples": [
+        {
+          "elapsedMs": 486.343,
+          "reads": 8,
+          "readBytes": 1450423,
+          "writes": 6,
+          "writeBytes": 727389,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 482.23,
+          "reads": 8,
+          "readBytes": 1450677,
+          "writes": 6,
+          "writeBytes": 727640,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 474.799,
+          "reads": 8,
+          "readBytes": 1450780,
+          "writes": 6,
+          "writeBytes": 727737,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 468.739,
+          "reads": 8,
+          "readBytes": 1450591,
+          "writes": 6,
+          "writeBytes": 727534,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 482.225,
+          "reads": 8,
+          "readBytes": 1450822,
+          "writes": 6,
+          "writeBytes": 727759,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 466.616,
+          "reads": 8,
+          "readBytes": 1450837,
+          "writes": 6,
+          "writeBytes": 727768,
+          "preconditionFailures": 0
+        }
+      ]
+    },
+    "trie-value-routed": {
+      "storedObjects": 282,
+      "storedBytes": 1435629,
+      "summary": {
+        "p50Ms": 110.728,
+        "p95Ms": 117.223,
+        "meanMs": 112.732,
+        "meanReads": 7,
+        "meanReadBytes": 290984,
+        "meanWrites": 7,
+        "meanWriteBytes": 291021
+      },
+      "samples": [
+        {
+          "elapsedMs": 113.891,
+          "reads": 7,
+          "readBytes": 292063,
+          "writes": 7,
+          "writeBytes": 292125,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 110.274,
+          "reads": 7,
+          "readBytes": 290279,
+          "writes": 7,
+          "writeBytes": 290306,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 110.728,
+          "reads": 7,
+          "readBytes": 290386,
+          "writes": 7,
+          "writeBytes": 290416,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 109.641,
+          "reads": 7,
+          "readBytes": 290235,
+          "writes": 7,
+          "writeBytes": 290267,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 117.223,
+          "reads": 7,
+          "readBytes": 290422,
+          "writes": 7,
+          "writeBytes": 290456,
+          "preconditionFailures": 0
+        },
+        {
+          "elapsedMs": 114.633,
+          "reads": 7,
+          "readBytes": 292521,
+          "writes": 7,
+          "writeBytes": 292553,
+          "preconditionFailures": 0
+        }
+      ]
+    }
+  }
+}
