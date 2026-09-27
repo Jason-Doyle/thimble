@@ -112,7 +112,7 @@
     "benchmark:current-regional:build": "vite build --config benchmarks/current-regional/vite.config.ts",
     "benchmark:current-regional:aggregate": "tsx benchmarks/current-regional/aggregate.mjs",
     "benchmark:current-regional:publish": "tsx benchmarks/current-regional/publish.mjs",
-    "benchmark:adaptive-revalidation:build": "vite build --config benchmarks/adaptive-head-revalidation/vite.config.ts",
+    "benchmark:adaptive-revalidation:build": "tsc -p benchmarks/adaptive-head-revalidation/tsconfig.json --noEmit && vite build --config benchmarks/adaptive-head-revalidation/vite.config.ts",
     "benchmark:adaptive-revalidation:aggregate": "tsx benchmarks/adaptive-head-revalidation/aggregate.mjs",
     "migrate:keys": "tsx src/key-migrate.ts",
     "migrate:external-auth": "tsx src/remove-local-auth.ts",

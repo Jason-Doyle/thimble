@@ -680,21 +680,21 @@ function assertVersion(
       `Expected version ${expectedVersion}, received ${document?.version ?? "missing"}`,
     );
   }
+}
 
-  function asBenchmarkDocument(
-    document: import("../../src/core.js").JsonDocument | null,
-  ): BenchmarkDocument | null {
-    if (
-      !document ||
-      typeof document.version !== "number"
-    ) {
-      return null;
-    }
-    return {
-      id: document.id,
-      version: document.version,
-    };
+function asBenchmarkDocument(
+  document: import("../../src/core.js").JsonDocument | null,
+): BenchmarkDocument | null {
+  if (
+    !document ||
+    typeof document.version !== "number"
+  ) {
+    return null;
   }
+  return {
+    id: document.id,
+    version: document.version,
+  };
 }
 
 function scenarioName(
