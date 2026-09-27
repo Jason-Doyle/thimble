@@ -70,69 +70,77 @@ const target = required("TARGET_URL").replace(/\/+$/, "");
 const region = required("BENCHMARK_REGION");
 const runId = required("BENCHMARK_RUN_ID");
 const resultToken = required("BENCHMARK_RESULT_TOKEN");
-const security = await initialSecurityChecks();
-const configResponse = await fetch(
-  `${target}/benchmark-config.json`,
-  {
-    cache: "no-store",
-    headers: {
-      "x-benchmark-token": resultToken,
-    },
-  },
-);
-if (!configResponse.ok) {
-  throw new Error(
-    `Benchmark configuration failed with ${configResponse.status}`,
-  );
-}
-const colo =
-  configResponse.headers.get("x-benchmark-colo") ?? "unknown";
-const config = (await configResponse.json()) as BenchmarkConfig;
-const rawKey = base64ToBytes(config.keyBase64);
-const key = await importAesGcmKey(
-  rawKey,
-  ["decrypt"],
-);
-rawKey.fill(0);
+let config: BenchmarkConfig;
+let key: CryptoKey;
+let colo = "unknown";
 let cachedObjectProbe:
   | { url: string; namespace: string }
   | undefined;
 
-const result = await runReadBenchmark();
-if (!cachedObjectProbe) {
-  throw new Error(
-    "No prewarmed cached object was observed",
-  );
-}
-const cachedAuthorizationResponse = await fetch(
-  cachedObjectProbe.url,
-  {
-    cache: "no-store",
-    headers: {
-      "x-benchmark-cache-namespace":
-        cachedObjectProbe.namespace,
+async function main() {
+  const security = await initialSecurityChecks();
+  const configResponse = await fetch(
+    `${target}/benchmark-config.json`,
+    {
+      cache: "no-store",
+      headers: {
+        "x-benchmark-token": resultToken,
+      },
     },
-  },
-);
-security.cachedObjectWithoutToken =
-  cachedAuthorizationResponse.status;
-if (security.cachedObjectWithoutToken !== 403) {
-  throw new Error(
-    "A cached object was accessible without authorization",
   );
+  if (!configResponse.ok) {
+    throw new Error(
+      `Benchmark configuration failed with ${configResponse.status}`,
+    );
+  }
+  colo =
+    configResponse.headers.get("x-benchmark-colo") ??
+      "unknown";
+  config =
+    (await configResponse.json()) as BenchmarkConfig;
+  const rawKey = base64ToBytes(config.keyBase64);
+  key = await importAesGcmKey(
+    rawKey,
+    ["decrypt"],
+  );
+  rawKey.fill(0);
+
+  const result = await runReadBenchmark();
+  if (!cachedObjectProbe) {
+    throw new Error(
+      "No prewarmed cached object was observed",
+    );
+  }
+  const cachedAuthorizationResponse = await fetch(
+    cachedObjectProbe.url,
+    {
+      cache: "no-store",
+      headers: {
+        "x-benchmark-cache-namespace":
+          cachedObjectProbe.namespace,
+      },
+    },
+  );
+  security.cachedObjectWithoutToken =
+    cachedAuthorizationResponse.status;
+  if (security.cachedObjectWithoutToken !== 403) {
+    throw new Error(
+      "A cached object was accessible without authorization",
+    );
+  }
+  await storeResult({
+    ...result,
+    security,
+  });
+  console.log(JSON.stringify({
+    stored: true,
+    runId,
+    region,
+    colo,
+    operations: countOperations(result.profiles),
+    security,
+  }, null, 2));
 }
-await storeResult({
-  ...result,
-  security,
-});
-console.log(JSON.stringify({
-  stored: true,
-  runId,
-  region,
-  colo,
-  operations: countOperations(result.profiles),
-  security,
-}, null, 2));
 
 async function runReadBenchmark() {
   const pointIterations = integerValue(
@@ -1025,3 +1033,5 @@ function delay(milliseconds: number) {
 function round(value: number): number {
   return Number(value.toFixed(3));
 }
+
+await main();
