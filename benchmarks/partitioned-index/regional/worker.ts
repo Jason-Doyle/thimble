@@ -325,63 +325,72 @@ async function cleanupBucket(env: Env): Promise<unknown> {
       break;
     }
 
-    async function uploadFixture(
-      request: Request,
-      env: Env,
-      url: URL,
-    ): Promise<Response> {
-      if (request.method !== "POST") {
-        return json({ error: "Method not allowed" }, 405);
-      }
-      const key = decodeObjectPath(
-        url.pathname.slice("/fixture/".length),
-      );
-      if (
-        !/^(read|write)\/.+/.test(key) ||
-        key.includes("..")
-      ) {
-        return json({ error: "Invalid fixture path" }, 400);
-      }
-      const declared = Number(
-        request.headers.get("content-length") ?? "0",
-      );
-      if (declared > 20 * 1024 * 1024) {
-        return json({ error: "Fixture is too large" }, 413);
-      }
-      const body = await request.arrayBuffer();
-      if (body.byteLength > 20 * 1024 * 1024) {
-        return json({ error: "Fixture is too large" }, 413);
-      }
-      await env.BENCHMARK_BUCKET.put(
-        key,
-        new Uint8Array(body),
-      );
-      return json({ stored: key }, 201);
-    }
-
-    async function fixtureInventory(
-      env: Env,
-    ): Promise<{ objects: number }> {
-      let objects = 0;
-      let cursor: string | undefined;
-      do {
-        const page = await env.BENCHMARK_BUCKET.list({
-          cursor,
-          limit: 1_000,
-        });
-        objects += page.objects.filter(
-          (object) =>
-            object.key.startsWith("read/") ||
-            object.key.startsWith("write/"),
-        ).length;
-        cursor = page.truncated ? page.cursor : undefined;
-      } while (cursor);
-      return { objects };
-    }
     await env.BENCHMARK_BUCKET.delete(keys);
     deleted += keys.length;
   }
   return { deleted };
+}
+
+async function uploadFixture(
+  request: Request,
+  env: Env,
+  url: URL,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405);
+  }
+  const key = decodeObjectPath(
+    url.pathname.slice("/fixture/".length),
+  );
+  if (
+    !/^(read|write)\/.+/.test(key) ||
+    key.includes("..")
+  ) {
+    return json({ error: "Invalid fixture path" }, 400);
+  }
+  const declared = Number(
+    request.headers.get("content-length") ?? "0",
+  );
+  if (declared > 20 * 1024 * 1024) {
+    return json({ error: "Fixture is too large" }, 413);
+  }
+  const body = await request.arrayBuffer();
+  if (body.byteLength > 20 * 1024 * 1024) {
+    return json({ error: "Fixture is too large" }, 413);
+  }
+  await env.BENCHMARK_BUCKET.put(
+    key,
+    new Uint8Array(body),
+  );
+  return json({ stored: key }, 201);
+}
+
+async function fixtureInventory(
+  env: Env,
+): Promise<{ objects: number }> {
+  let objects = 0;
+  let cursor: string | undefined;
+  do {
+    const options: {
+      cursor?: string;
+      limit: number;
+    } = {
+      limit: 1_000,
+    };
+    if (cursor) {
+      options.cursor = cursor;
+    }
+    const page = await env.BENCHMARK_BUCKET.list(
+      options,
+    );
+    objects += page.objects.filter(
+      (object) =>
+        object.key.startsWith("read/") ||
+        object.key.startsWith("write/"),
+    ).length;
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return { objects };
 }
 
 async function createEngine(

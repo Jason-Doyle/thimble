@@ -32,6 +32,9 @@ import {
   experimentalPartitionedIndexReferenceFromJson,
 } from "../../../src/experimental/partitioned-secondary-index.js";
 import type { JsonValue } from "../../../src/core.js";
+import type {
+  ThimbleQuery,
+} from "../../../src/query.js";
 
 type BenchmarkConfig = {
   sourceCommit: string;
@@ -227,7 +230,7 @@ async function runQueryCase(caseName: string) {
   const runtime = createClient(variant, layout);
   let started = performance.now();
   try {
-    const query =
+    const query: ThimbleQuery<BenchmarkNote> =
       operation === "covered-range"
         ? {
             version: 1 as const,

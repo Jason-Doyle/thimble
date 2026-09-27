@@ -114,7 +114,7 @@
     "benchmark:current-regional:publish": "tsx benchmarks/current-regional/publish.mjs",
     "benchmark:partitioned-index": "tsx benchmarks/partitioned-index/local.mjs",
     "benchmark:partitioned-index:regional:generate": "tsx benchmarks/partitioned-index/regional/generate-data.mjs",
-    "benchmark:partitioned-index:regional:build": "vite build --config benchmarks/partitioned-index/regional/vite.config.ts",
+    "benchmark:partitioned-index:regional:build": "tsc -p benchmarks/partitioned-index/regional/tsconfig.json --noEmit && vite build --config benchmarks/partitioned-index/regional/vite.config.ts",
     "benchmark:partitioned-index:regional:upload": "tsx benchmarks/partitioned-index/regional/upload.mjs",
     "benchmark:partitioned-index:regional:aggregate": "tsx benchmarks/partitioned-index/regional/aggregate.mjs",
     "migrate:keys": "tsx src/key-migrate.ts",
