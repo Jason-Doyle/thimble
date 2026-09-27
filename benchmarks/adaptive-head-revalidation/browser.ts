@@ -544,6 +544,7 @@ function summariseSamples(
     .sort((left, right) => left - right);
   return {
     p50Ms: percentile(elapsed, 0.5),
+    p90Ms: percentile(elapsed, 0.9),
     p95Ms: percentile(elapsed, 0.95),
     meanMs: mean(elapsed),
     maxMs: elapsed.at(-1) ?? 0,

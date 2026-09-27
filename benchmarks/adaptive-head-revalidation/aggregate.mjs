@@ -335,6 +335,7 @@ function summariseValues(values) {
   return {
     samples: sorted.length,
     p50: percentile(sorted, 0.5),
+    p90: percentile(sorted, 0.9),
     p95: percentile(sorted, 0.95),
     mean: mean(sorted),
     min: sorted[0] ?? 0,
