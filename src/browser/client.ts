@@ -84,6 +84,23 @@ export type ThimbleClientMetrics = {
   cache: BrowserCacheMetrics;
 };
 
+export type HeadRevalidationOutcome =
+  | "not-modified"
+  | "changed"
+  | "missing";
+
+export interface HeadRevalidationPolicy {
+  ttlMs(key: string, configuredTtlMs: number): number;
+  complete(
+    key: string,
+    outcome: HeadRevalidationOutcome,
+    configuredTtlMs: number,
+    startedAt: number,
+    completedAt: number,
+  ): number;
+  reset(key: string, configuredTtlMs: number): void;
+}
+
 const MAX_BOUNDED_STORED_RECORDS = 1_000;
 const MAX_BOUNDED_TOMBSTONES = 1_000;
 const MAX_BOUNDED_DECODED_BYTES = 16 * 1024 * 1024;
@@ -118,6 +135,7 @@ export class ThimbleClient {
       bundleReader?: PointReadBundleReader;
       cache: TieredObjectCache;
       headTtlMs: number;
+      headRevalidationPolicy?: HeadRevalidationPolicy;
       writeBaseUrl?: string;
       csrfToken?: string;
       scopeId?: string;
@@ -759,6 +777,10 @@ export class ThimbleClient {
         if (cachedRevision >= incomingRevision) {
           return;
         }
+        this.options.headRevalidationPolicy?.reset(
+          head.key,
+          this.options.headTtlMs,
+        );
       }
       const now = Date.now();
       await Promise.all(
@@ -849,10 +871,15 @@ export class ThimbleClient {
     return withBrowserLock(`thimbledb:${key}`, async () => {
       const cached = await this.options.cache.get(key);
       this.assertGeneration(generation);
-      const now = Date.now();
+      const startedAt = Date.now();
+      const ttlMs =
+        this.options.headRevalidationPolicy?.ttlMs(
+          key,
+          this.options.headTtlMs,
+        ) ?? this.options.headTtlMs;
       if (
         cached &&
-        now - cached.checkedAt < this.options.headTtlMs
+        startedAt - cached.checkedAt < ttlMs
       ) {
         return asHead(cached.value);
       }
@@ -873,12 +900,30 @@ export class ThimbleClient {
         throw error;
       }
       if (remote.status === "not-modified" && cached) {
-        const refreshed = { ...cached, checkedAt: now };
+        const completedAt = Date.now();
+        const refreshed = {
+          ...cached,
+          checkedAt:
+            this.options.headRevalidationPolicy?.complete(
+              key,
+              "not-modified",
+              this.options.headTtlMs,
+              startedAt,
+              completedAt,
+            ) ?? startedAt,
+        };
         await this.cacheSetIfActive(refreshed, generation);
         this.assertGeneration(generation);
         return asHead(refreshed.value);
       }
       if (remote.status === "missing") {
+        this.options.headRevalidationPolicy?.complete(
+          key,
+          "missing",
+          this.options.headTtlMs,
+          startedAt,
+          Date.now(),
+        );
         this.assertGeneration(generation);
         return { revision: 0, rootHash: null };
       }
@@ -886,8 +931,20 @@ export class ThimbleClient {
         throw new Error(`Cannot resolve HEAD for ${collection}`);
       }
 
+      const completedAt = Date.now();
+      this.options.headRevalidationPolicy?.complete(
+        key,
+        "changed",
+        this.options.headTtlMs,
+        startedAt,
+        completedAt,
+      );
       await this.cacheSetIfActive(
-        cacheEntryFromRemote(remote, false),
+        cacheEntryFromRemote(
+          remote,
+          false,
+          completedAt,
+        ),
         generation,
       );
       this.assertGeneration(generation);
@@ -943,10 +1000,15 @@ export class ThimbleClient {
     return withBrowserLock(`thimbledb:${key}`, async () => {
       const cached = await this.options.cache.get(key);
       this.assertGeneration(generation);
-      const now = Date.now();
+      const startedAt = Date.now();
+      const ttlMs =
+        this.options.headRevalidationPolicy?.ttlMs(
+          key,
+          this.options.headTtlMs,
+        ) ?? this.options.headTtlMs;
       if (
         cached &&
-        now - cached.checkedAt < this.options.headTtlMs
+        startedAt - cached.checkedAt < ttlMs
       ) {
         return asSnapshotHead(cached.value);
       }
@@ -966,11 +1028,29 @@ export class ThimbleClient {
         throw error;
       }
       if (remote.status === "not-modified" && cached) {
-        const refreshed = { ...cached, checkedAt: now };
+        const completedAt = Date.now();
+        const refreshed = {
+          ...cached,
+          checkedAt:
+            this.options.headRevalidationPolicy?.complete(
+              key,
+              "not-modified",
+              this.options.headTtlMs,
+              startedAt,
+              completedAt,
+            ) ?? startedAt,
+        };
         await this.cacheSetIfActive(refreshed, generation);
         return asSnapshotHead(refreshed.value);
       }
       if (remote.status === "missing") {
+        this.options.headRevalidationPolicy?.complete(
+          key,
+          "missing",
+          this.options.headTtlMs,
+          startedAt,
+          Date.now(),
+        );
         return { revision: 0, snapshotHash: null };
       }
       if (remote.status !== "found") {
@@ -978,8 +1058,20 @@ export class ThimbleClient {
           `Cannot resolve snapshot HEAD for ${collection}`,
         );
       }
+      const completedAt = Date.now();
+      this.options.headRevalidationPolicy?.complete(
+        key,
+        "changed",
+        this.options.headTtlMs,
+        startedAt,
+        completedAt,
+      );
       await this.cacheSetIfActive(
-        cacheEntryFromRemote(remote, false),
+        cacheEntryFromRemote(
+          remote,
+          false,
+          completedAt,
+        ),
         generation,
       );
       return asSnapshotHead(remote.value);
@@ -1495,8 +1587,8 @@ function asSnapshotPage(value: JsonValue): SnapshotPage {
 function cacheEntryFromRemote(
   remote: Extract<RemoteJsonObject, { status: "found" }>,
   immutable: boolean,
+  now = Date.now(),
 ): CachedJsonObject {
-  const now = Date.now();
   return {
     key: remote.key,
     etag: remote.etag,
