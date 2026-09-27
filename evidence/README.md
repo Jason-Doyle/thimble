@@ -27,3 +27,15 @@ the same evidence for plotting and independent analysis.
 The corresponding source revisions, methodology, failures, and limitations
 are embedded in the JSON artifact and documented in
 `docs/BENCHMARKS.md`.
+
+`write-scaling-regional-worker-2026-09-27.json` contains 1,008 production-path
+writes across seven Azure regions and two replicates. It covers 128, 5,000,
+and 25,000 document collections with zero, one, and two secondary indexes for
+Snapshot and Trie layouts.
+
+`write-scaling-local-2026-09-27.json` is the matching zero-latency local CPU
+and byte matrix.
+
+The scaling curve, object-stage analysis, browser-assistance implications,
+limitations, and cleanup record are documented in
+`benchmarks/write-scaling/RESULTS.md`.
