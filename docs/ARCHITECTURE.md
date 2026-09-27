@@ -79,7 +79,8 @@ encryption. Private scopes use a versioned AES-256-GCM data key.
    JSON parsing or cache insertion.
 5. If a cached HEAD TTL expired, the browser revalidates it with
    `If-None-Match`.
-6. A 304 response keeps the current layout generation.
+6. A successful HEAD response starts the next TTL interval when the response
+   completes. A 304 response keeps the current layout generation.
 7. ID equality resolves directly to one document path.
 8. A matching declared index resolves a bounded set of candidate IDs.
 9. An explicit `.select(...)` can use declared covering fields without

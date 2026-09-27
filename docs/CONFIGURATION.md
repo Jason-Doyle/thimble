@@ -32,7 +32,7 @@ unless noted otherwise.
 | `THIMBLE_PREFIX` | Application prefix inside the data store | `demo` |
 | `THIMBLE_KEY_VERSION` | Active scope-key version for writes | `1` |
 | `THIMBLE_READ_KEY_VERSIONS` | Comma-separated historical key versions that remain readable | Empty |
-| `THIMBLE_HEAD_TTL_MS` | Browser mutable-HEAD revalidation interval | `1000` |
+| `THIMBLE_HEAD_TTL_MS` | Browser mutable-HEAD freshness interval, measured from completion of a successful fetch or revalidation | `1000` |
 | `THIMBLE_COLLECTION_LAYOUTS` | Comma-separated `collection=trie|snapshot` mappings | Empty; trie is the fallback |
 | `THIMBLE_COLLECTION_INDEXES` | JSON object containing the complete active index definitions | `{}` |
 | `THIMBLE_DELETE_RETENTION_DAYS` | Restore window for retained deletions | `30` |

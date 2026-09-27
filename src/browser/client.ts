@@ -873,7 +873,10 @@ export class ThimbleClient {
         throw error;
       }
       if (remote.status === "not-modified" && cached) {
-        const refreshed = { ...cached, checkedAt: now };
+        const refreshed = {
+          ...cached,
+          checkedAt: Date.now(),
+        };
         await this.cacheSetIfActive(refreshed, generation);
         this.assertGeneration(generation);
         return asHead(refreshed.value);
@@ -966,7 +969,10 @@ export class ThimbleClient {
         throw error;
       }
       if (remote.status === "not-modified" && cached) {
-        const refreshed = { ...cached, checkedAt: now };
+        const refreshed = {
+          ...cached,
+          checkedAt: Date.now(),
+        };
         await this.cacheSetIfActive(refreshed, generation);
         return asSnapshotHead(refreshed.value);
       }

@@ -88,6 +88,9 @@ Mutable HEAD uses a configurable TTL:
 $env:THIMBLE_HEAD_TTL_MS = "1000"
 ```
 
+The interval starts when a successful HEAD fetch or conditional revalidation
+completes.
+
 Per-collection and per-object TTL policy is a future extension.
 
 ## Sample application
