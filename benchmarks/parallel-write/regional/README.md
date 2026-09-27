@@ -4,6 +4,9 @@ This harness compares the current sequential authority write pipeline with
 bounded parallel immutable work. It does not change object keys, HEAD shape,
 index format, query planning, or browser read behavior.
 
+The completed regional result and recommendation are in
+`../RESULTS.md`.
+
 The candidate:
 
 - validates and prepares index pages before writing objects

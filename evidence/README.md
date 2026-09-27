@@ -27,3 +27,14 @@ the same evidence for plotting and independent analysis.
 The corresponding source revisions, methodology, failures, and limitations
 are embedded in the JSON artifact and documented in
 `docs/BENCHMARKS.md`.
+
+`parallel-write-regional-worker-2026-09-27.json` contains 336 large
+two-index writes and 56 post-write read checks across seven Azure regions and
+two pristine-bucket replicates. It compares current sequential authority
+writes with bounded parallel immutable commits.
+
+`parallel-write-local-2026-09-27.json` contains the matching 128, 5,000, and
+25,000 document matrix with zero, one, and two indexes.
+
+The implementation, result tables, decision, limitations, and browser-compute
+assessment are documented in `benchmarks/parallel-write/RESULTS.md`.
