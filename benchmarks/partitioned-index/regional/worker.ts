@@ -241,8 +241,7 @@ async function serveIndexBundle(
     withStorageMetrics(
       new Response(compressed, {
         headers: {
-          "content-type": "application/json; charset=utf-8",
-          "content-encoding": "gzip",
+          "content-type": "application/octet-stream",
           "content-length": String(compressed.byteLength),
           "cache-control": "no-store",
           "x-benchmark-response-bytes": String(

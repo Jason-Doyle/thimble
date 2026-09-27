@@ -317,12 +317,17 @@ async function runBundledQueryCase(
         },
       },
     );
-    const body = await response.text();
     if (!response.ok) {
+      const body = await response.text();
       throw new Error(
         `Index bundle returned ${response.status}: ${body}`,
       );
     }
+    const compressed = new Uint8Array(
+      await response.arrayBuffer(),
+    );
+    const decoded = await gunzipBytes(compressed);
+    const body = new TextDecoder().decode(decoded);
     const parsed = JSON.parse(
       body,
     ) as ExperimentalPartitionedIndexBundle;
@@ -376,7 +381,7 @@ async function runBundledQueryCase(
       networkReads: 1,
       networkBytes: Number(
         response.headers.get("x-benchmark-response-bytes") ??
-          "0",
+          String(compressed.byteLength),
       ),
       decodedResponseBytes:
         new TextEncoder().encode(body).byteLength,
@@ -818,6 +823,17 @@ function integerValue(
 
 function round(value: number): number {
   return Number(value.toFixed(3));
+}
+
+async function gunzipBytes(
+  bytes: Uint8Array,
+): Promise<Uint8Array> {
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(
+    await new Response(stream).arrayBuffer(),
+  );
 }
 
 let result: unknown;
