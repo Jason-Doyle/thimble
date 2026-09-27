@@ -227,7 +227,7 @@ async function runWrite(
   }
   const prefix =
     mode === "single"
-      ? `write/single/${variant}/${layout}`
+      ? `write/single/${region}/${variant}/${layout}`
       : `write/contention/${replicate}/${variant}/${layout}`;
   const documentIndex =
     (iteration * 997 +

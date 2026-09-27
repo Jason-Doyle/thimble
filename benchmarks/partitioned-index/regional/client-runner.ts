@@ -174,6 +174,7 @@ async function runWriteBenchmark() {
           "single",
           iteration,
           runId,
+          true,
         ),
       );
     }

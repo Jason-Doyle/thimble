@@ -74,17 +74,20 @@ for (const variant of PARTITIONED_INDEX_VARIANTS) {
       documents,
     );
     layouts[variant][layout] = await inventory(directory);
-    await cp(
-      directory,
-      path.join(
-        objectsRoot,
-        "write",
-        "single",
-        variant,
-        layout,
-      ),
-      { recursive: true },
-    );
+    for (const region of BENCHMARK_REGIONS) {
+      await cp(
+        directory,
+        path.join(
+          objectsRoot,
+          "write",
+          "single",
+          region,
+          variant,
+          layout,
+        ),
+        { recursive: true },
+      );
+    }
     for (const replicate of ["a", "b"]) {
       await cp(
         directory,
