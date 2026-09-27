@@ -95,9 +95,7 @@ const documents = Number(
 const iterations = Number(
   process.env.THIMBLE_PARTITIONED_ITERATIONS ?? "6",
 );
-const partitionCount = Number(
-  process.env.THIMBLE_PARTITIONED_SHARDS ?? "8",
-);
+const partitionCount = 4;
 const rawKey = Uint8Array.from(
   { length: 32 },
   (_, index) => index + 91,
@@ -108,10 +106,10 @@ const key = await importAesGcmKey(
 );
 const initial = benchmarkDocuments(documents);
 const configurations = [
-  { name: "snapshot-baseline", layout: "snapshot", partitions: null },
-  { name: "snapshot-partitioned", layout: "snapshot", partitions: partitionCount },
-  { name: "trie-baseline", layout: "trie", partitions: null },
-  { name: "trie-partitioned", layout: "trie", partitions: partitionCount },
+  { name: "snapshot-baseline", layout: "snapshot", routed: false },
+  { name: "snapshot-value-routed", layout: "snapshot", routed: true },
+  { name: "trie-baseline", layout: "trie", routed: false },
+  { name: "trie-value-routed", layout: "trie", routed: true },
 ];
 const results = {};
 
@@ -122,14 +120,22 @@ for (const configuration of configurations) {
     keyId: "partitioned-local-v1",
     compression: "gzip",
   });
-  const partitionConfiguration = configuration.partitions
+  const partitionConfiguration = configuration.routed
     ? {
-        notes: Object.fromEntries(
-          BENCHMARK_INDEXES.notes.map((definition) => [
-            definition.name,
-            configuration.partitions,
-          ]),
-        ),
+        notes: {
+          "by-category": {
+            kind: "hash-values",
+            partitions: partitionCount,
+          },
+          "by-last-modified": {
+            kind: "range",
+            boundaries: [
+              documents / 4,
+              documents / 2,
+              (documents * 3) / 4,
+            ],
+          },
+        },
       }
     : {};
   const engine =

@@ -1,21 +1,25 @@
-# Partitioned secondary-index regional experiment
+# Value-routed secondary-index regional experiment
 
 This harness compares current monolithic secondary-index pages with an
-experimental eight-shard layout on the isolated
-`experiment/partitioned-secondary-indexes` branch.
+experimental four-partition layout on the isolated
+`experiment/value-routed-index-partitions` branch.
 
 The candidate keeps collection HEAD publication atomic:
 
 ```text
 collection HEAD
   index reference
-    partition count
+    routing strategy and partition count
     immutable shard hashes and decoded sizes
 ```
 
-Each document ID maps deterministically to one shard. A document mutation
-rewrites one shard per configured index. Queries read all eight shards in
-parallel and merge them before applying the existing index plan.
+Equality index values map deterministically to one hash partition. Range
+indexes use three explicit ordered boundaries. Equality queries read one
+partition and bounded ranges read only intersecting partitions.
+
+A covering-field update within one route rewrites one partition. An indexed
+value that moves routes rewrites the old and new partitions. Collection HEAD
+remains the atomic publication boundary.
 
 ## Workload
 
@@ -30,9 +34,10 @@ parallel and merge them before applying the existing index plan.
 - single-writer updates
 - simultaneous seven-region writes
 
-The warm re-query case preloads all index objects, removes the cached HEAD and
-one index object, then repeats the query. It measures the expected fetch after
-one partition changes without mutating the shared read fixture.
+The warm re-query case preloads the routed equality partition, removes cached
+HEAD and that partition, then repeats the query. It measures the expected
+fetch after one routed partition changes without mutating the shared read
+fixture.
 
 ## Preparation
 
@@ -66,7 +71,7 @@ npm run benchmark:partitioned-index:regional:aggregate
 The default artifact is:
 
 ```text
-evidence/partitioned-index-regional-worker-2026-09-26.json
+evidence/value-routed-index-regional-worker-2026-09-27.json
 ```
 
 No production Worker, bucket, route, domain, package export, or main-branch

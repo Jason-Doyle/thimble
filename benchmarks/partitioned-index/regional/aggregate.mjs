@@ -12,7 +12,7 @@ const root = path.resolve(
 );
 const outputPath = path.resolve(
   process.env.THIMBLE_PARTITIONED_REGIONAL_EVIDENCE ??
-    "evidence/partitioned-index-regional-worker-2026-09-26.json",
+    "evidence/value-routed-index-regional-worker-2026-09-27.json",
 );
 const replicates = (
   process.env.THIMBLE_PARTITIONED_REPLICATES ?? "a,b"
@@ -47,14 +47,16 @@ const evidence = {
     singleWriteIterationsPerCase: 8,
     contentionIterationsPerCase: 3,
     candidate:
-      "Eight immutable index shards selected by document ID, with shard metadata embedded atomically in the collection HEAD.",
+      "Four immutable secondary-index partitions. Equality values select one hash partition; range predicates select only intersecting ordered partitions. Routing metadata is embedded atomically in the collection HEAD.",
     baseline:
       "Current one-page immutable secondary index per definition.",
     primaryLatency:
       "clientElapsedMs measured around the complete regional operation",
   },
   limitations: [
-    "The fixed ID partitions require every query to read all eight shards.",
+    "Equality-value hashing can create skew when a few values dominate the workload.",
+    "Ordered range boundaries are static for this experiment and do not rebalance automatically.",
+    "An indexed-value move can rewrite both the old and new partitions.",
     "The candidate is experimental and is not a public package export or production protocol.",
     "Azure regions approximate geography and do not represent residential last-mile networks.",
     "One Cloudflare account and one R2 bucket placement were used.",
@@ -146,7 +148,7 @@ function aggregateReadRuns(runs) {
       ].flatMap((operation) =>
         ["snapshot", "trie"].map((layout) => {
           const candidate =
-            summary[`${operation}-partitioned-${layout}`];
+            summary[`${operation}-value-routed-${layout}`];
           const baseline =
             summary[`${operation}-baseline-${layout}`];
           return [
@@ -178,7 +180,7 @@ function aggregateWriteRuns(runs) {
       ["snapshot", "trie"].map((layout) => [
         layout,
         compare(
-          summary[`${prefix}-partitioned-${layout}`],
+          summary[`${prefix}-value-routed-${layout}`],
           summary[`${prefix}-baseline-${layout}`],
         ),
       ]),

@@ -25,6 +25,7 @@ import {
 } from "../src/engines/immutable-snapshot.js";
 import {
   buildExperimentalPartitionedIndex,
+  experimentalIndexPartition,
   experimentalPartitionedIndexManifestFromReference,
   mergeExperimentalPartitionedIndexPages,
   updateExperimentalPartitionedIndex,
@@ -60,19 +61,25 @@ const indexes: CollectionIndexConfiguration = {
 };
 const partitions: ExperimentalPartitionedIndexConfiguration = {
   notes: {
-    "by-category": 8,
-    "by-last-modified": 8,
+    "by-category": {
+      kind: "hash-values",
+      partitions: 4,
+    },
+    "by-last-modified": {
+      kind: "range",
+      boundaries: [128, 256, 384],
+    },
   },
 };
 
-describe("experimental partitioned secondary indexes", () => {
-  it("merges deterministic shards to the monolithic page", async () => {
+describe("experimental value-partitioned secondary indexes", () => {
+  it("merges value-routed shards to the monolithic page", async () => {
     const definition = indexes.notes![0]!;
     const documents = notes(256);
     const prepared = await buildExperimentalPartitionedIndex(
       definition,
       documents,
-      8,
+      partitions.notes!["by-category"]!,
       address,
     );
     const manifest =
@@ -80,8 +87,12 @@ describe("experimental partitioned secondary indexes", () => {
         prepared.reference,
         definition,
       );
-    expect(manifest?.partitions).toBe(8);
-    expect(prepared.objects).toHaveLength(8);
+    expect(manifest?.partitions).toBe(4);
+    expect(manifest?.routing).toEqual({
+      kind: "hash-values",
+      partitions: 4,
+    });
+    expect(prepared.objects).toHaveLength(4);
 
     const pages = prepared.objects.map((object, partition) => {
       const page = secondaryIndexPageFromJson(
@@ -107,13 +118,13 @@ describe("experimental partitioned secondary indexes", () => {
     );
   });
 
-  it("rewrites only the changed ID partition", async () => {
+  it("rewrites one shard when indexed values stay routed together", async () => {
     const definition = indexes.notes![0]!;
     const documents = notes(256);
     const initial = await buildExperimentalPartitionedIndex(
       definition,
       documents,
-      8,
+      partitions.notes!["by-category"]!,
       address,
     );
     const manifest =
@@ -133,13 +144,16 @@ describe("experimental partitioned secondary indexes", () => {
     );
     const replacement = {
       ...documents[17]!,
-      category: "changed",
-      lastModified: 999,
+      title: "Changed covering field",
     };
     const updated = await updateExperimentalPartitionedIndex(
       manifest,
       definition,
-      [{ id: replacement.id, document: replacement }],
+      [{
+        id: replacement.id,
+        previousDocument: documents[17]!,
+        document: replacement,
+      }],
       async (shard) => pages.get(shard.hash)!,
       address,
     );
@@ -176,6 +190,64 @@ describe("experimental partitioned secondary indexes", () => {
     );
   });
 
+  it("rewrites old and new shards when an indexed value moves", async () => {
+    const definition = indexes.notes![0]!;
+    const documents = notes(256);
+    const initial = await buildExperimentalPartitionedIndex(
+      definition,
+      documents,
+      partitions.notes!["by-category"]!,
+      address,
+    );
+    const manifest =
+      experimentalPartitionedIndexManifestFromReference(
+        initial.reference,
+        definition,
+      )!;
+    const pages = new Map(
+      initial.objects.map((object) => [
+        object.hash,
+        secondaryIndexPageFromJson(
+          JSON.parse(
+            Buffer.from(object.bytes).toString("utf8"),
+          ) as JsonValue,
+        ),
+      ]),
+    );
+    const previous = documents[17]!;
+    let category = "moved";
+    while (
+      experimentalIndexPartition(
+        definition,
+        previous,
+        partitions.notes!["by-category"]!,
+      ) ===
+      experimentalIndexPartition(
+        definition,
+        { ...previous, category },
+        partitions.notes!["by-category"]!,
+      )
+    ) {
+      category += "x";
+    }
+    const replacement = {
+      ...previous,
+      category,
+    };
+    const updated = await updateExperimentalPartitionedIndex(
+      manifest,
+      definition,
+      [{
+        id: replacement.id,
+        previousDocument: previous,
+        document: replacement,
+      }],
+      async (shard) => pages.get(shard.hash)!,
+      address,
+    );
+    expect(updated.objects).toHaveLength(2);
+  });
+
   it.each(["snapshot", "trie"] as const)(
     "publishes atomic partition references and serves %s queries",
     async (layout) => {
@@ -191,11 +263,11 @@ describe("experimental partitioned secondary indexes", () => {
           firstHead.indexes ?? {},
         )) {
           expect(
-            reference.experimentalPartitions?.partitions,
-          ).toBe(8);
+            reference.experimentalPartitions?.version,
+          ).toBe(2);
           expect(
             reference.experimentalPartitions?.shards.length,
-          ).toBe(8);
+          ).toBeGreaterThan(0);
         }
         await expect(
           inspectStudioIndex({
@@ -219,7 +291,11 @@ describe("experimental partitioned secondary indexes", () => {
           entries: 20,
         });
 
-        const client = browserClient(store, layout);
+        const reader = new CountingReader(store);
+        const client = browserClient(
+          reader,
+          layout,
+        );
         await expect(
           client.queryDocuments<Note>(
             "notes",
@@ -239,6 +315,40 @@ describe("experimental partitioned secondary indexes", () => {
           plan: "index",
           documents: { length: 26 },
         });
+        expect(reader.calls).toBe(2);
+
+        reader.reset();
+        client.clearMemory();
+        await expect(
+          client.queryDocuments<Note>(
+            "notes",
+            {
+              version: 1,
+              where: {
+                and: [
+                  {
+                    field: "lastModified",
+                    operator: "gte",
+                    value: 175,
+                  },
+                  {
+                    field: "lastModified",
+                    operator: "lte",
+                    value: 199,
+                  },
+                ],
+              },
+              limit: 25,
+              maxScanDocuments: 512,
+            },
+            ["title", "category"],
+          ),
+        ).resolves.toMatchObject({
+          plan: "index",
+          documents: { length: 25 },
+          scannedDocuments: 25,
+        });
+        expect(reader.calls).toBe(2);
         const changedIndexes: CollectionIndexConfiguration = {
           notes: [
             {
@@ -280,7 +390,9 @@ describe("experimental partitioned secondary indexes", () => {
         await engine.put("notes", "note-000017", {
           id: "note-000017",
           title: "Changed",
-          category: "changed",
+          category: differentCategory(
+            notes(18)[17]!,
+          ),
           lastModified: 999,
         });
         const nextHead = await readHead(store, layout);
@@ -291,12 +403,21 @@ describe("experimental partitioned secondary indexes", () => {
           const after =
             nextHead.indexes![definition.name]!
               .experimentalPartitions!.shards;
+          const beforeByPartition = new Map(
+            before.map((shard) => [
+              shard.partition,
+              shard.hash,
+            ]),
+          );
           expect(
             after.filter(
-              (shard, index) =>
-                shard.hash !== before[index]?.hash,
+              (shard) =>
+                shard.hash !==
+                beforeByPartition.get(
+                  shard.partition,
+                ),
             ),
-          ).toHaveLength(1);
+          ).toHaveLength(2);
         }
         client.close();
       } finally {
@@ -318,19 +439,26 @@ describe("experimental partitioned secondary indexes", () => {
         await engine.put("notes", "note-000017", {
           id: "note-000017",
           title: "Changed",
-          category: "changed",
+          category: differentCategory(
+            notes(18)[17]!,
+          ),
           lastModified: 999,
         });
         await engine.compact("notes");
 
-        const client = browserClient(store, layout);
+        const client = browserClient(
+          new CountingReader(store),
+          layout,
+        );
         await expect(
           client.queryDocuments<Note>("notes", {
             version: 1,
             where: {
               field: "category",
               operator: "eq",
-              value: "changed",
+              value: differentCategory(
+                notes(18)[17]!,
+              ),
             },
             limit: 1,
             maxScanDocuments: 128,
@@ -395,11 +523,11 @@ async function readHead(
 }
 
 function browserClient(
-  store: LocalObjectStore,
+  reader: JsonObjectReader,
   layout: "snapshot" | "trie",
 ): ThimbleClient {
   return new ThimbleClient({
-    reader: objectReader(store),
+    reader,
     cache: new TieredObjectCache(
       new MemoryObjectCache(),
       new NullPersistentCache(),
@@ -410,31 +538,41 @@ function browserClient(
   });
 }
 
-function objectReader(store: LocalObjectStore): JsonObjectReader {
-  return {
-    async get(key, ifNoneMatch): Promise<RemoteJsonObject> {
-      const object = await store.get(key);
-      if (!object) {
-        return { status: "missing", key };
-      }
-      if (ifNoneMatch === object.etag) {
-        return {
-          status: "not-modified",
-          key,
-          etag: object.etag,
-        };
-      }
+class CountingReader implements JsonObjectReader {
+  calls = 0;
+
+  constructor(private readonly store: LocalObjectStore) {}
+
+  reset(): void {
+    this.calls = 0;
+  }
+
+  async get(
+    key: string,
+    ifNoneMatch?: string,
+  ): Promise<RemoteJsonObject> {
+    this.calls += 1;
+    const object = await this.store.get(key);
+    if (!object) {
+      return { status: "missing", key };
+    }
+    if (ifNoneMatch === object.etag) {
       return {
-        status: "found",
+        status: "not-modified",
         key,
         etag: object.etag,
-        value: JSON.parse(
-          Buffer.from(object.bytes).toString("utf8"),
-        ) as JsonValue,
-        bytes: object.bytes.byteLength,
       };
-    },
-  };
+    }
+    return {
+      status: "found",
+      key,
+      etag: object.etag,
+      value: JSON.parse(
+        Buffer.from(object.bytes).toString("utf8"),
+      ) as JsonValue,
+      bytes: object.bytes.byteLength,
+    };
+  }
 }
 
 function notes(count: number): Note[] {
@@ -444,6 +582,28 @@ function notes(count: number): Note[] {
     category: `category-${String(index % 20).padStart(2, "0")}`,
     lastModified: index,
   }));
+}
+
+function differentCategory(document: Note): string {
+  const definition = indexes.notes![0]!;
+  const routing =
+    partitions.notes!["by-category"]!;
+  const current = experimentalIndexPartition(
+    definition,
+    document,
+    routing,
+  );
+  let candidate = "changed";
+  while (
+    experimentalIndexPartition(
+      definition,
+      { ...document, category: candidate },
+      routing,
+    ) === current
+  ) {
+    candidate += "x";
+  }
+  return candidate;
 }
 
 async function address(bytes: Uint8Array): Promise<string> {

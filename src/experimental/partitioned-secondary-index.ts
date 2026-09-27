@@ -14,18 +14,33 @@ import {
   type SecondaryIndexChange,
   type SecondaryIndexDefinition,
   type SecondaryIndexPage,
+  type SecondaryIndexPlan,
   type SecondaryIndexReference,
 } from "../secondary-index.js";
 import {
   createDictionary,
   encodeJson,
 } from "../shared-utils.js";
-import type {
-  TrieStoredDocument,
+import {
+  isTrieTombstone,
+  type TrieStoredDocument,
 } from "../trie-protocol.js";
 
+export type ExperimentalPartitionedIndexRouting =
+  | {
+      kind: "hash-values";
+      partitions: number;
+    }
+  | {
+      kind: "range";
+      boundaries: JsonPrimitive[];
+    };
+
 export type ExperimentalPartitionedIndexConfiguration =
-  Record<string, Record<string, number>>;
+  Record<
+    string,
+    Record<string, ExperimentalPartitionedIndexRouting>
+  >;
 
 export type ExperimentalPartitionedIndexShard = {
   partition: number;
@@ -36,8 +51,9 @@ export type ExperimentalPartitionedIndexShard = {
 };
 
 export type ExperimentalPartitionedIndexManifest = {
-  version: 1;
+  version: 2;
   definition: SecondaryIndexDefinition;
+  routing: ExperimentalPartitionedIndexRouting;
   partitions: number;
   entries: number;
   documents: number;
@@ -53,59 +69,101 @@ export type ExperimentalPreparedPartitionedIndex = {
   }>;
 };
 
+export function experimentalPartitionRouting(
+  configuration: ExperimentalPartitionedIndexConfiguration,
+  collection: string,
+  indexName: string,
+): ExperimentalPartitionedIndexRouting | null {
+  const value = configuration[collection]?.[indexName];
+  return value ? validateRouting(value) : null;
+}
+
 export function experimentalPartitionCount(
   configuration: ExperimentalPartitionedIndexConfiguration,
   collection: string,
   indexName: string,
 ): number | null {
-  const value = configuration[collection]?.[indexName];
-  if (value === undefined) {
-    return null;
-  }
-  if (
-    !Number.isInteger(value) ||
-    value < 2 ||
-    value > 64 ||
-    (value & (value - 1)) !== 0
-  ) {
-    throw new Error(
-      `Experimental partition count for ${collection}/${indexName} must be a power of two from 2 to 64`,
-    );
-  }
-  return value;
+  const routing = experimentalPartitionRouting(
+    configuration,
+    collection,
+    indexName,
+  );
+  return routing ? partitionCount(routing) : null;
 }
 
 export function experimentalIndexPartition(
-  id: string,
-  partitions: number,
-): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < id.length; index += 1) {
-    hash ^= id.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
+  definition: SecondaryIndexDefinition,
+  document: TrieStoredDocument | null,
+  routing: ExperimentalPartitionedIndexRouting,
+): number | null {
+  if (!document || isTrieTombstone(document)) {
+    return null;
   }
-  return (hash >>> 0) & (partitions - 1);
+  const values = definition.fields.map(
+    (field) => document[field],
+  );
+  if (!values.every(isJsonPrimitive)) {
+    return null;
+  }
+  const primitives = values as JsonPrimitive[];
+  if (routing.kind === "hash-values") {
+    return hashPartition(
+      JSON.stringify(primitives),
+      routing.partitions,
+    );
+  }
+  const value = primitives[0]!;
+  for (
+    let partition = 0;
+    partition < routing.boundaries.length;
+    partition += 1
+  ) {
+    if (
+      comparePrimitive(
+        value,
+        routing.boundaries[partition],
+      ) < 0
+    ) {
+      return partition;
+    }
+  }
+  return routing.boundaries.length;
 }
 
 export async function buildExperimentalPartitionedIndex(
   definition: SecondaryIndexDefinition,
   documents: Iterable<TrieStoredDocument>,
-  partitions: number,
-  address: (bytes: Uint8Array) => Promise<string> | string,
+  routing: ExperimentalPartitionedIndexRouting,
+  address: (
+    bytes: Uint8Array,
+  ) => Promise<string> | string,
 ): Promise<ExperimentalPreparedPartitionedIndex> {
-  validatePartitionCount(partitions);
+  const normalizedRouting = validateRoutingForDefinition(
+    routing,
+    definition,
+  );
   const buckets = Array.from(
-    { length: partitions },
+    { length: partitionCount(normalizedRouting) },
     () => [] as TrieStoredDocument[],
   );
   for (const document of documents) {
-    buckets[
-      experimentalIndexPartition(document.id, partitions)
-    ]!.push(document);
+    const partition = experimentalIndexPartition(
+      definition,
+      document,
+      normalizedRouting,
+    );
+    if (partition !== null) {
+      buckets[partition]!.push(document);
+    }
   }
-  const objects: ExperimentalPreparedPartitionedIndex["objects"] = [];
+  const objects: ExperimentalPreparedPartitionedIndex["objects"] =
+    [];
   const shards: ExperimentalPartitionedIndexShard[] = [];
-  for (let partition = 0; partition < buckets.length; partition += 1) {
+  for (
+    let partition = 0;
+    partition < buckets.length;
+    partition += 1
+  ) {
     const page = buildSecondaryIndexPage(
       definition,
       buckets[partition]!,
@@ -116,11 +174,18 @@ export async function buildExperimentalPartitionedIndex(
     const bytes = encodeSecondaryIndexPage(page);
     const hash = await address(bytes);
     objects.push({ hash, bytes });
-    shards.push(shardReference(partition, hash, page, bytes));
+    shards.push(
+      shardReference(
+        partition,
+        hash,
+        page,
+        bytes,
+      ),
+    );
   }
   return finishPreparedIndex(
     definition,
-    partitions,
+    normalizedRouting,
     shards,
     objects,
     address,
@@ -134,7 +199,9 @@ export async function updateExperimentalPartitionedIndex(
   loadShard: (
     shard: ExperimentalPartitionedIndexShard,
   ) => Promise<SecondaryIndexPage>,
-  address: (bytes: Uint8Array) => Promise<string> | string,
+  address: (
+    bytes: Uint8Array,
+  ) => Promise<string> | string,
 ): Promise<ExperimentalPreparedPartitionedIndex> {
   if (
     !secondaryIndexDefinitionsEqual(
@@ -143,7 +210,7 @@ export async function updateExperimentalPartitionedIndex(
     )
   ) {
     throw new Error(
-      `Experimental partitioned index ${definition.name} definition changed`,
+      `Experimental value-partitioned index ${definition.name} definition changed`,
     );
   }
   const changesByPartition = new Map<
@@ -151,26 +218,67 @@ export async function updateExperimentalPartitionedIndex(
     SecondaryIndexChange[]
   >();
   for (const change of changes) {
-    const partition = experimentalIndexPartition(
-      change.id,
-      manifest.partitions,
+    if (change.previousDocument === undefined) {
+      throw new Error(
+        `Experimental value-partitioned index ${definition.name} requires the previous document`,
+      );
+    }
+    const previousPartition =
+      experimentalIndexPartition(
+        definition,
+        change.previousDocument,
+        manifest.routing,
+      );
+    const nextPartition = experimentalIndexPartition(
+      definition,
+      change.document,
+      manifest.routing,
     );
-    const partitionChanges =
-      changesByPartition.get(partition) ?? [];
-    partitionChanges.push(change);
-    changesByPartition.set(partition, partitionChanges);
+    if (previousPartition !== null) {
+      appendChange(
+        changesByPartition,
+        previousPartition,
+        {
+          id: change.id,
+          document:
+            previousPartition === nextPartition
+              ? change.document
+              : null,
+        },
+      );
+    }
+    if (
+      nextPartition !== null &&
+      nextPartition !== previousPartition
+    ) {
+      appendChange(
+        changesByPartition,
+        nextPartition,
+        {
+          id: change.id,
+          document: change.document,
+        },
+      );
+    }
   }
+
   const current = new Map(
     manifest.shards.map((shard) => [
       shard.partition,
       shard,
     ]),
   );
-  const objects: ExperimentalPreparedPartitionedIndex["objects"] = [];
-  for (const [partition, partitionChanges] of changesByPartition) {
+  const objects: ExperimentalPreparedPartitionedIndex["objects"] =
+    [];
+  for (
+    const [partition, partitionChanges] of
+    changesByPartition
+  ) {
     const currentShard = current.get(partition);
     const page = updateSecondaryIndexPage(
-      currentShard ? await loadShard(currentShard) : null,
+      currentShard
+        ? await loadShard(currentShard)
+        : null,
       definition,
       partitionChanges,
     );
@@ -193,12 +301,58 @@ export async function updateExperimentalPartitionedIndex(
   }
   return finishPreparedIndex(
     definition,
-    manifest.partitions,
+    manifest.routing,
     [...current.values()].sort(
-      (left, right) => left.partition - right.partition,
+      (left, right) =>
+        left.partition - right.partition,
     ),
     objects,
     address,
+  );
+}
+
+export function selectExperimentalPartitionedIndexShards<
+  T extends { id: string },
+>(
+  manifest: ExperimentalPartitionedIndexManifest,
+  plan: SecondaryIndexPlan<T>,
+): ExperimentalPartitionedIndexShard[] {
+  if (
+    !secondaryIndexDefinitionsEqual(
+      manifest.definition,
+      plan.definition,
+    )
+  ) {
+    throw new Error(
+      "Experimental value-partitioned query plan does not match its manifest",
+    );
+  }
+  if (manifest.routing.kind === "hash-values") {
+    const values = plan.definition.fields.map((field) =>
+      plan.comparisons.find(
+        (comparison) =>
+          comparison.field === field &&
+          comparison.operator === "eq",
+      )?.value,
+    );
+    if (!values.every(isJsonPrimitive)) {
+      return manifest.shards;
+    }
+    const partition = hashPartition(
+      JSON.stringify(values),
+      manifest.routing.partitions,
+    );
+    return manifest.shards.filter(
+      (shard) => shard.partition === partition,
+    );
+  }
+  const boundaries = manifest.routing.boundaries;
+  return manifest.shards.filter((shard) =>
+    rangePartitionMayMatch(
+      boundaries,
+      shard.partition,
+      plan.comparisons,
+    ),
   );
 }
 
@@ -211,97 +365,109 @@ export function experimentalPartitionedIndexReferenceFromJson(
     typeof value !== "object" ||
     value === null ||
     Array.isArray(value) ||
-    value.version !== 1 ||
+    value.version !== 2 ||
     typeof value.definition !== "object" ||
     value.definition === null ||
     Array.isArray(value.definition) ||
-    !Number.isInteger(value.partitions) ||
+    typeof value.routing !== "object" ||
+    value.routing === null ||
+    Array.isArray(value.routing) ||
     !Number.isInteger(value.documents) ||
     !Array.isArray(value.shards)
   ) {
     throw new Error(
-      "Experimental partitioned secondary index manifest is malformed",
+      "Experimental value-partitioned secondary index manifest is malformed",
     );
   }
-  const partitions = value.partitions as number;
-  validatePartitionCount(partitions);
   const definition = validateIndexConfiguration({
     collection: [
       value.definition as unknown as SecondaryIndexDefinition,
     ],
   }).collection![0]!;
+  const routing = validateRoutingForDefinition(
+    value.routing as unknown as ExperimentalPartitionedIndexRouting,
+    definition,
+  );
+  const partitions = partitionCount(routing);
   const seen = new Set<number>();
-  const shards = value.shards.map((candidate) => {
-    if (
-      typeof candidate !== "object" ||
-      candidate === null ||
-      Array.isArray(candidate)
-    ) {
-      throw new Error(
-        "Experimental partitioned secondary index shard is malformed",
-      );
-    }
-    const partition = candidate.partition;
-    const entries = candidate.entries;
-    const documents = candidate.documents;
-    const decodedBytes = candidate.decodedBytes;
-    if (
-      typeof partition !== "number" ||
-      !Number.isInteger(partition) ||
-      partition < 0 ||
-      partition >= partitions ||
-      seen.has(partition) ||
-      typeof candidate.hash !== "string" ||
-      !/^[a-f0-9]{64}$/.test(candidate.hash) ||
-      typeof entries !== "number" ||
-      !Number.isInteger(entries) ||
-      entries < 1 ||
-      typeof documents !== "number" ||
-      !Number.isInteger(documents) ||
-      documents < 1 ||
-      typeof decodedBytes !== "number" ||
-      !Number.isInteger(decodedBytes) ||
-      decodedBytes < 1 ||
-      decodedBytes > MAX_SECONDARY_INDEX_PAGE_BYTES
-    ) {
-      throw new Error(
-        "Experimental partitioned secondary index shard is malformed",
-      );
-    }
-    seen.add(partition);
-    return {
-      partition,
-      hash: candidate.hash,
-      entries,
-      documents,
-      decodedBytes,
-    };
-  }).sort((left, right) => left.partition - right.partition);
+  const shards = value.shards
+    .map((candidate) => {
+      if (
+        typeof candidate !== "object" ||
+        candidate === null ||
+        Array.isArray(candidate)
+      ) {
+        throw new Error(
+          "Experimental value-partitioned secondary index shard is malformed",
+        );
+      }
+      const partition = candidate.partition;
+      const entries = candidate.entries;
+      const documents = candidate.documents;
+      const decodedBytes = candidate.decodedBytes;
+      if (
+        typeof partition !== "number" ||
+        !Number.isInteger(partition) ||
+        partition < 0 ||
+        partition >= partitions ||
+        seen.has(partition) ||
+        typeof candidate.hash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(candidate.hash) ||
+        typeof entries !== "number" ||
+        !Number.isInteger(entries) ||
+        entries < 1 ||
+        typeof documents !== "number" ||
+        !Number.isInteger(documents) ||
+        documents < 1 ||
+        typeof decodedBytes !== "number" ||
+        !Number.isInteger(decodedBytes) ||
+        decodedBytes < 1 ||
+        decodedBytes >
+          MAX_SECONDARY_INDEX_PAGE_BYTES
+      ) {
+        throw new Error(
+          "Experimental value-partitioned secondary index shard is malformed",
+        );
+      }
+      seen.add(partition);
+      return {
+        partition,
+        hash: candidate.hash,
+        entries,
+        documents,
+        decodedBytes,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.partition - right.partition,
+    );
   if (
     value.documents !==
-      shards.reduce(
-        (total, shard) => total + shard.documents,
-        0,
-      )
+    shards.reduce(
+      (total, shard) => total + shard.documents,
+      0,
+    )
   ) {
     throw new Error(
-      "Experimental partitioned secondary index totals do not match its shards",
+      "Experimental value-partitioned secondary index totals do not match its shards",
     );
   }
   if (
     shards.reduce(
-      (total, shard) => total + shard.decodedBytes,
+      (total, shard) =>
+        total + shard.decodedBytes,
       0,
     ) > MAX_SECONDARY_INDEX_PAGE_BYTES
   ) {
     throw new Error(
-      `Experimental partitioned secondary index exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} aggregate decoded bytes`,
+      `Experimental value-partitioned secondary index exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} aggregate decoded bytes`,
     );
   }
   return {
-    version: 1,
+    version: 2,
     definition,
-    partitions,
+    routing,
     documents: value.documents as number,
     shards,
   };
@@ -314,16 +480,17 @@ export function experimentalPartitionedIndexManifestFromReference(
   if (!reference.experimentalPartitions) {
     return null;
   }
-  const metadata = experimentalPartitionedIndexReferenceFromJson(
-    reference.experimentalPartitions as unknown as JsonValue,
-  );
+  const metadata =
+    experimentalPartitionedIndexReferenceFromJson(
+      reference.experimentalPartitions as unknown as JsonValue,
+    );
   const entries = metadata.shards.reduce(
     (total, shard) => total + shard.entries,
     0,
   );
   if (reference.entries !== entries) {
     throw new Error(
-      "Experimental partitioned secondary index entry count does not match its collection head",
+      "Experimental value-partitioned secondary index entry count does not match its collection head",
     );
   }
   if (
@@ -333,21 +500,24 @@ export function experimentalPartitionedIndexManifestFromReference(
     )
   ) {
     throw new Error(
-      `Experimental partitioned index ${definition.name} definition changed`,
+      `Experimental value-partitioned index ${definition.name} definition changed`,
     );
   }
   const encoded = encodeJson(
     metadata as unknown as JsonValue,
   );
-  if (reference.decodedBytes !== encoded.byteLength) {
+  if (
+    reference.decodedBytes !== encoded.byteLength
+  ) {
     throw new Error(
-      "Experimental partitioned secondary index metadata size does not match its collection head",
+      "Experimental value-partitioned secondary index metadata size does not match its collection head",
     );
   }
   return {
-    version: 1,
+    version: 2,
     definition: metadata.definition,
-    partitions: metadata.partitions,
+    routing: metadata.routing,
+    partitions: partitionCount(metadata.routing),
     entries,
     documents: metadata.documents,
     shards: metadata.shards,
@@ -376,7 +546,7 @@ export function mergeExperimentalPartitionedIndexPages(
       )
     ) {
       throw new Error(
-        "Experimental partitioned index shard definition does not match its manifest",
+        "Experimental value-partitioned index shard definition does not match its manifest",
       );
     }
     for (const entry of page.entries) {
@@ -388,7 +558,7 @@ export function mergeExperimentalPartitionedIndexPages(
       for (const id of entry.ids) {
         if (merged.ids.has(id)) {
           throw new Error(
-            `Experimental partitioned index contains duplicate document ${id}`,
+            `Experimental value-partitioned index contains duplicate document ${id}`,
           );
         }
         merged.ids.add(id);
@@ -396,12 +566,13 @@ export function mergeExperimentalPartitionedIndexPages(
       entries.set(key, merged);
     }
     if (projections) {
-      for (const [id, projection] of Object.entries(
-        page.projections ?? {},
-      )) {
+      for (
+        const [id, projection] of
+        Object.entries(page.projections ?? {})
+      ) {
         if (Object.hasOwn(projections, id)) {
           throw new Error(
-            `Experimental partitioned index contains duplicate projection ${id}`,
+            `Experimental value-partitioned index contains duplicate projection ${id}`,
           );
         }
         projections[id] = projection;
@@ -417,7 +588,10 @@ export function mergeExperimentalPartitionedIndexPages(
         ids: [...entry.ids].sort(),
       }))
       .sort((left, right) =>
-        compareTuples(left.values, right.values),
+        compareTuples(
+          left.values,
+          right.values,
+        ),
       ),
     ...(projections ? { projections } : {}),
   } as unknown as JsonValue;
@@ -434,7 +608,8 @@ export function validateExperimentalPartitionedIndexShard(
     decodedBytes !== shard.decodedBytes ||
     page.entries.length !== shard.entries ||
     page.entries.reduce(
-      (total, entry) => total + entry.ids.length,
+      (total, entry) =>
+        total + entry.ids.length,
       0,
     ) !== shard.documents ||
     !secondaryIndexDefinitionsEqual(
@@ -443,17 +618,19 @@ export function validateExperimentalPartitionedIndexShard(
     )
   ) {
     throw new Error(
-      `Experimental partitioned index shard ${shard.partition} does not match its manifest`,
+      `Experimental value-partitioned index shard ${shard.partition} does not match its manifest`,
     );
   }
 }
 
 async function finishPreparedIndex(
   definition: SecondaryIndexDefinition,
-  partitions: number,
+  routing: ExperimentalPartitionedIndexRouting,
   shards: ExperimentalPartitionedIndexShard[],
   shardObjects: ExperimentalPreparedPartitionedIndex["objects"],
-  address: (bytes: Uint8Array) => Promise<string> | string,
+  address: (
+    bytes: Uint8Array,
+  ) => Promise<string> | string,
 ): Promise<ExperimentalPreparedPartitionedIndex> {
   const aggregateDecodedBytes = shards.reduce(
     (total, shard) => total + shard.decodedBytes,
@@ -464,13 +641,14 @@ async function finishPreparedIndex(
     MAX_SECONDARY_INDEX_PAGE_BYTES
   ) {
     throw new Error(
-      `Experimental partitioned index ${definition.name} exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} aggregate decoded bytes`,
+      `Experimental value-partitioned index ${definition.name} exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} aggregate decoded bytes`,
     );
   }
   const manifest: ExperimentalPartitionedIndexManifest = {
-    version: 1,
+    version: 2,
     definition,
-    partitions,
+    routing,
+    partitions: partitionCount(routing),
     entries: shards.reduce(
       (total, shard) => total + shard.entries,
       0,
@@ -482,9 +660,9 @@ async function finishPreparedIndex(
     shards,
   };
   const metadata = {
-    version: 1 as const,
+    version: 2 as const,
     definition,
-    partitions,
+    routing,
     documents: manifest.documents,
     shards,
   };
@@ -496,7 +674,7 @@ async function finishPreparedIndex(
     MAX_SECONDARY_INDEX_PAGE_BYTES
   ) {
     throw new Error(
-      `Experimental partitioned index manifest ${definition.name} exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} decoded bytes`,
+      `Experimental value-partitioned index manifest ${definition.name} exceeds ${MAX_SECONDARY_INDEX_PAGE_BYTES} decoded bytes`,
     );
   }
   const hash = await address(metadataBytes);
@@ -512,6 +690,153 @@ async function finishPreparedIndex(
   };
 }
 
+function validateRoutingForDefinition(
+  routing: ExperimentalPartitionedIndexRouting,
+  definition: SecondaryIndexDefinition,
+): ExperimentalPartitionedIndexRouting {
+  const normalized = validateRouting(routing);
+  if (
+    (definition.mode === "equality" &&
+      normalized.kind !== "hash-values") ||
+    (definition.mode === "range" &&
+      normalized.kind !== "range")
+  ) {
+    throw new Error(
+      `Experimental routing does not match index mode for ${definition.name}`,
+    );
+  }
+  return normalized;
+}
+
+function validateRouting(
+  routing: ExperimentalPartitionedIndexRouting,
+): ExperimentalPartitionedIndexRouting {
+  if (
+    routing.kind === "hash-values" &&
+    Number.isInteger(routing.partitions) &&
+    routing.partitions >= 2 &&
+    routing.partitions <= 64 &&
+    (routing.partitions &
+      (routing.partitions - 1)) ===
+      0
+  ) {
+    return {
+      kind: "hash-values",
+      partitions: routing.partitions,
+    };
+  }
+  if (
+    routing.kind === "range" &&
+    Array.isArray(routing.boundaries) &&
+    routing.boundaries.length >= 1 &&
+    routing.boundaries.length < 64 &&
+    routing.boundaries.every(isJsonPrimitive) &&
+    routing.boundaries.every(
+      (boundary, index) =>
+        index === 0 ||
+        comparePrimitive(
+          routing.boundaries[index - 1],
+          boundary,
+        ) < 0,
+    )
+  ) {
+    return {
+      kind: "range",
+      boundaries: [...routing.boundaries],
+    };
+  }
+  throw new Error(
+    "Experimental value-partition routing is malformed",
+  );
+}
+
+function partitionCount(
+  routing: ExperimentalPartitionedIndexRouting,
+): number {
+  return routing.kind === "hash-values"
+    ? routing.partitions
+    : routing.boundaries.length + 1;
+}
+
+function hashPartition(
+  value: string,
+  partitions: number,
+): number {
+  let hash = 0x811c9dc5;
+  for (
+    let index = 0;
+    index < value.length;
+    index += 1
+  ) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0) & (partitions - 1);
+}
+
+function rangePartitionMayMatch<
+  T extends { id: string },
+>(
+  boundaries: JsonPrimitive[],
+  partition: number,
+  comparisons: SecondaryIndexPlan<T>["comparisons"],
+): boolean {
+  const lower =
+    partition === 0
+      ? undefined
+      : boundaries[partition - 1];
+  const upper = boundaries[partition];
+  return comparisons.every((comparison) => {
+    if (!isJsonPrimitive(comparison.value)) {
+      return true;
+    }
+    const expected = comparison.value;
+    if (comparison.operator === "eq") {
+      return (
+        (lower === undefined ||
+          comparePrimitive(expected, lower) >= 0) &&
+        (upper === undefined ||
+          comparePrimitive(expected, upper) < 0)
+      );
+    }
+    if (
+      comparison.operator === "lt" ||
+      comparison.operator === "lte"
+    ) {
+      if (lower === undefined) {
+        return true;
+      }
+      const comparisonToLower = comparePrimitive(
+        lower,
+        expected,
+      );
+      return comparison.operator === "lt"
+        ? comparisonToLower < 0
+        : comparisonToLower <= 0;
+    }
+    if (
+      comparison.operator === "gt" ||
+      comparison.operator === "gte"
+    ) {
+      return (
+        upper === undefined ||
+        comparePrimitive(upper, expected) > 0
+      );
+    }
+    return true;
+  });
+}
+
+function appendChange(
+  changes: Map<number, SecondaryIndexChange[]>,
+  partition: number,
+  change: SecondaryIndexChange,
+): void {
+  const current = changes.get(partition) ?? [];
+  current.push(change);
+  changes.set(partition, current);
+}
+
 function shardReference(
   partition: number,
   hash: string,
@@ -523,32 +848,39 @@ function shardReference(
     hash,
     entries: page.entries.length,
     documents: page.entries.reduce(
-      (total, entry) => total + entry.ids.length,
+      (total, entry) =>
+        total + entry.ids.length,
       0,
     ),
     decodedBytes: bytes.byteLength,
   };
 }
 
-function validatePartitionCount(partitions: number): void {
-  if (
-    !Number.isInteger(partitions) ||
-    partitions < 2 ||
-    partitions > 64 ||
-    (partitions & (partitions - 1)) !== 0
-  ) {
-    throw new Error(
-      "Experimental partition count must be a power of two from 2 to 64",
-    );
-  }
+function isJsonPrimitive(
+  value: unknown,
+): value is JsonPrimitive {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    (typeof value === "number" &&
+      Number.isFinite(value)) ||
+    typeof value === "boolean"
+  );
 }
 
 function compareTuples(
   left: JsonPrimitive[],
   right: JsonPrimitive[],
 ): number {
-  const length = Math.max(left.length, right.length);
-  for (let index = 0; index < length; index += 1) {
+  const length = Math.max(
+    left.length,
+    right.length,
+  );
+  for (
+    let index = 0;
+    index < length;
+    index += 1
+  ) {
     const comparison = comparePrimitive(
       left[index],
       right[index],
@@ -573,14 +905,25 @@ function comparePrimitive(
   if (right === undefined) {
     return 1;
   }
-  if (typeof left === "number" && typeof right === "number") {
+  if (
+    typeof left === "number" &&
+    typeof right === "number"
+  ) {
     return left - right;
   }
-  if (typeof left === "string" && typeof right === "string") {
+  if (
+    typeof left === "string" &&
+    typeof right === "string"
+  ) {
     return left.localeCompare(right);
   }
-  if (typeof left === "boolean" && typeof right === "boolean") {
+  if (
+    typeof left === "boolean" &&
+    typeof right === "boolean"
+  ) {
     return Number(left) - Number(right);
   }
-  return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  return JSON.stringify(left).localeCompare(
+    JSON.stringify(right),
+  );
 }

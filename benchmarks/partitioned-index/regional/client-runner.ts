@@ -28,6 +28,7 @@ import {
   trieIndexKey,
 } from "../../../src/trie-protocol.js";
 import {
+  experimentalIndexPartition,
   experimentalPartitionedIndexReferenceFromJson,
 } from "../../../src/experimental/partitioned-secondary-index.js";
 import type { JsonValue } from "../../../src/core.js";
@@ -42,7 +43,7 @@ type BenchmarkConfig = {
   documents: number;
   partitionCount: number;
   indexes: CollectionIndexConfiguration;
-  variants: Array<"baseline" | "partitioned">;
+  variants: Array<"baseline" | "value-routed">;
   regions: string[];
   pointIds: string[];
   expected: {
@@ -54,7 +55,7 @@ type BenchmarkConfig = {
   };
 };
 
-type Variant = "baseline" | "partitioned";
+type Variant = "baseline" | "value-routed";
 type Layout = "snapshot" | "trie";
 type BenchmarkNote = {
   id: string;
@@ -346,11 +347,11 @@ function createClient(
       [config.collection]: layout as CollectionLayout,
     },
     collectionIndexes: config.indexes,
-    layoutGeneration: "partitioned-index-v1",
+    layoutGeneration: "value-routed-index-v1",
     configurationCheckedAt: Date.now(),
     layoutCheckTtlMs: Number.MAX_SAFE_INTEGER,
     channelName:
-      `partitioned-index-${region}-${variant}-${layout}-${crypto.randomUUID()}`,
+      `value-routed-index-${region}-${variant}-${layout}-${crypto.randomUUID()}`,
   });
   return { client, cache };
 }
@@ -387,17 +388,34 @@ async function invalidateWarmIndex(
     throw new Error("Warm query HEAD is missing the category index");
   }
   let hash = rawReference.hash;
-  if (variant === "partitioned") {
+  if (variant === "value-routed") {
     if (rawReference.experimentalPartitions === undefined) {
       throw new Error(
-        "Warm partitioned query is missing shard metadata",
+        "Warm value-routed query is missing shard metadata",
       );
     }
     const metadata =
       experimentalPartitionedIndexReferenceFromJson(
         rawReference.experimentalPartitions,
       );
-    hash = metadata.shards[0]!.hash;
+    const partition = experimentalIndexPartition(
+      metadata.definition,
+      {
+        id: "benchmark-route",
+        category: config.expected.rareCategory,
+      },
+      metadata.routing,
+    );
+    const shard = metadata.shards.find(
+      (candidate) =>
+        candidate.partition === partition,
+    );
+    if (!shard) {
+      throw new Error(
+        "Warm value-routed query did not select a stored shard",
+      );
+    }
+    hash = shard.hash;
   }
   const indexKey =
     layout === "snapshot"
@@ -577,8 +595,8 @@ function parseQueryCase(caseName: string): {
     0,
     -(layout.length + 1),
   );
-  const variant = withoutLayout.endsWith("-partitioned")
-    ? "partitioned"
+  const variant = withoutLayout.endsWith("-value-routed")
+    ? "value-routed"
     : "baseline";
   const operation = withoutLayout.slice(
     0,
@@ -599,8 +617,8 @@ function parseWriteCase(caseName: string): {
     -(layout.length + 1),
   );
   return {
-    variant: withoutLayout.endsWith("-partitioned")
-      ? "partitioned"
+    variant: withoutLayout.endsWith("-value-routed")
+      ? "value-routed"
       : "baseline",
     layout,
   };

@@ -89,9 +89,17 @@ export type SecondaryIndexReference = {
   entries: number;
   decodedBytes?: number;
   experimentalPartitions?: {
-    version: 1;
+    version: 2;
     definition: SecondaryIndexDefinition;
-    partitions: number;
+    routing:
+      | {
+          kind: "hash-values";
+          partitions: number;
+        }
+      | {
+          kind: "range";
+          boundaries: JsonPrimitive[];
+        };
     documents: number;
     shards: Array<{
       partition: number;
@@ -123,6 +131,7 @@ export type SecondaryIndexPage = {
 export type SecondaryIndexChange = {
   id: string;
   document: TrieStoredDocument | null;
+  previousDocument?: TrieStoredDocument | null;
 };
 
 export type SecondaryIndexPlan<T extends { id: string }> = {
@@ -313,7 +322,7 @@ export function planSecondaryIndex<T extends { id: string }>(
       }
       continue;
     }
-    const comparison = comparisons.find(
+    const matched = comparisons.filter(
       (candidate) =>
         candidate.field === definition.fields[0] &&
         ["eq", "lt", "lte", "gt", "gte"].includes(
@@ -321,10 +330,10 @@ export function planSecondaryIndex<T extends { id: string }>(
         ) &&
         isJsonPrimitive(candidate.value),
     );
-    if (comparison) {
+    if (matched.length > 0) {
       return {
         definition,
-        comparisons: [comparison],
+        comparisons: matched,
       };
     }
   }
@@ -359,16 +368,22 @@ export function idsFromSecondaryIndex<T extends { id: string }>(
         ?.ids ?? []
     );
   }
-  const comparison = plan.comparisons[0]!;
-  if (!isJsonPrimitive(comparison.value)) {
+  if (
+    !plan.comparisons.every(
+      (comparison) =>
+        isJsonPrimitive(comparison.value),
+    )
+  ) {
     return [];
   }
   return page.entries
     .filter((entry) =>
-      compareIndexedValue(
-        entry.values[0],
-        comparison.operator,
-        comparison.value as JsonPrimitive,
+      plan.comparisons.every((comparison) =>
+        compareIndexedValue(
+          entry.values[0],
+          comparison.operator,
+          comparison.value as JsonPrimitive,
+        ),
       ),
     )
     .flatMap((entry) => entry.ids);

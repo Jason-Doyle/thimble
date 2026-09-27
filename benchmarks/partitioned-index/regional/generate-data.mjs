@@ -157,7 +157,7 @@ async function writeLayout(
     },
   );
   const partitionConfiguration =
-    variant === "partitioned"
+    variant === "value-routed"
       ? PARTITIONED_INDEX_CONFIGURATION
       : {};
   const engine =

@@ -28,10 +28,10 @@ export {
 };
 
 export const PARTITIONED_INDEX_DOCUMENTS = 25_000;
-export const PARTITIONED_INDEX_SHARDS = 8;
+export const PARTITIONED_INDEX_SHARDS = 4;
 export const PARTITIONED_INDEX_VARIANTS = [
   "baseline",
-  "partitioned",
+  "value-routed",
 ] as const;
 
 export type PartitionedIndexVariant =
@@ -40,12 +40,18 @@ export type PartitionedIndexLayout = "snapshot" | "trie";
 
 export const PARTITIONED_INDEX_CONFIGURATION:
   ExperimentalPartitionedIndexConfiguration = {
-    [BENCHMARK_COLLECTION]: Object.fromEntries(
-      BENCHMARK_INDEXES[BENCHMARK_COLLECTION]!.map(
-        (definition) => [
-          definition.name,
-          PARTITIONED_INDEX_SHARDS,
+    [BENCHMARK_COLLECTION]: {
+      "by-category": {
+        kind: "hash-values",
+        partitions: PARTITIONED_INDEX_SHARDS,
+      },
+      "by-last-modified": {
+        kind: "range",
+        boundaries: [
+          PARTITIONED_INDEX_DOCUMENTS / 4,
+          PARTITIONED_INDEX_DOCUMENTS / 2,
+          (PARTITIONED_INDEX_DOCUMENTS * 3) / 4,
         ],
-      ),
-    ),
+      },
+    },
   };

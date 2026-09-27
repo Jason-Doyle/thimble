@@ -46,6 +46,7 @@ import {
 import {
   buildExperimentalPartitionedIndex,
   experimentalPartitionCount,
+  experimentalPartitionRouting,
   experimentalPartitionedIndexManifestFromReference,
   updateExperimentalPartitionedIndex,
   validateExperimentalPartitionedIndexShard,
@@ -530,7 +531,11 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
             definition.name,
           ) !== null,
       );
-      const indexChanges: SecondaryIndexChange[] =
+      const indexChanges: Array<
+        SecondaryIndexChange & {
+          previousDocument: TrieStoredDocument | null;
+        }
+      > =
         hasPartitionedIndexes
           ? [
               ...new Set([
@@ -545,6 +550,8 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
             ).map((id) => ({
               id,
               document: documents[id] ?? null,
+              previousDocument:
+                loaded.page.documents[id] ?? null,
             }))
           : [];
       const preparedIndexes = await this.prepareIndexes(
@@ -659,17 +666,21 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
     collection: string,
     head: SnapshotHead,
     documents: TrieStoredDocument[],
-    changes: SecondaryIndexChange[],
+    changes: Array<
+      SecondaryIndexChange & {
+        previousDocument: TrieStoredDocument | null;
+      }
+    >,
   ): Promise<PreparedSecondaryIndex[]> {
     const definitions = this.indexConfiguration[collection] ?? [];
     const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of definitions) {
-      const partitions = experimentalPartitionCount(
+      const routing = experimentalPartitionRouting(
         this.experimentalPartitionedIndexes,
         collection,
         definition.name,
       );
-      if (partitions !== null) {
+      if (routing !== null) {
         let partitioned:
           | ExperimentalPreparedPartitionedIndex
           | undefined;
@@ -682,9 +693,12 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
               definition,
             );
           if (manifest) {
-            if (manifest.partitions !== partitions) {
+            if (
+              JSON.stringify(manifest.routing) !==
+              JSON.stringify(routing)
+            ) {
               throw new Error(
-                `Experimental partition count changed for ${collection}/${definition.name}`,
+                `Experimental partition routing changed for ${collection}/${definition.name}`,
               );
             }
             partitioned =
@@ -707,7 +721,7 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
           await buildExperimentalPartitionedIndex(
             definition,
             documents,
-            partitions,
+            routing,
             this.addressSnapshot,
           );
         prepared.push(
@@ -851,7 +865,7 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
           `Collection ${collection} has active secondary index ${name} that is missing from the supplied configuration`,
         );
       }
-      const partitions = experimentalPartitionCount(
+      const routing = experimentalPartitionRouting(
         this.experimentalPartitionedIndexes,
         collection,
         name,
@@ -863,8 +877,9 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
         );
       if (manifest) {
         if (
-          partitions === null ||
-          manifest.partitions !== partitions
+          routing === null ||
+          JSON.stringify(manifest.routing) !==
+            JSON.stringify(routing)
         ) {
           throw new Error(
             `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
@@ -872,7 +887,7 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
         }
         continue;
       }
-      if (partitions !== null) {
+      if (routing !== null) {
         throw new Error(
           `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
         );

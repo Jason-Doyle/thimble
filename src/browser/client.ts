@@ -50,6 +50,7 @@ import {
   validateProjectionFields,
   type CollectionIndexConfiguration,
   type SecondaryIndexPage,
+  type SecondaryIndexPlan,
   type SecondaryIndexReference,
   type SecondaryIndexReferences,
 } from "../secondary-index.js";
@@ -57,6 +58,7 @@ import {
   experimentalPartitionedIndexManifestFromReference,
   experimentalPartitionedIndexReferenceFromJson,
   mergeExperimentalPartitionedIndexPages,
+  selectExperimentalPartitionedIndexShards,
   validateExperimentalPartitionedIndexShard,
 } from "../experimental/partitioned-secondary-index.js";
 import {
@@ -270,7 +272,7 @@ export class ThimbleClient {
           layout,
           collection,
           indexPlan.definition.name,
-          indexPlan.definition,
+          indexPlan,
           reference,
           generation,
         );
@@ -1008,22 +1010,30 @@ export class ThimbleClient {
     return asSnapshotPage(remote.value);
   }
 
-  private async readSecondaryIndexPage(
+  private async readSecondaryIndexPage<
+    T extends { id: string },
+  >(
     layout: CollectionLayout,
     collection: string,
     indexName: string,
-    definition: SecondaryIndexPage["definition"],
+    plan: SecondaryIndexPlan<T>,
     reference: SecondaryIndexReference,
     generation: number,
   ): Promise<SecondaryIndexPage> {
+    const definition = plan.definition;
     const manifest =
       experimentalPartitionedIndexManifestFromReference(
         reference,
         definition,
       );
     if (manifest) {
+      const selected =
+        selectExperimentalPartitionedIndexShards(
+          manifest,
+          plan,
+        );
       const pages = await Promise.all(
-        manifest.shards.map(async (shard) => {
+        selected.map(async (shard) => {
           const shardValue =
             await this.readSecondaryIndexValue(
               layout,

@@ -50,6 +50,7 @@ import {
 import {
   buildExperimentalPartitionedIndex,
   experimentalPartitionCount,
+  experimentalPartitionRouting,
   experimentalPartitionedIndexManifestFromReference,
   updateExperimentalPartitionedIndex,
   validateExperimentalPartitionedIndexShard,
@@ -556,11 +557,29 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       ) {
         return false;
       }
-      const preparedIndexes = await this.prepareIndexes(
-        normalized,
-        head.state,
-        collapsedChanges,
+      const hasPartitionedIndexes = (
+        this.indexConfiguration[normalized] ?? []
+      ).some(
+        (definition) =>
+          experimentalPartitionCount(
+            this.experimentalPartitionedIndexes,
+            normalized,
+            definition.name,
+          ) !== null,
       );
+      let preparedIndexes =
+        hasPartitionedIndexes
+          ? undefined
+          : await this.prepareIndexes(
+              normalized,
+              head.state,
+              collapsedChanges,
+            );
+      const previousDocuments =
+        new Map<
+          string,
+          TrieStoredDocument | null
+        >();
       const root =
         head.state.rootHash === null
           ? this.emptyRoot()
@@ -611,6 +630,12 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
                 ),
               };
               for (const update of leafUpdates) {
+                previousDocuments.set(
+                  update.id,
+                  currentLeaf.documents[
+                    update.id
+                  ] ?? null,
+                );
                 if (update.document === null) {
                   delete nextLeaf.documents[update.id];
                 } else {
@@ -660,6 +685,17 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         Object.keys(nextRoot.children).length === 0
           ? null
           : await this.writeNode(normalized, nextRoot);
+      preparedIndexes ??=
+        await this.prepareIndexes(
+          normalized,
+          head.state,
+          collapsedChanges.map((change) => ({
+            ...change,
+            previousDocument:
+              previousDocuments.get(change.id) ??
+              null,
+          })),
+        );
       const indexes = await this.commitIndexes(
         preparedIndexes,
       );
@@ -953,12 +989,12 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of definitions) {
       const currentReference = head.indexes?.[definition.name];
-      const partitions = experimentalPartitionCount(
+      const routing = experimentalPartitionRouting(
         this.experimentalPartitionedIndexes,
         collection,
         definition.name,
       );
-      if (partitions !== null) {
+      if (routing !== null) {
         let partitioned:
           | ExperimentalPreparedPartitionedIndex
           | undefined;
@@ -969,9 +1005,12 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
               definition,
             );
           if (manifest) {
-            if (manifest.partitions !== partitions) {
+            if (
+              JSON.stringify(manifest.routing) !==
+              JSON.stringify(routing)
+            ) {
               throw new Error(
-                `Experimental partition count changed for ${collection}/${definition.name}`,
+                `Experimental partition routing changed for ${collection}/${definition.name}`,
               );
             }
             partitioned =
@@ -1015,7 +1054,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
             await buildExperimentalPartitionedIndex(
               definition,
               currentDocuments.values(),
-              partitions,
+              routing,
               this.addressNode,
             );
         }
@@ -1107,12 +1146,12 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
   ): Promise<PreparedSecondaryIndex[]> {
     const prepared: PreparedSecondaryIndex[] = [];
     for (const definition of this.indexConfiguration[collection] ?? []) {
-      const partitions = experimentalPartitionCount(
+      const routing = experimentalPartitionRouting(
         this.experimentalPartitionedIndexes,
         collection,
         definition.name,
       );
-      if (partitions !== null) {
+      if (routing !== null) {
         prepared.push(
           this.asPreparedPartitionedIndex(
             collection,
@@ -1120,7 +1159,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
             await buildExperimentalPartitionedIndex(
               definition,
               documents,
-              partitions,
+              routing,
               this.addressNode,
             ),
           ),
@@ -1259,7 +1298,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           `Collection ${collection} has active secondary index ${name} that is missing from the supplied configuration`,
         );
       }
-      const partitions = experimentalPartitionCount(
+      const routing = experimentalPartitionRouting(
         this.experimentalPartitionedIndexes,
         collection,
         name,
@@ -1271,8 +1310,9 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         );
       if (manifest) {
         if (
-          partitions === null ||
-          manifest.partitions !== partitions
+          routing === null ||
+          JSON.stringify(manifest.routing) !==
+            JSON.stringify(routing)
         ) {
           throw new Error(
             `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
@@ -1280,7 +1320,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         }
         continue;
       }
-      if (partitions !== null) {
+      if (routing !== null) {
         throw new Error(
           `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
         );

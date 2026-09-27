@@ -151,7 +151,7 @@ async function serveObject(
 ): Promise<Response> {
   const key = decodeURIComponent(encodedKey);
   if (
-    !/^read\/(baseline|partitioned)\/(snapshot|trie)\/scopes\/benchmark\/.+/.test(
+    !/^read\/(baseline|value-routed)\/(snapshot|trie)\/scopes\/benchmark\/.+/.test(
       key,
     )
   ) {
@@ -343,7 +343,7 @@ async function createEngine(
     },
   );
   const partitionConfiguration =
-    variant === "partitioned"
+    variant === "value-routed"
       ? PARTITIONED_INDEX_CONFIGURATION
       : {};
   const engine =
@@ -450,7 +450,7 @@ class BenchmarkAccessError extends Error {}
 function requireVariant(
   value: string | null | undefined,
 ): PartitionedIndexVariant {
-  if (value !== "baseline" && value !== "partitioned") {
+  if (value !== "baseline" && value !== "value-routed") {
     throw new Error("Invalid benchmark variant");
   }
   return value;
