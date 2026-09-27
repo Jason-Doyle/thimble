@@ -74,9 +74,29 @@ const region = required("BENCHMARK_REGION");
 const runId = required("BENCHMARK_RUN_ID");
 const mode = process.env.BENCHMARK_MODE ?? "read";
 const resultToken = required("BENCHMARK_RESULT_TOKEN");
+const benchmarkFetch: typeof fetch = (
+  input,
+  init = {},
+) => {
+  const headers = new Headers(init.headers);
+  headers.set(
+    "x-benchmark-token",
+    resultToken,
+  );
+  return fetch(input, {
+    ...init,
+    cache: "no-store",
+    headers,
+  });
+};
 const configResponse = await fetch(
   `${target}/benchmark-config.json`,
-  { cache: "no-store" },
+  {
+    cache: "no-store",
+    headers: {
+      "x-benchmark-token": resultToken,
+    },
+  },
 );
 if (!configResponse.ok) {
   throw new Error(
@@ -325,7 +345,7 @@ function createClient(
     new EnvelopeJsonObjectReader(
       new HttpByteObjectReader(
         dataBaseUrl,
-        fetch,
+        benchmarkFetch,
         target,
       ),
       (keyId) => keyId === config.keyId ? key : null,

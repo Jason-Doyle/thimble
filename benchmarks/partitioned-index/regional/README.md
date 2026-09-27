@@ -51,6 +51,14 @@ npm run benchmark:partitioned-index:regional:build
 All generated fixtures and deployment configuration remain below the ignored
 `.bench-data/partitioned-index-regional` directory.
 
+After deploying the temporary Worker and bucket:
+
+```powershell
+$env:THIMBLE_BENCHMARK_TARGET = "<temporary workers.dev URL>"
+$env:THIMBLE_BENCHMARK_TOKEN = "<temporary token>"
+npm run benchmark:partitioned-index:regional:upload
+```
+
 ## Evidence layout
 
 ```text
