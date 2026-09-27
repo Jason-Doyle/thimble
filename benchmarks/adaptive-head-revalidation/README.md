@@ -9,6 +9,9 @@ the Snapshot or Trie storage protocols:
 4. adaptive 1-10 second TTL that doubles after each 304 and resets after a
    changed HEAD
 
+The completed regional result and recommendation are in
+`RESULTS.md`.
+
 Real Chromium instances run in disposable Azure Container Instances. Each
 policy and layout uses an isolated R2 prefix and one deterministic document.
 

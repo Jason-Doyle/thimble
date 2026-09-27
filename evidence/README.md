@@ -27,3 +27,13 @@ the same evidence for plotting and independent analysis.
 The corresponding source revisions, methodology, failures, and limitations
 are embedded in the JSON artifact and documented in
 `docs/BENCHMARKS.md`.
+
+`adaptive-head-revalidation-regional-browser-2026-09-27.json` contains 112
+real Chromium policy scenarios and 14,705 measured reads across seven Azure
+regions and two replicates. It compares current one second HEAD freshness,
+response-completion timing, fixed ten second freshness, and adaptive one to
+ten second backoff.
+
+The implementation, result tables, decision, limitations, and cleanup record
+are documented in
+`benchmarks/adaptive-head-revalidation/RESULTS.md`.
