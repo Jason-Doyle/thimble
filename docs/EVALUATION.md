@@ -42,6 +42,16 @@ Enable the opt-in cold point-read bundle path with:
 $env:THIMBLE_READ_BUNDLES = "true"
 ```
 
+Enable the opt-in bounded mutation-batch path with:
+
+```powershell
+$env:THIMBLE_MUTATION_BATCHES = "true"
+```
+
+The browser harness does not automatically coalesce writes. Use
+`ThimbleCollection.putMany()` or `ThimbleClient.writeBatch()` to exercise one
+explicit group.
+
 For a compiled local run:
 
 ```powershell

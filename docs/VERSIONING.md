@@ -14,16 +14,6 @@ Package version `1.0.0` freezes the documented exports in
 [Public package API](PUBLIC-API.md). Semantic versioning applies to the root,
 auth, authority, and provider subpaths.
 
-## Unreleased compatible capabilities
-
-- authorities may explicitly advertise bounded mutation batches
-- clients can publish 1-20 documents in one collection revision through
-  `putMany()`
-- authorities that do not enable the capability retain existing single-write
-  behavior and do not advertise the endpoint
-- the stored TDB1, Snapshot HEAD, Trie HEAD, and secondary-index formats are
-  unchanged
-
 ## Version 1.0
 
 Version 1.0 provides:
@@ -113,6 +103,25 @@ The TDB1 envelope and collection HEAD formats are unchanged. Index pages gain
 optional definition and projection fields that older readers ignore. Upgrade
 every writing authority before enabling covering fields, then rebuild the
 affected indexes while writes are quiescent.
+
+## Version 3.2
+
+Version 3.2 adds compatible bounded write and performance improvements:
+
+- authorities may explicitly advertise bounded mutation batches
+- clients can publish 1-20 unique documents and at most 1 MiB of JSON in one
+  collection revision through `putMany()`
+- authorities that do not enable the capability retain existing single-write
+  behavior and do not advertise the endpoint
+- range planning applies every supported bound before loading candidates
+- bounded immutable commits overlap independent Snapshot, Trie, and index
+  uploads while preserving final HEAD publication
+- normal decoded object reads and writes fail closed above 16 MiB by default
+- mutable HEAD freshness begins when revalidation completes
+
+The stored TDB1, Snapshot HEAD, Trie HEAD, and secondary-index formats are
+unchanged. Mutation batching is an optional authority and browser capability,
+so older clients continue using ordinary single writes.
 
 ## Object protocol version
 

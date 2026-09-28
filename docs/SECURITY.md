@@ -164,6 +164,24 @@ maintenance, key rotation, and migration. A deployment that does not trust the
 authority runtime with plaintext is outside the current ThimbleDB threat
 model.
 
+## Mutation batch boundary
+
+Mutation batching is disabled by default. When enabled, it uses the same
+authenticated session, exact origin, CSRF token, scope write grant, and layout
+generation checks as an ordinary write.
+
+The complete request is limited to 20 unique document IDs and 1 MiB of JSON.
+Validation finishes before candidate immutable objects are uploaded. Success
+is returned only after one conditional collection HEAD publication. A
+validation failure publishes nothing, and a HEAD conflict applies to the
+complete batch rather than hidden per-document commits.
+
+The batch response is `no-store` and may contain decoded changed document-path
+cache values over HTTPS. Response cache values are bounded to 42 objects and
+16 MiB. The authority already processes the same plaintext during writes.
+Applications that do not accept this response boundary should leave mutation
+batching disabled and use ordinary writes.
+
 ## Secret handling
 
 Never commit:

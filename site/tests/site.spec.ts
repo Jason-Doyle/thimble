@@ -243,7 +243,7 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(fullText).toContain("# System diagrams");
   expect(fullText).toContain("# Configuration reference");
   expect(fullText).toContain("# Website privacy");
-  expect(fullText).toContain("## 3.1.0");
+  expect(fullText).toContain("## 3.2.0");
 
   await page.goto("/vibe-coded-apps/");
   await expect(

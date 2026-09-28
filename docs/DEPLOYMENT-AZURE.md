@@ -96,10 +96,11 @@ collection-layout, and retention settings. It does not currently expose:
 - `THIMBLE_READ_BUNDLES`
 - `THIMBLE_MUTATION_BATCHES`
 
-The supplied deployment therefore leaves Studio, covering indexes, and read
-bundles disabled. Use a reviewed derived template or another Container Apps
-configuration when those optional features are required. Setting variables
-only in the deployment shell does not add them to the Container App.
+The supplied deployment therefore leaves Studio, covering indexes, read
+bundles, and mutation batches disabled. Use a reviewed derived template or
+another Container Apps configuration when those optional features are
+required. Setting variables only in the deployment shell does not add them to
+the Container App.
 
 For key rotation, set `keyVersion` to the current write version and
 `readKeyVersions` to the comma-separated historical versions that remain
