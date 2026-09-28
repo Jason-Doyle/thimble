@@ -189,7 +189,9 @@ defineIndex<Note>(
 ```
 
 Range indexes contain exactly one field. Equality indexes can contain up to
-four fields.
+four fields. For conjunctive range queries, every supported `eq`, `lt`, `lte`,
+`gt`, and `gte` comparison on the indexed field is applied before document
+candidates are loaded.
 
 Only scalar string, number, boolean, or null values are indexed. Arrays and
 objects remain available to bounded local filtering.

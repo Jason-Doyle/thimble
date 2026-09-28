@@ -4,7 +4,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ContentAddressedTrieEngine,
+  buildSecondaryIndexPage,
   defineIndex,
+  idsFromSecondaryIndex,
   ImmutableSnapshotEngine,
   MemoryObjectCache,
   planSecondaryIndex,
@@ -908,6 +910,50 @@ describe("secondary indexes", () => {
         ],
       }),
     ).toBeNull();
+  });
+
+  it("applies every bounded range comparison before loading candidates", () => {
+    const definition = indexes.notes![1]!;
+    const plan = planSecondaryIndex<Note>(
+      [definition],
+      {
+        version: 1,
+        where: {
+          and: [
+            {
+              field: "lastModified",
+              operator: "gte",
+              value: 2_500,
+            },
+            {
+              field: "lastModified",
+              operator: "lt",
+              value: 2_525,
+            },
+          ],
+        },
+      },
+    );
+    expect(plan).not.toBeNull();
+    if (!plan) {
+      throw new Error("Expected a range index plan");
+    }
+    expect(plan.comparisons).toHaveLength(2);
+
+    const page = buildSecondaryIndexPage(
+      definition,
+      Array.from({ length: 10_000 }, (_, index) => ({
+        id: `note-${index}`,
+        title: `Note ${index}`,
+        lastModified: index,
+      })),
+    );
+    expect(idsFromSecondaryIndex(page, plan)).toEqual(
+      Array.from(
+        { length: 25 },
+        (_, index) => `note-${index + 2_500}`,
+      ),
+    );
   });
 
   it("falls back when equality values cannot be indexed", () => {

@@ -183,10 +183,13 @@ The range returned 25 documents from covering index fields.
 | Medium | 473.98 ms | 1,612.96 ms | 510.99 ms | 1,919.19 ms | 1,500 |
 | Large | 1,044.55 ms | 2,115.30 ms | 1,026.00 ms | 2,018.80 ms | 7,500 |
 
-Current range planning selected every value above the lower bound before
-applying the upper bound, so the 25-document large result evaluated 7,500
-index candidates. Covering fields still kept the operation to two network
-reads and avoided loading document pages.
+At the benchmarked commit, range planning selected every value above the
+lower bound before applying the upper bound, so the 25-document large result
+evaluated 7,500 index candidates. The current planner applies both bounds and
+the equivalent regression test selects 25 candidates. The latency table
+remains the historical measurement and has not been relabelled as a
+post-correction benchmark. Covering fields kept the measured operation to two
+network reads and avoided loading document pages.
 
 ## Full scans
 
