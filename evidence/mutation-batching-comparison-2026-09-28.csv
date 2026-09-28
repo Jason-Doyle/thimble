@@ -1,0 +1,13 @@
+case,layout,batch_size,strategy,logical_operations,successful,failed,client_p50_ms,client_p95_ms,per_document_p50_ms,per_document_p95_ms,mean_reads,mean_read_bytes,mean_writes,mean_write_bytes,mean_head_writes,verification_failures
+mutation-snapshot-batch-1-individual,snapshot,1,individual,42,42,0,6806.441,9971.706,6806.441,9971.706,4,1171567,4,1171646,1,0
+mutation-snapshot-batch-1-batch,snapshot,1,batch,42,42,0,6015.835,9950.26,6015.835,9950.26,4,1171567,4,1171646,1,0
+mutation-snapshot-batch-5-individual,snapshot,5,individual,42,42,0,32961.125,48168.846,6592.225,9633.769199999999,20,5859682,20,5859988,5,0
+mutation-snapshot-batch-5-batch,snapshot,5,batch,42,42,0,6009.37,9516.954,1201.874,1903.3908,4,1171835,4,1172141,1,0
+mutation-snapshot-batch-20-individual,snapshot,20,individual,42,41,1,127081.159,195135.49,6354.05795,9756.7745,80,23465333,80,23466286,20,1
+mutation-snapshot-batch-20-batch,snapshot,20,batch,42,42,0,5963.859,11431.427,298.19295,571.5713499999999,4,1172774,4,1173739,1,0
+mutation-trie-batch-1-individual,trie,1,individual,42,42,0,6879.513,9001.708,6879.513,9001.708,8,1450729,6,727711,1,0
+mutation-trie-batch-1-batch,trie,1,batch,42,42,0,6733.32,8325.098,6733.32,8325.098,8,1450729,6,727711,1,0
+mutation-trie-batch-5-individual,trie,5,individual,42,42,0,34379.64,43521.053,6875.928,8704.2106,40,7253794,30,3638396,5,0
+mutation-trie-batch-5-batch,trie,5,batch,42,42,0,7078.877,9078.186,1415.7754,1815.6372,14.667,1463470,12.667,740528,1,0
+mutation-trie-batch-20-individual,trie,20,individual,42,41,1,137998.643,186423.953,6899.932150000001,9321.19765,160,29030483,120,14562343,20,1
+mutation-trie-batch-20-batch,trie,20,batch,42,42,0,10264.631,13851.327,513.23155,692.5663499999999,36.667,1509172,34.667,786458,1,0

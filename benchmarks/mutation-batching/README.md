@@ -40,3 +40,6 @@ Acceptance requires:
 
 No production route, storage protocol, or browser API is changed by this
 experiment.
+
+The completed result and rejection boundaries are documented in
+[`RESULTS.md`](RESULTS.md).

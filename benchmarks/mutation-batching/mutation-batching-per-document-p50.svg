@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="535" viewBox="0 0 1080 535" role="img" aria-labelledby="title desc">
+  <title id="title">Mutation batching per-document p50</title>
+  <desc id="desc">Twenty-five-thousand documents with two indexes across seven regions and two replicates. Lower is better.</desc>
+  <style>
+    text { font-family: Inter, Arial, sans-serif; fill: #1e293b; }
+    .title { font-size: 24px; font-weight: 700; }
+    .description { font-size: 13px; fill: #475569; }
+    .legend, .category, .value, .axis { font-size: 12px; }
+    .category { font-weight: 600; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="24" y="30" class="title">Mutation batching per-document p50</text>
+  <text x="24" y="48" class="description">Twenty-five-thousand documents with two indexes across seven regions and two replicates. Lower is better.</text>
+  <rect x="190" y="76" width="16" height="16" rx="3" fill="#64748b"/><text x="214" y="89" class="legend">Separate writes</text><rect x="380" y="76" width="16" height="16" rx="3" fill="#2563eb"/><text x="404" y="89" class="legend">One batch</text>
+  <line x1="190" y1="105" x2="190" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="190" y="507" text-anchor="middle" class="axis">0</text>
+  <line x1="344" y1="105" x2="344" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="344" y="507" text-anchor="middle" class="axis">2,000</text>
+  <line x1="498" y1="105" x2="498" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="498" y="507" text-anchor="middle" class="axis">4,000</text>
+  <line x1="652" y1="105" x2="652" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="652" y="507" text-anchor="middle" class="axis">6,000</text>
+  <line x1="806" y1="105" x2="806" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="806" y="507" text-anchor="middle" class="axis">8,000</text>
+  <line x1="960" y1="105" x2="960" y2="480" stroke="#dbe4ef" stroke-width="1"/>
+  <text x="960" y="507" text-anchor="middle" class="axis">10,000</text>
+  <text x="174" y="141" text-anchor="end" class="category">Snapshot x5</text>
+  <rect x="190" y="125" width="507.60132500000003" height="18" rx="4" fill="#64748b"/>
+  <text x="705.6013250000001" y="139" class="value">6,592 ms</text>
+  <rect x="190" y="151" width="92.544298" height="18" rx="4" fill="#2563eb"/>
+  <text x="290.544298" y="165" class="value">1,202 ms</text>
+  <text x="174" y="221" text-anchor="end" class="category">Snapshot x20</text>
+  <rect x="190" y="205" width="489.26246215000003" height="18" rx="4" fill="#64748b"/>
+  <text x="687.26246215" y="219" class="value">6,354 ms</text>
+  <rect x="190" y="231" width="22.96085715" height="18" rx="4" fill="#2563eb"/>
+  <text x="220.96085715" y="245" class="value">298.2 ms</text>
+  <text x="174" y="301" text-anchor="end" class="category">Trie x5</text>
+  <rect x="190" y="285" width="529.446456" height="18" rx="4" fill="#64748b"/>
+  <text x="727.446456" y="299" class="value">6,876 ms</text>
+  <rect x="190" y="311" width="109.0147058" height="18" rx="4" fill="#2563eb"/>
+  <text x="307.0147058" y="325" class="value">1,416 ms</text>
+  <text x="174" y="381" text-anchor="end" class="category">Trie x20</text>
+  <rect x="190" y="365" width="531.29477555" height="18" rx="4" fill="#64748b"/>
+  <text x="729.29477555" y="379" class="value">6,900 ms</text>
+  <rect x="190" y="391" width="39.51882935" height="18" rx="4" fill="#2563eb"/>
+  <text x="237.51882935" y="405" class="value">513.2 ms</text>
+  <text x="575" y="529" text-anchor="middle" class="axis">milliseconds per document</text>
+</svg>

@@ -123,6 +123,7 @@
     "benchmark:mutation-batching:regional:build": "tsc -p benchmarks/mutation-batching/regional/tsconfig.json --noEmit && vite build --config benchmarks/mutation-batching/regional/vite.config.ts",
     "benchmark:mutation-batching:regional:upload": "tsx benchmarks/mutation-batching/regional/upload.mjs",
     "benchmark:mutation-batching:regional:aggregate": "tsx benchmarks/mutation-batching/regional/aggregate.mjs",
+    "benchmark:mutation-batching:publish": "tsx benchmarks/mutation-batching/publish.mjs",
     "migrate:keys": "tsx src/key-migrate.ts",
     "migrate:external-auth": "tsx src/remove-local-auth.ts",
     "advise:layout": "tsx src/layout-advisor-cli.ts",

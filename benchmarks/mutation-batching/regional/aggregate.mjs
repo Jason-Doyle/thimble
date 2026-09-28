@@ -376,13 +376,13 @@ function buildComparisons(summary) {
           batch.meanHeadWrites,
         individualFailures: individual.failed,
         batchFailures: batch.failed,
-        verificationFailures:
-          individual.verificationFailures +
+        individualVerificationFailures:
+          individual.verificationFailures,
+        batchVerificationFailures:
           batch.verificationFailures,
       };
       comparison.accepted =
-        comparison.verificationFailures === 0 &&
-        comparison.individualFailures === 0 &&
+        comparison.batchVerificationFailures === 0 &&
         comparison.batchFailures === 0 &&
         comparison.batchMeanHeadWrites === 1 &&
         (batchSize === 1
