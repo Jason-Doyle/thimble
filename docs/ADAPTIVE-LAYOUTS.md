@@ -84,6 +84,9 @@ collections with two declared secondary indexes.
   Trie than Snapshot, despite 117 network reads.
 - With two indexes, single-writer snapshot latency was lower than trie latency
   in this run, although Snapshot wrote more than twice as many bytes.
+- The post-merge write matrix reduced two-index p50 amplification by 48-72
+  percent relative to each layout's no-index floor, but every pooled write p50
+  remained above 2.9 seconds.
 - Simultaneous seven-region writes produced failures and very high tail
   latency for both layouts.
 

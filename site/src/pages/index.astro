@@ -481,7 +481,14 @@ const websiteSchema = {
         <p class="evidence-note">
           Cold reads and large writes remain too slow for latency-sensitive
           request paths. Production fit depends on warm browser cache hits
-          dominating. Tables, graphs, failures, JSON, and CSV are published.
+          dominating. A separate post-merge matrix retained {
+            currentBenchmark.postMergeWriteScaling.measuredOperations.toLocaleString("en-US")
+          } writes; bounded commits reduced index amplification, but large
+          two-index p50 remained {
+            formatSeconds(currentBenchmark.postMergeWriteScaling.largeTwoIndexP50Ms.snapshot)
+          } for Snapshot and {
+            formatSeconds(currentBenchmark.postMergeWriteScaling.largeTwoIndexP50Ms.trie)
+          } for Trie. Tables, graphs, failures, JSON, and CSV are published.
         </p>
         <a class="button dark" href="/benchmarks/">Read the benchmark and limitations <span>→</span></a>
       </div>

@@ -117,6 +117,7 @@
     "benchmark:write-scaling:regional:build": "tsc -p benchmarks/write-scaling/regional/tsconfig.json --noEmit && vite build --config benchmarks/write-scaling/regional/vite.config.ts",
     "benchmark:write-scaling:regional:upload": "tsx benchmarks/write-scaling/regional/upload.mjs",
     "benchmark:write-scaling:regional:aggregate": "tsx benchmarks/write-scaling/regional/aggregate.mjs",
+    "benchmark:write-scaling:publish": "tsx benchmarks/write-scaling/publish.mjs",
     "migrate:keys": "tsx src/key-migrate.ts",
     "migrate:external-auth": "tsx src/remove-local-auth.ts",
     "advise:layout": "tsx src/layout-advisor-cli.ts",

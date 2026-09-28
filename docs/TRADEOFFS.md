@@ -22,6 +22,9 @@
   full snapshot page and that uncovered fields fall back to full documents.
 - Current regional evidence shows that cold object reads and large indexed
   writes miss normal interactive latency targets.
+- Post-merge regional evidence shows that bounded immutable commits reduce
+  index amplification but leave a roughly three-second no-index Snapshot floor
+  and a roughly five-second no-index Trie floor in the tested regions.
 
 ## Not established by the published evidence
 

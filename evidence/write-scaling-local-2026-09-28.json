@@ -1,0 +1,1340 @@
+{
+  "generatedAt": "2026-09-28T16:49:30.600Z",
+  "sourceCommit": "2c648a603d21f69872839272b560a547abb13a9b",
+  "iterations": 8,
+  "warning": "Local in-memory object-store CPU preflight. Regional cloud evidence remains authoritative for end-to-end latency.",
+  "results": {
+    "small-none-snapshot": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "none",
+      "indexCount": 0,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 1.967,
+        "p95Ms": 3.212,
+        "meanMs": 2.278,
+        "meanReads": 2,
+        "meanReadBytes": 2854,
+        "meanWrites": 2,
+        "meanWriteBytes": 2863
+      },
+      "samples": [
+        {
+          "elapsedMs": 3.212,
+          "reads": 2,
+          "readBytes": 2818,
+          "writes": 2,
+          "writeBytes": 2829
+        },
+        {
+          "elapsedMs": 2.761,
+          "reads": 2,
+          "readBytes": 2829,
+          "writes": 2,
+          "writeBytes": 2843
+        },
+        {
+          "elapsedMs": 2.858,
+          "reads": 2,
+          "readBytes": 2843,
+          "writes": 2,
+          "writeBytes": 2852
+        },
+        {
+          "elapsedMs": 1.967,
+          "reads": 2,
+          "readBytes": 2852,
+          "writes": 2,
+          "writeBytes": 2864
+        },
+        {
+          "elapsedMs": 1.892,
+          "reads": 2,
+          "readBytes": 2864,
+          "writes": 2,
+          "writeBytes": 2873
+        },
+        {
+          "elapsedMs": 2.15,
+          "reads": 2,
+          "readBytes": 2873,
+          "writes": 2,
+          "writeBytes": 2875
+        },
+        {
+          "elapsedMs": 1.642,
+          "reads": 2,
+          "readBytes": 2875,
+          "writes": 2,
+          "writeBytes": 2881
+        },
+        {
+          "elapsedMs": 1.741,
+          "reads": 2,
+          "readBytes": 2881,
+          "writes": 2,
+          "writeBytes": 2885
+        }
+      ]
+    },
+    "small-none-trie": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "none",
+      "indexCount": 0,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 1.589,
+        "p95Ms": 1.924,
+        "meanMs": 1.603,
+        "meanReads": 4,
+        "meanReadBytes": 1634,
+        "meanWrites": 4,
+        "meanWriteBytes": 1644
+      },
+      "samples": [
+        {
+          "elapsedMs": 1.924,
+          "reads": 4,
+          "readBytes": 1522,
+          "writes": 4,
+          "writeBytes": 1532
+        },
+        {
+          "elapsedMs": 1.647,
+          "reads": 4,
+          "readBytes": 1609,
+          "writes": 4,
+          "writeBytes": 1618
+        },
+        {
+          "elapsedMs": 1.484,
+          "reads": 4,
+          "readBytes": 1649,
+          "writes": 4,
+          "writeBytes": 1660
+        },
+        {
+          "elapsedMs": 1.807,
+          "reads": 4,
+          "readBytes": 1777,
+          "writes": 4,
+          "writeBytes": 1791
+        },
+        {
+          "elapsedMs": 1.344,
+          "reads": 4,
+          "readBytes": 1517,
+          "writes": 4,
+          "writeBytes": 1526
+        },
+        {
+          "elapsedMs": 1.411,
+          "reads": 4,
+          "readBytes": 1654,
+          "writes": 4,
+          "writeBytes": 1660
+        },
+        {
+          "elapsedMs": 1.589,
+          "reads": 4,
+          "readBytes": 1601,
+          "writes": 4,
+          "writeBytes": 1611
+        },
+        {
+          "elapsedMs": 1.616,
+          "reads": 4,
+          "readBytes": 1746,
+          "writes": 4,
+          "writeBytes": 1753
+        }
+      ]
+    },
+    "small-one-snapshot": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "one",
+      "indexCount": 1,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 3.529,
+        "p95Ms": 3.883,
+        "meanMs": 3.598,
+        "meanReads": 3,
+        "meanReadBytes": 4952,
+        "meanWrites": 3,
+        "meanWriteBytes": 4962
+      },
+      "samples": [
+        {
+          "elapsedMs": 3.883,
+          "reads": 3,
+          "readBytes": 4910,
+          "writes": 3,
+          "writeBytes": 4925
+        },
+        {
+          "elapsedMs": 3.435,
+          "reads": 3,
+          "readBytes": 4925,
+          "writes": 3,
+          "writeBytes": 4938
+        },
+        {
+          "elapsedMs": 3.283,
+          "reads": 3,
+          "readBytes": 4938,
+          "writes": 3,
+          "writeBytes": 4950
+        },
+        {
+          "elapsedMs": 3.839,
+          "reads": 3,
+          "readBytes": 4950,
+          "writes": 3,
+          "writeBytes": 4965
+        },
+        {
+          "elapsedMs": 3.716,
+          "reads": 3,
+          "readBytes": 4965,
+          "writes": 3,
+          "writeBytes": 4974
+        },
+        {
+          "elapsedMs": 3.647,
+          "reads": 3,
+          "readBytes": 4974,
+          "writes": 3,
+          "writeBytes": 4975
+        },
+        {
+          "elapsedMs": 3.452,
+          "reads": 3,
+          "readBytes": 4975,
+          "writes": 3,
+          "writeBytes": 4982
+        },
+        {
+          "elapsedMs": 3.529,
+          "reads": 3,
+          "readBytes": 4982,
+          "writes": 3,
+          "writeBytes": 4986
+        }
+      ]
+    },
+    "small-one-trie": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "one",
+      "indexCount": 1,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 3.111,
+        "p95Ms": 4.12,
+        "meanMs": 3.357,
+        "meanReads": 6,
+        "meanReadBytes": 5786,
+        "meanWrites": 5,
+        "meanWriteBytes": 3768
+      },
+      "samples": [
+        {
+          "elapsedMs": 4.12,
+          "reads": 6,
+          "readBytes": 5664,
+          "writes": 5,
+          "writeBytes": 3652
+        },
+        {
+          "elapsedMs": 3.396,
+          "reads": 6,
+          "readBytes": 5753,
+          "writes": 5,
+          "writeBytes": 3737
+        },
+        {
+          "elapsedMs": 3.916,
+          "reads": 6,
+          "readBytes": 5793,
+          "writes": 5,
+          "writeBytes": 3784
+        },
+        {
+          "elapsedMs": 2.888,
+          "reads": 6,
+          "readBytes": 5929,
+          "writes": 5,
+          "writeBytes": 3918
+        },
+        {
+          "elapsedMs": 3.586,
+          "reads": 6,
+          "readBytes": 5675,
+          "writes": 5,
+          "writeBytes": 3652
+        },
+        {
+          "elapsedMs": 2.947,
+          "reads": 6,
+          "readBytes": 5810,
+          "writes": 5,
+          "writeBytes": 3787
+        },
+        {
+          "elapsedMs": 2.894,
+          "reads": 6,
+          "readBytes": 5758,
+          "writes": 5,
+          "writeBytes": 3738
+        },
+        {
+          "elapsedMs": 3.111,
+          "reads": 6,
+          "readBytes": 5903,
+          "writes": 5,
+          "writeBytes": 3879
+        }
+      ]
+    },
+    "small-two-snapshot": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "two",
+      "indexCount": 2,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 4.582,
+        "p95Ms": 5.332,
+        "meanMs": 4.723,
+        "meanReads": 4,
+        "meanReadBytes": 7340,
+        "meanWrites": 4,
+        "meanWriteBytes": 7351
+      },
+      "samples": [
+        {
+          "elapsedMs": 5.258,
+          "reads": 4,
+          "readBytes": 7293,
+          "writes": 4,
+          "writeBytes": 7310
+        },
+        {
+          "elapsedMs": 5.332,
+          "reads": 4,
+          "readBytes": 7310,
+          "writes": 4,
+          "writeBytes": 7319
+        },
+        {
+          "elapsedMs": 5.221,
+          "reads": 4,
+          "readBytes": 7319,
+          "writes": 4,
+          "writeBytes": 7337
+        },
+        {
+          "elapsedMs": 4.324,
+          "reads": 4,
+          "readBytes": 7337,
+          "writes": 4,
+          "writeBytes": 7355
+        },
+        {
+          "elapsedMs": 4.149,
+          "reads": 4,
+          "readBytes": 7355,
+          "writes": 4,
+          "writeBytes": 7366
+        },
+        {
+          "elapsedMs": 4.582,
+          "reads": 4,
+          "readBytes": 7366,
+          "writes": 4,
+          "writeBytes": 7365
+        },
+        {
+          "elapsedMs": 4.699,
+          "reads": 4,
+          "readBytes": 7365,
+          "writes": 4,
+          "writeBytes": 7373
+        },
+        {
+          "elapsedMs": 4.219,
+          "reads": 4,
+          "readBytes": 7373,
+          "writes": 4,
+          "writeBytes": 7379
+        }
+      ]
+    },
+    "small-two-trie": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "two",
+      "indexCount": 2,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 4.044,
+        "p95Ms": 4.443,
+        "meanMs": 4.003,
+        "meanReads": 8,
+        "meanReadBytes": 10500,
+        "meanWrites": 6,
+        "meanWriteBytes": 6159
+      },
+      "samples": [
+        {
+          "elapsedMs": 4.443,
+          "reads": 8,
+          "readBytes": 10369,
+          "writes": 6,
+          "writeBytes": 6039
+        },
+        {
+          "elapsedMs": 4.044,
+          "reads": 8,
+          "readBytes": 10462,
+          "writes": 6,
+          "writeBytes": 6121
+        },
+        {
+          "elapsedMs": 3.6,
+          "reads": 8,
+          "readBytes": 10495,
+          "writes": 6,
+          "writeBytes": 6173
+        },
+        {
+          "elapsedMs": 4.08,
+          "reads": 8,
+          "readBytes": 10641,
+          "writes": 6,
+          "writeBytes": 6310
+        },
+        {
+          "elapsedMs": 3.69,
+          "reads": 8,
+          "readBytes": 10394,
+          "writes": 6,
+          "writeBytes": 6046
+        },
+        {
+          "elapsedMs": 3.697,
+          "reads": 8,
+          "readBytes": 10533,
+          "writes": 6,
+          "writeBytes": 6179
+        },
+        {
+          "elapsedMs": 4.304,
+          "reads": 8,
+          "readBytes": 10478,
+          "writes": 6,
+          "writeBytes": 6132
+        },
+        {
+          "elapsedMs": 4.168,
+          "reads": 8,
+          "readBytes": 10626,
+          "writes": 6,
+          "writeBytes": 6274
+        }
+      ]
+    },
+    "medium-none-snapshot": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "none",
+      "indexCount": 0,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 32.523,
+        "p95Ms": 33.56,
+        "meanMs": 32.492,
+        "meanReads": 2,
+        "meanReadBytes": 87979,
+        "meanWrites": 2,
+        "meanWriteBytes": 88000
+      },
+      "samples": [
+        {
+          "elapsedMs": 33.56,
+          "reads": 2,
+          "readBytes": 87905,
+          "writes": 2,
+          "writeBytes": 87924
+        },
+        {
+          "elapsedMs": 33.503,
+          "reads": 2,
+          "readBytes": 87924,
+          "writes": 2,
+          "writeBytes": 87932
+        },
+        {
+          "elapsedMs": 33.513,
+          "reads": 2,
+          "readBytes": 87932,
+          "writes": 2,
+          "writeBytes": 87969
+        },
+        {
+          "elapsedMs": 31.952,
+          "reads": 2,
+          "readBytes": 87969,
+          "writes": 2,
+          "writeBytes": 87997
+        },
+        {
+          "elapsedMs": 30.889,
+          "reads": 2,
+          "readBytes": 87997,
+          "writes": 2,
+          "writeBytes": 88014
+        },
+        {
+          "elapsedMs": 32.523,
+          "reads": 2,
+          "readBytes": 88014,
+          "writes": 2,
+          "writeBytes": 88040
+        },
+        {
+          "elapsedMs": 32.6,
+          "reads": 2,
+          "readBytes": 88040,
+          "writes": 2,
+          "writeBytes": 88054
+        },
+        {
+          "elapsedMs": 31.399,
+          "reads": 2,
+          "readBytes": 88054,
+          "writes": 2,
+          "writeBytes": 88070
+        }
+      ]
+    },
+    "medium-none-trie": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "none",
+      "indexCount": 0,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 1.221,
+        "p95Ms": 1.359,
+        "meanMs": 1.242,
+        "meanReads": 4,
+        "meanReadBytes": 2605,
+        "meanWrites": 4,
+        "meanWriteBytes": 2613
+      },
+      "samples": [
+        {
+          "elapsedMs": 1.359,
+          "reads": 4,
+          "readBytes": 2476,
+          "writes": 4,
+          "writeBytes": 2488
+        },
+        {
+          "elapsedMs": 1.311,
+          "reads": 4,
+          "readBytes": 2648,
+          "writes": 4,
+          "writeBytes": 2655
+        },
+        {
+          "elapsedMs": 1.162,
+          "reads": 4,
+          "readBytes": 2605,
+          "writes": 4,
+          "writeBytes": 2610
+        },
+        {
+          "elapsedMs": 1.151,
+          "reads": 4,
+          "readBytes": 2486,
+          "writes": 4,
+          "writeBytes": 2498
+        },
+        {
+          "elapsedMs": 1.174,
+          "reads": 4,
+          "readBytes": 2599,
+          "writes": 4,
+          "writeBytes": 2602
+        },
+        {
+          "elapsedMs": 1.258,
+          "reads": 4,
+          "readBytes": 2768,
+          "writes": 4,
+          "writeBytes": 2777
+        },
+        {
+          "elapsedMs": 1.298,
+          "reads": 4,
+          "readBytes": 2662,
+          "writes": 4,
+          "writeBytes": 2668
+        },
+        {
+          "elapsedMs": 1.221,
+          "reads": 4,
+          "readBytes": 2596,
+          "writes": 4,
+          "writeBytes": 2604
+        }
+      ]
+    },
+    "medium-one-snapshot": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "one",
+      "indexCount": 1,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 90.711,
+        "p95Ms": 92.638,
+        "meanMs": 90.861,
+        "meanReads": 3,
+        "meanReadBytes": 153910,
+        "meanWrites": 3,
+        "meanWriteBytes": 153933
+      },
+      "samples": [
+        {
+          "elapsedMs": 91.015,
+          "reads": 3,
+          "readBytes": 153823,
+          "writes": 3,
+          "writeBytes": 153846
+        },
+        {
+          "elapsedMs": 90.711,
+          "reads": 3,
+          "readBytes": 153846,
+          "writes": 3,
+          "writeBytes": 153869
+        },
+        {
+          "elapsedMs": 90.249,
+          "reads": 3,
+          "readBytes": 153869,
+          "writes": 3,
+          "writeBytes": 153899
+        },
+        {
+          "elapsedMs": 92.038,
+          "reads": 3,
+          "readBytes": 153899,
+          "writes": 3,
+          "writeBytes": 153928
+        },
+        {
+          "elapsedMs": 91.482,
+          "reads": 3,
+          "readBytes": 153928,
+          "writes": 3,
+          "writeBytes": 153946
+        },
+        {
+          "elapsedMs": 90.06,
+          "reads": 3,
+          "readBytes": 153946,
+          "writes": 3,
+          "writeBytes": 153978
+        },
+        {
+          "elapsedMs": 88.691,
+          "reads": 3,
+          "readBytes": 153978,
+          "writes": 3,
+          "writeBytes": 153992
+        },
+        {
+          "elapsedMs": 92.638,
+          "reads": 3,
+          "readBytes": 153992,
+          "writes": 3,
+          "writeBytes": 154009
+        }
+      ]
+    },
+    "medium-one-trie": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "one",
+      "indexCount": 1,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 34.845,
+        "p95Ms": 38.445,
+        "meanMs": 35.405,
+        "meanReads": 6,
+        "meanReadBytes": 134419,
+        "meanWrites": 5,
+        "meanWriteBytes": 68571
+      },
+      "samples": [
+        {
+          "elapsedMs": 38.445,
+          "reads": 6,
+          "readBytes": 134266,
+          "writes": 5,
+          "writeBytes": 68436
+        },
+        {
+          "elapsedMs": 34.999,
+          "reads": 6,
+          "readBytes": 134449,
+          "writes": 5,
+          "writeBytes": 68610
+        },
+        {
+          "elapsedMs": 35.473,
+          "reads": 6,
+          "readBytes": 134418,
+          "writes": 5,
+          "writeBytes": 68565
+        },
+        {
+          "elapsedMs": 34.498,
+          "reads": 6,
+          "readBytes": 134300,
+          "writes": 5,
+          "writeBytes": 68454
+        },
+        {
+          "elapsedMs": 34.658,
+          "reads": 6,
+          "readBytes": 134415,
+          "writes": 5,
+          "writeBytes": 68560
+        },
+        {
+          "elapsedMs": 34.845,
+          "reads": 6,
+          "readBytes": 134587,
+          "writes": 5,
+          "writeBytes": 68741
+        },
+        {
+          "elapsedMs": 36.23,
+          "reads": 6,
+          "readBytes": 134492,
+          "writes": 5,
+          "writeBytes": 68631
+        },
+        {
+          "elapsedMs": 34.096,
+          "reads": 6,
+          "readBytes": 134427,
+          "writes": 5,
+          "writeBytes": 68570
+        }
+      ]
+    },
+    "medium-two-snapshot": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "two",
+      "indexCount": 2,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 135.961,
+        "p95Ms": 154.069,
+        "meanMs": 138.186,
+        "meanReads": 4,
+        "meanReadBytes": 234101,
+        "meanWrites": 4,
+        "meanWriteBytes": 234129
+      },
+      "samples": [
+        {
+          "elapsedMs": 139.661,
+          "reads": 4,
+          "readBytes": 233996,
+          "writes": 4,
+          "writeBytes": 234026
+        },
+        {
+          "elapsedMs": 138.34,
+          "reads": 4,
+          "readBytes": 234026,
+          "writes": 4,
+          "writeBytes": 234055
+        },
+        {
+          "elapsedMs": 135.961,
+          "reads": 4,
+          "readBytes": 234055,
+          "writes": 4,
+          "writeBytes": 234087
+        },
+        {
+          "elapsedMs": 139.738,
+          "reads": 4,
+          "readBytes": 234087,
+          "writes": 4,
+          "writeBytes": 234121
+        },
+        {
+          "elapsedMs": 132.483,
+          "reads": 4,
+          "readBytes": 234121,
+          "writes": 4,
+          "writeBytes": 234144
+        },
+        {
+          "elapsedMs": 154.069,
+          "reads": 4,
+          "readBytes": 234144,
+          "writes": 4,
+          "writeBytes": 234180
+        },
+        {
+          "elapsedMs": 133.912,
+          "reads": 4,
+          "readBytes": 234180,
+          "writes": 4,
+          "writeBytes": 234198
+        },
+        {
+          "elapsedMs": 131.32,
+          "reads": 4,
+          "readBytes": 234198,
+          "writes": 4,
+          "writeBytes": 234222
+        }
+      ]
+    },
+    "medium-two-trie": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "two",
+      "indexCount": 2,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 78.709,
+        "p95Ms": 84.77,
+        "meanMs": 79.312,
+        "meanReads": 8,
+        "meanReadBytes": 294742,
+        "meanWrites": 6,
+        "meanWriteBytes": 148771
+      },
+      "samples": [
+        {
+          "elapsedMs": 79.946,
+          "reads": 8,
+          "readBytes": 294555,
+          "writes": 6,
+          "writeBytes": 148619
+        },
+        {
+          "elapsedMs": 78.613,
+          "reads": 8,
+          "readBytes": 294747,
+          "writes": 6,
+          "writeBytes": 148799
+        },
+        {
+          "elapsedMs": 79.073,
+          "reads": 8,
+          "readBytes": 294729,
+          "writes": 6,
+          "writeBytes": 148756
+        },
+        {
+          "elapsedMs": 76.289,
+          "reads": 8,
+          "readBytes": 294616,
+          "writes": 6,
+          "writeBytes": 148652
+        },
+        {
+          "elapsedMs": 79.994,
+          "reads": 8,
+          "readBytes": 294743,
+          "writes": 6,
+          "writeBytes": 148762
+        },
+        {
+          "elapsedMs": 78.709,
+          "reads": 8,
+          "readBytes": 294924,
+          "writes": 6,
+          "writeBytes": 148948
+        },
+        {
+          "elapsedMs": 77.105,
+          "reads": 8,
+          "readBytes": 294839,
+          "writes": 6,
+          "writeBytes": 148841
+        },
+        {
+          "elapsedMs": 84.77,
+          "reads": 8,
+          "readBytes": 294780,
+          "writes": 6,
+          "writeBytes": 148787
+        }
+      ]
+    },
+    "large-none-snapshot": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "none",
+      "indexCount": 0,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 167.586,
+        "p95Ms": 174.639,
+        "meanMs": 168.88,
+        "meanReads": 2,
+        "meanReadBytes": 448406,
+        "meanWrites": 2,
+        "meanWriteBytes": 448431
+      },
+      "samples": [
+        {
+          "elapsedMs": 174.639,
+          "reads": 2,
+          "readBytes": 448325,
+          "writes": 2,
+          "writeBytes": 448352
+        },
+        {
+          "elapsedMs": 166.925,
+          "reads": 2,
+          "readBytes": 448352,
+          "writes": 2,
+          "writeBytes": 448369
+        },
+        {
+          "elapsedMs": 167.542,
+          "reads": 2,
+          "readBytes": 448369,
+          "writes": 2,
+          "writeBytes": 448384
+        },
+        {
+          "elapsedMs": 170.411,
+          "reads": 2,
+          "readBytes": 448384,
+          "writes": 2,
+          "writeBytes": 448423
+        },
+        {
+          "elapsedMs": 166.299,
+          "reads": 2,
+          "readBytes": 448423,
+          "writes": 2,
+          "writeBytes": 448434
+        },
+        {
+          "elapsedMs": 169.646,
+          "reads": 2,
+          "readBytes": 448434,
+          "writes": 2,
+          "writeBytes": 448461
+        },
+        {
+          "elapsedMs": 167.586,
+          "reads": 2,
+          "readBytes": 448461,
+          "writes": 2,
+          "writeBytes": 448501
+        },
+        {
+          "elapsedMs": 167.993,
+          "reads": 2,
+          "readBytes": 448501,
+          "writes": 2,
+          "writeBytes": 448523
+        }
+      ]
+    },
+    "large-none-trie": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "none",
+      "indexCount": 0,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 1.748,
+        "p95Ms": 1.884,
+        "meanMs": 1.746,
+        "meanReads": 4,
+        "meanReadBytes": 4455,
+        "meanWrites": 4,
+        "meanWriteBytes": 4467
+      },
+      "samples": [
+        {
+          "elapsedMs": 1.826,
+          "reads": 4,
+          "readBytes": 4166,
+          "writes": 4,
+          "writeBytes": 4179
+        },
+        {
+          "elapsedMs": 1.579,
+          "reads": 4,
+          "readBytes": 4414,
+          "writes": 4,
+          "writeBytes": 4420
+        },
+        {
+          "elapsedMs": 1.748,
+          "reads": 4,
+          "readBytes": 4495,
+          "writes": 4,
+          "writeBytes": 4503
+        },
+        {
+          "elapsedMs": 1.629,
+          "reads": 4,
+          "readBytes": 4280,
+          "writes": 4,
+          "writeBytes": 4293
+        },
+        {
+          "elapsedMs": 1.831,
+          "reads": 4,
+          "readBytes": 4497,
+          "writes": 4,
+          "writeBytes": 4509
+        },
+        {
+          "elapsedMs": 1.669,
+          "reads": 4,
+          "readBytes": 4494,
+          "writes": 4,
+          "writeBytes": 4507
+        },
+        {
+          "elapsedMs": 1.884,
+          "reads": 4,
+          "readBytes": 4486,
+          "writes": 4,
+          "writeBytes": 4497
+        },
+        {
+          "elapsedMs": 1.805,
+          "reads": 4,
+          "readBytes": 4810,
+          "writes": 4,
+          "writeBytes": 4826
+        }
+      ]
+    },
+    "large-one-snapshot": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "one",
+      "indexCount": 1,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 983.057,
+        "p95Ms": 1014.855,
+        "meanMs": 985.644,
+        "meanReads": 3,
+        "meanReadBytes": 774552,
+        "meanWrites": 3,
+        "meanWriteBytes": 774579
+      },
+      "samples": [
+        {
+          "elapsedMs": 985.279,
+          "reads": 3,
+          "readBytes": 774466,
+          "writes": 3,
+          "writeBytes": 774486
+        },
+        {
+          "elapsedMs": 1014.855,
+          "reads": 3,
+          "readBytes": 774486,
+          "writes": 3,
+          "writeBytes": 774505
+        },
+        {
+          "elapsedMs": 1004.564,
+          "reads": 3,
+          "readBytes": 774505,
+          "writes": 3,
+          "writeBytes": 774535
+        },
+        {
+          "elapsedMs": 973.207,
+          "reads": 3,
+          "readBytes": 774535,
+          "writes": 3,
+          "writeBytes": 774565
+        },
+        {
+          "elapsedMs": 984.296,
+          "reads": 3,
+          "readBytes": 774565,
+          "writes": 3,
+          "writeBytes": 774586
+        },
+        {
+          "elapsedMs": 957.131,
+          "reads": 3,
+          "readBytes": 774586,
+          "writes": 3,
+          "writeBytes": 774619
+        },
+        {
+          "elapsedMs": 983.057,
+          "reads": 3,
+          "readBytes": 774619,
+          "writes": 3,
+          "writeBytes": 774653
+        },
+        {
+          "elapsedMs": 982.764,
+          "reads": 3,
+          "readBytes": 774653,
+          "writes": 3,
+          "writeBytes": 774686
+        }
+      ]
+    },
+    "large-one-trie": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "one",
+      "indexCount": 1,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 204.245,
+        "p95Ms": 213.745,
+        "meanMs": 205.094,
+        "meanReads": 6,
+        "meanReadBytes": 656695,
+        "meanWrites": 5,
+        "meanWriteBytes": 330638
+      },
+      "samples": [
+        {
+          "elapsedMs": 205.749,
+          "reads": 6,
+          "readBytes": 656385,
+          "writes": 5,
+          "writeBytes": 330340
+        },
+        {
+          "elapsedMs": 200.869,
+          "reads": 6,
+          "readBytes": 656639,
+          "writes": 5,
+          "writeBytes": 330584
+        },
+        {
+          "elapsedMs": 213.745,
+          "reads": 6,
+          "readBytes": 656726,
+          "writes": 5,
+          "writeBytes": 330672
+        },
+        {
+          "elapsedMs": 206.759,
+          "reads": 6,
+          "readBytes": 656520,
+          "writes": 5,
+          "writeBytes": 330460
+        },
+        {
+          "elapsedMs": 204.245,
+          "reads": 6,
+          "readBytes": 656736,
+          "writes": 5,
+          "writeBytes": 330680
+        },
+        {
+          "elapsedMs": 204.389,
+          "reads": 6,
+          "readBytes": 656739,
+          "writes": 5,
+          "writeBytes": 330683
+        },
+        {
+          "elapsedMs": 201.349,
+          "reads": 6,
+          "readBytes": 656741,
+          "writes": 5,
+          "writeBytes": 330676
+        },
+        {
+          "elapsedMs": 203.644,
+          "reads": 6,
+          "readBytes": 657070,
+          "writes": 5,
+          "writeBytes": 331008
+        }
+      ]
+    },
+    "large-two-snapshot": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "two",
+      "indexCount": 2,
+      "layout": "snapshot",
+      "summary": {
+        "p50Ms": 1237.368,
+        "p95Ms": 1316.73,
+        "meanMs": 1248.333,
+        "meanReads": 4,
+        "meanReadBytes": 1171629,
+        "meanWrites": 4,
+        "meanWriteBytes": 1171662
+      },
+      "samples": [
+        {
+          "elapsedMs": 1238.784,
+          "reads": 4,
+          "readBytes": 1171522,
+          "writes": 4,
+          "writeBytes": 1171542
+        },
+        {
+          "elapsedMs": 1268.659,
+          "reads": 4,
+          "readBytes": 1171542,
+          "writes": 4,
+          "writeBytes": 1171572
+        },
+        {
+          "elapsedMs": 1316.73,
+          "reads": 4,
+          "readBytes": 1171572,
+          "writes": 4,
+          "writeBytes": 1171608
+        },
+        {
+          "elapsedMs": 1225.7,
+          "reads": 4,
+          "readBytes": 1171608,
+          "writes": 4,
+          "writeBytes": 1171646
+        },
+        {
+          "elapsedMs": 1256.533,
+          "reads": 4,
+          "readBytes": 1171646,
+          "writes": 4,
+          "writeBytes": 1171673
+        },
+        {
+          "elapsedMs": 1234.367,
+          "reads": 4,
+          "readBytes": 1171673,
+          "writes": 4,
+          "writeBytes": 1171716
+        },
+        {
+          "elapsedMs": 1208.524,
+          "reads": 4,
+          "readBytes": 1171716,
+          "writes": 4,
+          "writeBytes": 1171750
+        },
+        {
+          "elapsedMs": 1237.368,
+          "reads": 4,
+          "readBytes": 1171750,
+          "writes": 4,
+          "writeBytes": 1171792
+        }
+      ]
+    },
+    "large-two-trie": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "two",
+      "indexCount": 2,
+      "layout": "trie",
+      "summary": {
+        "p50Ms": 458.958,
+        "p95Ms": 512.098,
+        "meanMs": 473.704,
+        "meanReads": 8,
+        "meanReadBytes": 1450787,
+        "meanWrites": 6,
+        "meanWriteBytes": 727724
+      },
+      "samples": [
+        {
+          "elapsedMs": 490.201,
+          "reads": 8,
+          "readBytes": 1450439,
+          "writes": 6,
+          "writeBytes": 727401
+        },
+        {
+          "elapsedMs": 458.958,
+          "reads": 8,
+          "readBytes": 1450693,
+          "writes": 6,
+          "writeBytes": 727652
+        },
+        {
+          "elapsedMs": 447.877,
+          "reads": 8,
+          "readBytes": 1450796,
+          "writes": 6,
+          "writeBytes": 727749
+        },
+        {
+          "elapsedMs": 456.001,
+          "reads": 8,
+          "readBytes": 1450607,
+          "writes": 6,
+          "writeBytes": 727546
+        },
+        {
+          "elapsedMs": 450.419,
+          "reads": 8,
+          "readBytes": 1450838,
+          "writes": 6,
+          "writeBytes": 727771
+        },
+        {
+          "elapsedMs": 502.236,
+          "reads": 8,
+          "readBytes": 1450853,
+          "writes": 6,
+          "writeBytes": 727780
+        },
+        {
+          "elapsedMs": 512.098,
+          "reads": 8,
+          "readBytes": 1450868,
+          "writes": 6,
+          "writeBytes": 727777
+        },
+        {
+          "elapsedMs": 471.845,
+          "reads": 8,
+          "readBytes": 1451205,
+          "writes": 6,
+          "writeBytes": 728117
+        }
+      ]
+    }
+  }
+}

@@ -365,8 +365,8 @@ test("benchmark page publishes tables, graphs, and raw evidence", async ({
   ).toBeVisible();
   await expect(
     page.locator('.prose img[src*="/benchmarks/"]'),
-  ).toHaveCount(4);
-  await expect(page.locator(".prose table")).toHaveCount(10);
+  ).toHaveCount(5);
+  await expect(page.locator(".prose table")).toHaveCount(12);
 
   const jsonResponse = await request.get(
     "/evidence/r2-current-layout-multiregion-2026-09-25.json",
@@ -374,14 +374,28 @@ test("benchmark page publishes tables, graphs, and raw evidence", async ({
   const csvResponse = await request.get(
     "/evidence/r2-current-layout-summary-2026-09-25.csv",
   );
+  const writeScalingResponse = await request.get(
+    "/evidence/write-scaling-regional-worker-2026-09-28.json",
+  );
+  const writeComparisonResponse = await request.get(
+    "/evidence/write-scaling-comparison-2026-09-28.csv",
+  );
   expect(jsonResponse.ok()).toBe(true);
   expect(csvResponse.ok()).toBe(true);
+  expect(writeScalingResponse.ok()).toBe(true);
+  expect(writeComparisonResponse.ok()).toBe(true);
   expect(jsonResponse.headers()["content-type"]).toContain(
     "application/json",
   );
   expect(csvResponse.headers()["content-type"]).toMatch(
     /text\/csv|application\/octet-stream/,
   );
+  expect(
+    writeScalingResponse.headers()["content-type"],
+  ).toContain("application/json");
+  expect(
+    writeComparisonResponse.headers()["content-type"],
+  ).toMatch(/text\/csv|application\/octet-stream/);
   expect(
     createHash("sha256")
       .update(await jsonResponse.body())
@@ -397,6 +411,14 @@ test("benchmark page publishes tables, graphs, and raw evidence", async ({
       .toUpperCase(),
   ).toBe(
     "76210F31306CE6E7BF0E22C67BC498EA593634E08F89AD5A188A0F3D1B526DB9",
+  );
+  expect(
+    createHash("sha256")
+      .update(await writeScalingResponse.body())
+      .digest("hex")
+      .toUpperCase(),
+  ).toBe(
+    "A433E2729528787929FCAED89448FBBCE3ED51977DEC6D8B95C06BC40BAD09DD",
   );
   await assertNoHorizontalOverflow(page);
 });
