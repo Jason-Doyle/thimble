@@ -136,6 +136,20 @@ Backups require the matching master key version.
 Logical exports are portable plaintext migrations, not encrypted backups. See
 [Logical migration](MIGRATION.md).
 
+## Mutation batches
+
+Enable mutation batching only for applications that intentionally call
+`putMany()`. Ordinary writes are not delayed or coalesced automatically.
+
+Monitor complete batch duration rather than only amortized per-document
+latency. A batch remains one conflict and retry unit, so repeated CAS failures
+can repeat more work than one ordinary mutation. Keep an immediate single-write
+fallback for user actions that should not wait for a group.
+
+The initial supported limits are 20 unique documents and 1 MiB of JSON. Do not
+raise them without measuring authority memory, provider request limits, and
+contention with representative payloads.
+
 ## Observability
 
 Record:
@@ -143,6 +157,8 @@ Record:
 - read source: memory, IndexedDB, or remote
 - remote object bytes
 - read-bundle requests, bytes, object counts, and fallbacks
+- mutation-batch document count, request bytes, total duration, revision,
+  `cacheComplete`, failures, and CAS retries
 - compression ratio
 - envelope encode/decode duration
 - HEAD conditional-write retries

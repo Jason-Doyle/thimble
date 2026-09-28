@@ -206,7 +206,9 @@ const websiteSchema = {
         </div>
         <p>
           The authority owns credentials, identity, keys, and conditional
-          writes. Application code works with documents and collections.
+          writes. Applications can explicitly group an existing burst into one
+          bounded collection revision. Application code works with documents
+          and collections.
         </p>
       </div>
 
@@ -277,6 +279,7 @@ const websiteSchema = {
             <li>Records belong to one user, tenant, role, or public scope</li>
             <li>ID reads, declared indexes, or bounded scans cover the workflow</li>
             <li>Writes are modest compared with reads</li>
+            <li>Existing import or autosave bursts can use bounded batches</li>
             <li>The hot working set fits in browser storage</li>
             <li>External OIDC already handles account security</li>
           </ul>

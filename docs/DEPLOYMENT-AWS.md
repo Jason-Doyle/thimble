@@ -73,10 +73,11 @@ expose:
 - `THIMBLE_READ_BUNDLES`
 - `THIMBLE_MUTATION_BATCHES`
 
-The supplied deployment therefore leaves Studio, covering indexes, and read
-bundles disabled. Use a reviewed derived template or another Node deployment
-configuration when those optional features are required. Setting variables
-only in the deployment shell does not pass them into the Lambda function.
+The supplied deployment therefore leaves Studio, covering indexes, read
+bundles, and mutation batches disabled. Use a reviewed derived template or
+another Node deployment configuration when those optional features are
+required. Setting variables only in the deployment shell does not pass them
+into the Lambda function.
 
 The template still passes its legacy `RetiredCollectionLayouts` value into
 the Lambda environment. The authority runtime does not perform retired-layout
