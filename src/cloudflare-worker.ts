@@ -73,6 +73,13 @@ import {
   studioScopes,
 } from "./studio-api.js";
 import { readPointBundle } from "./read-bundle.js";
+import {
+  MUTATION_BATCH_MAX_REQUEST_BYTES,
+  MUTATION_BATCH_MAX_RESPONSE_DECODED_BYTES,
+  MUTATION_BATCH_MAX_RESPONSE_OBJECTS,
+  MutationBatchRequestError,
+  mutationBatchDocuments,
+} from "./mutation-batch.js";
 
 type RateLimitBinding = {
   limit(options: { key: string }): Promise<{ success: boolean }>;
@@ -96,6 +103,7 @@ export type CloudflareAuthorityEnv = {
   THIMBLE_MAINTENANCE_MODE?: string;
   THIMBLE_STUDIO?: string;
   THIMBLE_READ_BUNDLES?: string;
+  THIMBLE_MUTATION_BATCHES?: string;
   THIMBLE_STUDIO_ORIGIN?: string;
   THIMBLE_COLLECTIONS?: string;
   ENTRA_TENANT_ID?: string;
@@ -142,6 +150,7 @@ type Runtime = {
   maintenanceMode: boolean;
   studioEnabled: boolean;
   readBundlesEnabled: boolean;
+  mutationBatchesEnabled: boolean;
   studioOrigin: string | null;
   oidcProviders: string[];
   allowedOrigin: string;
@@ -154,6 +163,7 @@ export type CloudflareAuthorityOptions = {
   collections?: string[];
   studio?: boolean;
   readBundles?: boolean;
+  mutationBatches?: boolean;
   studioOrigin?: string;
 };
 
@@ -179,7 +189,13 @@ export function createCloudflareAuthority(
                 "secondary_index_too_large",
                 error.message,
               )
-            : error;
+            : error instanceof MutationBatchRequestError
+              ? new AuthError(
+                  error.status,
+                  error.code,
+                  error.message,
+                )
+              : error;
         if (
           !(
             handledError instanceof AuthError &&
@@ -648,6 +664,12 @@ async function route(
       ...(runtime.readBundlesEnabled
         ? { readBundleBaseUrl: "/api/read-bundles" }
         : {}),
+      ...(runtime.mutationBatchesEnabled
+        ? {
+            mutationBatchBaseUrl:
+              "/api/mutation-batches",
+          }
+        : {}),
       headTtlMs: runtime.headTtlMs,
       cachePolicy: "content",
       collectionLayouts: runtime.collectionLayouts,
@@ -799,6 +821,57 @@ async function route(
       customers: dataset.customers.length,
       orders: dataset.orders.length,
     });
+  }
+
+  const mutationBatchRoute =
+    /^\/api\/mutation-batches\/([^/]+)$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    runtime.mutationBatchesEnabled &&
+    mutationBatchRoute?.[1]
+  ) {
+    requireAuthenticated(authenticated);
+    requireWritesEnabled(runtime);
+    requireLayoutGeneration(runtime, request);
+    requireMutationRequest(
+      runtime,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const grant = selectedWriteGrant(
+      authenticated.session.grants,
+      request,
+    );
+    const scope = await runtime.scope(grant.scopeId);
+    const collection = decodePathSegment(
+      mutationBatchRoute[1],
+    );
+    const documents = mutationBatchDocuments(
+      await readJsonRequest(
+        request,
+        MUTATION_BATCH_MAX_REQUEST_BYTES,
+      ),
+    );
+    const engine = engineFor(
+      runtime,
+      scope,
+      collection,
+    );
+    await engine.putMany(collection, documents);
+    return json(
+      await engine.readMutationBundle(
+        collection,
+        documents,
+        {
+          maxObjects:
+            MUTATION_BATCH_MAX_RESPONSE_OBJECTS,
+          maxDecodedBytes:
+            MUTATION_BATCH_MAX_RESPONSE_DECODED_BYTES,
+        },
+      ),
+    );
   }
 
   const writeRoute =
@@ -1099,6 +1172,9 @@ async function createRuntime(
   const readBundlesEnabled =
     options.readBundles ??
     env.THIMBLE_READ_BUNDLES === "true";
+  const mutationBatchesEnabled =
+    options.mutationBatches ??
+    env.THIMBLE_MUTATION_BATCHES === "true";
   const collections = studioEnabled
     ? studioCollectionCatalog({
         collections:
@@ -1148,6 +1224,7 @@ async function createRuntime(
     maintenanceMode: env.THIMBLE_MAINTENANCE_MODE === "true",
     studioEnabled,
     readBundlesEnabled,
+    mutationBatchesEnabled,
     studioOrigin:
       options.studioOrigin ??
       env.THIMBLE_STUDIO_ORIGIN ??
@@ -2003,8 +2080,8 @@ function isJsonContentType(value: string): boolean {
 
 export async function readJsonRequest(
   request: Request,
+  maximumBytes = 1_048_576,
 ): Promise<unknown> {
-  const maximumBytes = 1_048_576;
   const declaredLength = Number(
     request.headers.get("content-length"),
   );

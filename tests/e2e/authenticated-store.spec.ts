@@ -103,6 +103,117 @@ test("authenticates externally, reads, writes, persists cache, and logs out", as
   );
   expect(bundleRequests).toHaveLength(1);
 
+  const mutationBatch = await page.evaluate(async () => {
+    // @ts-expect-error Vite serves this source module during browser QA.
+    const { createThimbleClient } = await import("/src/browser/connect.ts");
+    const config = await fetch("/api/config", {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).then((response) => response.json()) as {
+      mutationBatchBaseUrl?: string;
+      csrfToken: string;
+      layoutGeneration: string;
+      scope: { id: string };
+    };
+    const client = await createThimbleClient({
+      persistentCache: false,
+    });
+    const documents = [
+      {
+        id: "batch-product-1",
+        sku: "BATCH-1",
+        name: "Batch product 1",
+        priceCents: 1_001,
+      },
+      {
+        id: "batch-product-2",
+        sku: "BATCH-2",
+        name: "Batch product 2",
+        priceCents: 1_002,
+      },
+    ];
+    const result = await client.writeBatch(
+      "products",
+      documents,
+    );
+    client.resetMetrics();
+    const loaded = await Promise.all(
+      documents.map((document) =>
+        client.get("products", document.id),
+      ),
+    );
+    const oversized = await fetch(
+      "/api/mutation-batches/products",
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-thimble-csrf": config.csrfToken,
+          "x-thimble-scope": config.scope.id,
+          "x-thimble-layout-generation":
+            config.layoutGeneration,
+        },
+        body: JSON.stringify({
+          version: 1,
+          documents: Array.from(
+            { length: 21 },
+            (_, index) => ({
+              id: `oversized-batch-${index}`,
+            }),
+          ),
+        }),
+      },
+    );
+    client.close();
+    return {
+      advertised: config.mutationBatchBaseUrl,
+      revision: result.revision,
+      cacheComplete: result.cacheComplete,
+      documents: result.documents,
+      loaded,
+      metricsAfterBatch: client.metrics(),
+      oversized: {
+        status: oversized.status,
+        body: await oversized.json(),
+      },
+    };
+  });
+  expect(mutationBatch).toMatchObject({
+    advertised: "/api/mutation-batches",
+    cacheComplete: true,
+    documents: [
+      {
+        id: "batch-product-1",
+        sku: "BATCH-1",
+      },
+      {
+        id: "batch-product-2",
+        sku: "BATCH-2",
+      },
+    ],
+    loaded: [
+      {
+        id: "batch-product-1",
+        sku: "BATCH-1",
+      },
+      {
+        id: "batch-product-2",
+        sku: "BATCH-2",
+      },
+    ],
+    metricsAfterBatch: {
+      remoteReads: 2,
+      notModified: 2,
+    },
+    oversized: {
+      status: 413,
+      body: {
+        error: "mutation_batch_too_large",
+      },
+    },
+  });
+
   await page.locator("#delete-product").click();
   await expect(page.locator("#status")).toContainText(
     "Product deleted",

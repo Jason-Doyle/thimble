@@ -102,7 +102,8 @@ private.
 
 ## Write path
 
-1. The browser sends a mutation to the authority.
+1. The browser sends one mutation or an explicitly enabled bounded mutation
+   batch to the authority.
 2. The authority authenticates the session and resolves allowed scopes.
 3. Application validation and the decoded-object limit run before storage
    publication.
@@ -115,8 +116,8 @@ private.
    or Trie object writes.
 7. After every immutable upload completes, HEAD publishes the document root
    and all active index references with one ETag compare-and-swap.
-8. The response includes the new HEAD, changed immutable objects, and
-   document.
+8. The response includes the new HEAD, bounded changed immutable objects, and
+   changed document or documents.
 9. The writing tab updates its cache and broadcasts the bundle to other tabs.
 
 Conditional HEAD writes are the transaction boundary for one collection and

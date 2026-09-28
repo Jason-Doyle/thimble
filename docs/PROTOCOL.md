@@ -225,6 +225,53 @@ Clients automatically use the individual encrypted-object broker when the
 endpoint is absent, the collection lacks authenticated size metadata, or the
 bundle exceeds its limits. Older clients ignore the advertised endpoint.
 
+## Bounded mutation batch
+
+Authorities with `mutationBatches: true` or
+`THIMBLE_MUTATION_BATCHES=true` advertise `/api/mutation-batches` through
+`/api/config`.
+
+The browser sends:
+
+```text
+POST /api/mutation-batches/<collection>
+Content-Type: application/json
+X-Thimble-Scope: <scope>
+X-Thimble-CSRF: <session token>
+X-Thimble-Layout-Generation: <generation>
+
+{
+  "version": 1,
+  "documents": [
+    { "id": "note-1", "title": "First" },
+    { "id": "note-2", "title": "Second" }
+  ]
+}
+```
+
+The request is limited to 20 unique document IDs and 1 MiB of JSON. The
+authority:
+
+1. authenticates the session, origin, CSRF token, scope write grant, and
+   layout generation
+2. validates the complete request before writing immutable objects
+3. updates the active document layout and every configured index
+4. awaits all immutable uploads
+5. publishes one conditional HEAD revision
+6. returns the changed documents and bounded cache objects
+
+The response reports `cacheComplete: false` when the 42-object or 16 MiB
+cache-response limit is exceeded. `cacheComplete` covers changed document
+paths, not secondary-index pages. The write is still committed; missing cache
+objects use the normal authenticated object path on the next read.
+
+Batch failure is not reported as success. Validation failure publishes
+nothing. A conditional HEAD conflict applies to the complete batch retry, not
+to hidden per-document commits.
+
+Clients do not silently convert `putMany()` into separate writes when the
+capability is absent. Ordinary `put()` remains unchanged.
+
 ## Compatibility fixtures
 
 The envelope magic and version are durable protocol fields. Before a public

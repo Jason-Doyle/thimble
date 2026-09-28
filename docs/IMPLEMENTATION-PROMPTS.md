@@ -95,7 +95,8 @@ Requirements:
 9. Keep the master key and provider credentials in the platform secret store.
 10. Expose only the authority HTTP port.
 11. Enable bounded read bundles only after accepting the documented trusted-authority plaintext boundary.
-12. Add health, authentication, bundled point read, indexed projection, write, deletion, and logout smoke tests.
+12. Add health, authentication, bundled point read, bounded mutation batch,
+    indexed projection, single write, deletion, and logout smoke tests.
 13. Document backup, logical export, key rotation, retention maintenance, index migration, and layout migration.
 
 Do not create a second authentication system. Do not store passwords or provider access tokens.

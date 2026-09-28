@@ -19,6 +19,7 @@ Both `startNodeAuthority()` and `createCloudflareAuthority()` accept:
 | `studio` | Enable Studio APIs and Node asset hosting | `false` |
 | `studioOrigin` | Additional exact origin accepted for Studio mutations | Local Node authority origin when Studio is enabled; otherwise none |
 | `readBundles` | Advertise bounded decoded point-read bundles | `false` |
+| `mutationBatches` | Advertise atomic bounded multi-document writes | `false` |
 
 ## Common authority settings
 
@@ -42,9 +43,17 @@ unless noted otherwise.
 | `THIMBLE_STUDIO_ORIGIN` | Additional exact Studio origin | None, except local Node defaults to its authority origin |
 | `THIMBLE_COLLECTIONS` | Comma-separated Studio collection catalogue | Empty |
 | `THIMBLE_READ_BUNDLES` | Enable the trusted-authority decoded bundle path | `false` |
+| `THIMBLE_MUTATION_BATCHES` | Enable bounded multi-document mutation requests | `false` |
 
 `THIMBLE_READ_BUNDLES=true` changes the read transport trust boundary. Review
 [Security](SECURITY.md) before enabling it.
+
+`THIMBLE_MUTATION_BATCHES=true` advertises the batch endpoint through
+`/api/config`. A request is limited to 20 documents and 1 MiB of JSON. The
+authority validates the complete request before writing, publishes one
+collection revision, and returns only after final HEAD publication. Enabling
+the capability does not automatically delay or combine ordinary `put()`
+calls; applications opt in by calling `putMany()`.
 
 Normal `EnvelopeObjectStore` and browser object-reader instances limit each
 decoded object to 16 MiB. This is a code-level safety default rather than an

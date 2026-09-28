@@ -20,6 +20,8 @@
   an eligible cold trie point read from four browser requests to one.
 - Unit tests verify that an explicit covered projection can avoid loading the
   full snapshot page and that uncovered fields fall back to full documents.
+- Opt-in mutation batches publish up to 20 documents in one collection
+  revision and retain immediate browser read-your-writes behavior.
 - Current regional evidence shows that cold object reads and large indexed
   writes miss normal interactive latency targets.
 - Post-merge regional evidence shows that bounded immutable commits reduce
@@ -41,6 +43,8 @@
 - Application code must understand eventual cache freshness.
 - Key grants and revocation become part of application security.
 - A collection root is a write-contention point.
+- A mutation batch makes the complete group one retry and conflict unit.
+- Batching reduces amortized cost but does not shorten an isolated write.
 - Identity-provider availability affects new session creation.
 - Garbage collection and lifecycle policy are required.
 - Browser storage quotas and eviction differ by browser.
@@ -82,4 +86,5 @@ using the application's real workload before choosing a production data layer.
 
 Production use should assume that warm browser cache hits dominate. Avoid
 request-critical flows that depend on cold object reads or large indexed
-writes.
+writes. Use bounded batches for existing bursts, imports, or coordinated
+autosave groups rather than delaying unrelated single writes.

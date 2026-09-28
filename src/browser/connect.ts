@@ -32,6 +32,7 @@ export type ThimbleAuthorityConfig = {
   provider: "local" | "azure" | "s3" | "r2";
   readBaseUrl: string;
   readBundleBaseUrl?: string;
+  mutationBatchBaseUrl?: string;
   headTtlMs: number;
   cachePolicy: CachePolicy;
   collectionLayouts: Record<string, CollectionLayout>;
@@ -147,6 +148,13 @@ export async function createThimbleConnection(
         configurationUrl,
       ).toString()
     : null;
+  const mutationBatchBaseUrl =
+    config.mutationBatchBaseUrl
+      ? new URL(
+          config.mutationBatchBaseUrl,
+          configurationUrl,
+        ).toString()
+      : null;
   const namespace = [
     config.provider,
     new URL(readBaseUrl).origin,
@@ -221,6 +229,9 @@ export async function createThimbleConnection(
     scopeId: config.scope.id,
     scopeKeyId: config.scope.keyId,
     writeBaseUrl: configurationUrl.origin,
+    ...(mutationBatchBaseUrl
+      ? { mutationBatchBaseUrl }
+      : {}),
     fetchImplementation,
     ...(scopeKeys
       ? { keyExpiresAt: scopeKeys.expiresAt }
@@ -321,6 +332,9 @@ function validateConfig(value: unknown): ThimbleAuthorityConfig {
     (value.readBundleBaseUrl !== undefined &&
       (typeof value.readBundleBaseUrl !== "string" ||
         value.readBundleBaseUrl.length === 0)) ||
+    (value.mutationBatchBaseUrl !== undefined &&
+      (typeof value.mutationBatchBaseUrl !== "string" ||
+        value.mutationBatchBaseUrl.length === 0)) ||
     typeof value.headTtlMs !== "number" ||
     !Number.isFinite(value.headTtlMs) ||
     value.headTtlMs < 0 ||

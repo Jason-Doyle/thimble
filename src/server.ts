@@ -86,6 +86,13 @@ import {
   studioScopes,
 } from "./studio-api.js";
 import { readPointBundle } from "./read-bundle.js";
+import {
+  MUTATION_BATCH_MAX_REQUEST_BYTES,
+  MUTATION_BATCH_MAX_RESPONSE_DECODED_BYTES,
+  MUTATION_BATCH_MAX_RESPONSE_OBJECTS,
+  MutationBatchRequestError,
+  mutationBatchDocuments,
+} from "./mutation-batch.js";
 
 type ScopeRuntime = {
   material: ScopeMaterial;
@@ -109,6 +116,7 @@ type ServerContext = {
   maintenanceMode: boolean;
   studioEnabled: boolean;
   readBundlesEnabled: boolean;
+  mutationBatchesEnabled: boolean;
   studioOrigin: string | null;
   developmentIdentity: boolean;
   oidcProviders: string[];
@@ -128,6 +136,7 @@ export type NodeAuthorityOptions = {
   collections?: string[];
   studio?: boolean;
   readBundles?: boolean;
+  mutationBatches?: boolean;
   studioOrigin?: string;
 };
 
@@ -180,6 +189,10 @@ async function createContext(
   const readBundlesEnabled =
     options.readBundles ??
     process.env.THIMBLE_READ_BUNDLES === "true";
+  const mutationBatchesEnabled =
+    options.mutationBatches ??
+    process.env.THIMBLE_MUTATION_BATCHES ===
+      "true";
   const studioOrigin =
     options.studioOrigin ??
     process.env.THIMBLE_STUDIO_ORIGIN ??
@@ -311,6 +324,7 @@ async function createContext(
       process.env.THIMBLE_MAINTENANCE_MODE === "true",
     studioEnabled,
     readBundlesEnabled,
+    mutationBatchesEnabled,
     studioOrigin,
     developmentIdentity,
     oidcProviders: [...identityAdapters.keys()].filter(
@@ -849,6 +863,12 @@ async function handleRequest(
       ...(context.readBundlesEnabled
         ? { readBundleBaseUrl: "/api/read-bundles" }
         : {}),
+      ...(context.mutationBatchesEnabled
+        ? {
+            mutationBatchBaseUrl:
+              "/api/mutation-batches",
+          }
+        : {}),
       headTtlMs: context.headTtlMs,
       cachePolicy: "content",
       collectionLayouts: context.collectionLayouts,
@@ -996,6 +1016,60 @@ async function handleRequest(
       customers: dataset.customers.length,
       orders: dataset.orders.length,
     });
+    return;
+  }
+
+  const mutationBatchRoute =
+    /^\/api\/mutation-batches\/([^/]+)$/.exec(
+      url.pathname,
+    );
+  if (
+    request.method === "POST" &&
+    context.mutationBatchesEnabled &&
+    mutationBatchRoute?.[1]
+  ) {
+    requireAuthenticated(authenticated);
+    requireWritesEnabled(context);
+    requireLayoutGeneration(context, request);
+    requireMutationRequest(
+      context,
+      request,
+      authenticated.session.csrfToken,
+    );
+    const grant = selectedWriteGrant(
+      authenticated.session.grants,
+      request,
+    );
+    const runtime = await context.scope(grant.scopeId);
+    const collection = decodePathSegment(
+      mutationBatchRoute[1],
+    );
+    const documents = mutationBatchDocuments(
+      await readJsonBody(
+        request,
+        MUTATION_BATCH_MAX_REQUEST_BYTES,
+      ),
+    );
+    const engine = engineFor(
+      context,
+      runtime,
+      collection,
+    );
+    await engine.putMany(collection, documents);
+    sendJson(
+      response,
+      200,
+      await engine.readMutationBundle(
+        collection,
+        documents,
+        {
+          maxObjects:
+            MUTATION_BATCH_MAX_RESPONSE_OBJECTS,
+          maxDecodedBytes:
+            MUTATION_BATCH_MAX_RESPONSE_DECODED_BYTES,
+        },
+      ),
+    );
     return;
   }
 
@@ -1388,7 +1462,21 @@ function scopeFromObjectKey(key: string): string {
 
 async function readJsonBody(
   request: IncomingMessage,
+  maximumBytes = 1_048_576,
 ): Promise<unknown> {
+  const declaredLength = Number(
+    request.headers["content-length"],
+  );
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > maximumBytes
+  ) {
+    throw new AuthError(
+      413,
+      "request_too_large",
+      "Request body is too large",
+    );
+  }
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of request) {
@@ -1396,7 +1484,7 @@ async function readJsonBody(
       ? chunk
       : Buffer.from(chunk);
     bytes += buffer.byteLength;
-    if (bytes > 1_048_576) {
+    if (bytes > maximumBytes) {
       throw new AuthError(
         413,
         "request_too_large",
@@ -2167,7 +2255,13 @@ function handleServerError(
           "secondary_index_too_large",
           error.message,
         )
-      : error;
+      : error instanceof MutationBatchRequestError
+        ? new AuthError(
+            error.status,
+            error.code,
+            error.message,
+          )
+        : error;
   if (
     !(
       handledError instanceof AuthError &&

@@ -11,6 +11,7 @@ const { startNodeAuthority } = await import(
 await startNodeAuthority({
   studio: true,
   readBundles: true,
+  mutationBatches: true,
   collections: ["notes"],
   collectionLayouts: {
     notes: "snapshot",

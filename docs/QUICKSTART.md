@@ -109,6 +109,7 @@ Use a Wrangler configuration with caller-owned resources:
     "THIMBLE_READ_KEY_VERSIONS": "",
     "THIMBLE_HEAD_TTL_MS": "10000",
     "THIMBLE_READ_BUNDLES": "true",
+    "THIMBLE_MUTATION_BATCHES": "true",
     "THIMBLE_COLLECTION_LAYOUTS": "",
     "THIMBLE_COLLECTION_INDEXES": "{}",
     "THIMBLE_DELETE_RETENTION_DAYS": "30",
@@ -172,6 +173,7 @@ import { startNodeAuthority } from "thimbledb/authority/node";
 
 await startNodeAuthority({
   readBundles: true,
+  mutationBatches: true,
 });
 ```
 
@@ -358,6 +360,12 @@ const db = new ThimbleClient({
         ),
       }
     : {}),
+  ...(config.mutationBatchBaseUrl
+      ? {
+          mutationBatchBaseUrl:
+            config.mutationBatchBaseUrl,
+        }
+      : {}),
   cache,
   headTtlMs: config.headTtlMs,
   csrfToken: config.csrfToken,
@@ -379,6 +387,19 @@ await db.write("notes", "note-1", {
   body: "Stored through ThimbleDB",
 });
 
+await db.writeBatch("notes", [
+  {
+    id: "note-2",
+    title: "Second note",
+    body: "Committed in one bounded batch",
+  },
+  {
+    id: "note-3",
+    title: "Third note",
+    body: "Visible in the same collection revision",
+  },
+]);
+
 const note = await db.get("notes", "note-1");
 const notes = await db.scan("notes");
 
@@ -396,11 +417,13 @@ Confirm:
 4. Brokered objects begin with `TDB1`.
 5. Eligible cold point reads use one bounded bundle request and oversized
    bundles fall back to the object path.
-6. R2, S3, or Blob credentials never reach the browser.
-7. Scope keys exist only as non-extractable in-memory CryptoKeys.
-8. Logout blocks later object reads and clears the browser cache.
-9. Delete and restore follow the configured retention window.
-10. A stale layout generation receives `409 layout_changed`.
+6. When enabled, `/api/config` advertises `/api/mutation-batches`, and
+   `putMany()` publishes one revision for the complete group.
+7. R2, S3, or Blob credentials never reach the browser.
+8. Scope keys exist only as non-extractable in-memory CryptoKeys.
+9. Logout blocks later object reads and clears the browser cache.
+10. Delete and restore follow the configured retention window.
+11. A stale layout generation receives `409 layout_changed`.
 
 Continue with [Authentication](AUTHENTICATION.md),
 [Local development](DEVELOPMENT.md),

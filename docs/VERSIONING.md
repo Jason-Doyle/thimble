@@ -14,6 +14,16 @@ Package version `1.0.0` freezes the documented exports in
 [Public package API](PUBLIC-API.md). Semantic versioning applies to the root,
 auth, authority, and provider subpaths.
 
+## Unreleased compatible capabilities
+
+- authorities may explicitly advertise bounded mutation batches
+- clients can publish 1-20 documents in one collection revision through
+  `putMany()`
+- authorities that do not enable the capability retain existing single-write
+  behavior and do not advertise the endpoint
+- the stored TDB1, Snapshot HEAD, Trie HEAD, and secondary-index formats are
+  unchanged
+
 ## Version 1.0
 
 Version 1.0 provides:

@@ -18,6 +18,9 @@ import {
   type AsyncOperationLimiter,
   validateName,
 } from "../shared-utils.js";
+import type {
+  MutationBatchBundle,
+} from "../mutation-batch.js";
 import {
   snapshotHeadKey,
   snapshotCollectionPrefix,
@@ -411,6 +414,7 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
         layout: "snapshot",
       };
     }
+
     if (limits) {
       if (typeof head.state.decodedBytes !== "number") {
         throw new BoundedReadError(
@@ -459,6 +463,104 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       objects,
       layout: "snapshot",
     };
+  }
+
+  async readMutationBundle(
+    collection: string,
+    documents: JsonDocument[],
+    limits: ReadBundleLimits,
+  ): Promise<MutationBatchBundle> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    const objects: MutationBatchBundle["objects"] = [];
+    let decodedBytes = 0;
+    if (head.object) {
+      decodedBytes = addBundleObject(
+        objects,
+        decodedBytes,
+        {
+          key: snapshotHeadKey(normalized),
+          etag: head.object.etag,
+          value: head.state as unknown as JsonValue,
+        },
+        head.object.bytes.byteLength,
+        limits,
+      );
+    }
+    if (!head.state.snapshotHash) {
+      return mutationBundle(
+        normalized,
+        head.state.revision,
+        documents,
+        objects,
+        true,
+      );
+    }
+    if (
+      typeof head.state.decodedBytes !== "number" ||
+      objects.length + 1 > limits.maxObjects ||
+      decodedBytes + head.state.decodedBytes >
+        limits.maxDecodedBytes
+    ) {
+      return mutationBundle(
+        normalized,
+        head.state.revision,
+        documents,
+        objects,
+        false,
+      );
+    }
+    const pageObject = await this.store.get(
+      snapshotPageKey(
+        normalized,
+        head.state.snapshotHash,
+      ),
+    );
+    if (!pageObject) {
+      throw new Error(
+        `Snapshot ${head.state.snapshotHash} is missing`,
+      );
+    }
+    const page = decodeJson<SnapshotPage>(
+      pageObject.bytes,
+    );
+    addBundleObject(
+      objects,
+      decodedBytes,
+      {
+        key: snapshotPageKey(
+          normalized,
+          head.state.snapshotHash,
+        ),
+        etag: pageObject.etag,
+        value: page as unknown as JsonValue,
+      },
+      pageObject.bytes.byteLength,
+      limits,
+    );
+    const storedDocuments = documents.map(
+      (document) => {
+        const stored = visibleTrieDocument(
+          ownValue(
+            page.documents,
+            document.id,
+          ),
+        );
+        if (!stored) {
+          throw new Error(
+            `Document ${document.id} is missing after mutation batch`,
+          );
+        }
+        return stored;
+      },
+    );
+    return mutationBundle(
+      normalized,
+      head.state.revision,
+      storedDocuments,
+      objects,
+      true,
+    );
   }
 
   private async mutate<T>(
@@ -789,6 +891,26 @@ function assertUserDocument(document: JsonDocument): void {
       'Document field "__thimbleTombstone" is reserved',
     );
   }
+}
+
+function mutationBundle(
+  collection: string,
+  revision: number,
+  documents: JsonDocument[],
+  objects: MutationBatchBundle["objects"],
+  cacheComplete: boolean,
+): MutationBatchBundle {
+  return {
+    version: 1,
+    collection,
+    revision,
+    documents: documents.map((document) =>
+      structuredClone(document),
+    ),
+    objects,
+    layout: "snapshot",
+    cacheComplete,
+  };
 }
 
 async function hashBytes(bytes: Uint8Array): Promise<string> {

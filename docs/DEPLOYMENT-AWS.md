@@ -71,6 +71,7 @@ expose:
 - `THIMBLE_HEAD_TTL_MS`
 - `THIMBLE_STUDIO` or `THIMBLE_STUDIO_ORIGIN`
 - `THIMBLE_READ_BUNDLES`
+- `THIMBLE_MUTATION_BATCHES`
 
 The supplied deployment therefore leaves Studio, covering indexes, and read
 bundles disabled. Use a reviewed derived template or another Node deployment
@@ -113,7 +114,9 @@ skipped rather than collapsing all users onto the adapter loopback address.
 
 - Function URL serves the application and `/api/config`.
 - `/api/config` advertises the optional bounded read-bundle route.
+- `/api/config` advertises the optional bounded mutation-batch route.
 - An eligible cold point read uses one browser request.
+- A bounded `putMany()` publishes one collection revision.
 - S3 objects are private from the S3 endpoint.
 - Brokered private object bodies start with `TDB1`.
 - The auth bucket is never browser-readable.

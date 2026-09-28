@@ -116,6 +116,7 @@ Enable the Studio API in the authority factory or set:
 THIMBLE_STUDIO=true
 THIMBLE_STUDIO_ORIGIN=https://database.example.com
 THIMBLE_READ_BUNDLES=true
+THIMBLE_MUTATION_BATCHES=true
 ```
 
 Build the browser application and copy the package-owned Studio assets after
@@ -161,8 +162,10 @@ npx wrangler deploy --config deploy\cloudflare\wrangler.local.jsonc
 5. Confirm private object GETs use `/api/objects/scopes/...`.
 6. Confirm `/api/config` advertises `/api/read-bundles`.
 7. Confirm an eligible cold point read uses one bounded bundle request.
-8. Confirm raw object bodies start with `TDB1` and contain no plaintext JSON.
-9. Confirm a second HEAD request returns 304.
+8. Confirm `/api/config` advertises `/api/mutation-batches` when enabled.
+9. Confirm a two-document `putMany()` returns one revision and both documents.
+10. Confirm raw object bodies start with `TDB1` and contain no plaintext JSON.
+11. Confirm a second HEAD request returns 304.
 10. Confirm the browser key is non-extractable.
 11. Confirm logout revokes the session and blocks brokered reads.
 12. Delete and restore a test document.

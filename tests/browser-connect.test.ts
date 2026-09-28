@@ -110,6 +110,128 @@ describe("browser connection factory", () => {
     client.close();
   });
 
+  it("uses an advertised mutation batch endpoint", async () => {
+    const requests: Array<{
+      url: string;
+      body: unknown;
+    }> = [];
+    const client = await createThimbleClient({
+      configurationUrl:
+        "https://authority.example.test/custom/api/config",
+      persistentCache: false,
+      fetchImplementation: async (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/custom/api/config")) {
+          return Response.json({
+            ...browserConfig(false),
+            mutationBatchBaseUrl:
+              "/api/mutation-batches",
+          });
+        }
+        requests.push({
+          url,
+          body:
+            typeof init?.body === "string"
+              ? JSON.parse(init.body)
+              : null,
+        });
+        return Response.json({
+          version: 1,
+          collection: "notes",
+          revision: 1,
+          documents: [
+            {
+              id: "note-1",
+              title: "First",
+            },
+            {
+              id: "note-2",
+              title: "Second",
+            },
+          ],
+          objects: [
+            {
+              key:
+                "content-snapshot/notes/HEAD.json",
+              etag: "head",
+              value: {
+                revision: 1,
+                snapshotHash: null,
+              },
+            },
+          ],
+          layout: "snapshot",
+          cacheComplete: false,
+        });
+      },
+    });
+
+    await client.writeBatch("notes", [
+      {
+        id: "note-1",
+        title: "First",
+      },
+      {
+        id: "note-2",
+        title: "Second",
+      },
+    ]);
+
+    expect(requests).toEqual([
+      {
+        url:
+          "https://authority.example.test/" +
+          "api/mutation-batches/notes",
+        body: {
+          version: 1,
+          documents: [
+            {
+              id: "note-1",
+              title: "First",
+            },
+            {
+              id: "note-2",
+              title: "Second",
+            },
+          ],
+        },
+      },
+    ]);
+    client.close();
+  });
+
+  it("does not silently split a batch when the capability is absent", async () => {
+    const requests: string[] = [];
+    const client = await createThimbleClient({
+      configurationUrl:
+        "https://authority.example.test/api/config",
+      persistentCache: false,
+      fetchImplementation: async (input) => {
+        requests.push(String(input));
+        return Response.json(browserConfig(false));
+      },
+    });
+
+    await expect(
+      client.writeBatch("notes", [
+        {
+          id: "note-1",
+          title: "First",
+        },
+        {
+          id: "note-2",
+          title: "Second",
+        },
+      ]),
+    ).rejects.toThrow(
+      "Mutation batching is not enabled by the authority",
+    );
+    expect(requests).toEqual([
+      "https://authority.example.test/api/config",
+    ]);
+    client.close();
+  });
+
   it("uses an advertised point-read bundle endpoint", async () => {
     const requests: string[] = [];
     const client = await createThimbleClient({

@@ -44,6 +44,57 @@ describe("typed collections", () => {
     );
   });
 
+  it("validates a complete mutation batch before writing", async () => {
+    const writeBatch = vi.fn().mockResolvedValue({
+      version: 1,
+      collection: "notes",
+      revision: 2,
+      documents: [
+        {
+          id: "note-1",
+          title: "First",
+        },
+        {
+          id: "note-2",
+          title: "Second",
+        },
+      ],
+      objects: [],
+      layout: "snapshot",
+      cacheComplete: false,
+    });
+    const collection = new ThimbleCollection<Note>(
+      client({ writeBatch }),
+      defineCollection("notes", noteSchema),
+    );
+
+    await expect(
+      collection.putMany([
+        {
+          id: "note-1",
+          title: "First",
+        },
+        {
+          id: "note-2",
+          title: "Second",
+        },
+      ]),
+    ).resolves.toMatchObject({
+      revision: 2,
+      documents: [
+        {
+          id: "note-1",
+          title: "First",
+        },
+        {
+          id: "note-2",
+          title: "Second",
+        },
+      ],
+    });
+    expect(writeBatch).toHaveBeenCalledOnce();
+  });
+
   it("uses a point read for ID equality", async () => {
     const get = vi.fn().mockResolvedValue({
       id: "note-1",

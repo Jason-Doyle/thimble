@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+- Added opt-in bounded mutation batches for up to 20 documents and 1 MiB of
+  JSON, with one atomic collection revision, HEAD-last durability, and browser
+  cache updates.
 - Published a post-merge 1,008-write scaling matrix across seven regions,
   three collection sizes, and zero, one, and two indexes, including three
   retained R2 failures and the historical comparison.
