@@ -25,5 +25,14 @@
   "contentionSuccessRatePercent": {
     "snapshot": 94.29,
     "trie": 98.57
+  },
+  "postMergeWriteScaling": {
+    "evidence": "/evidence/write-scaling-regional-worker-2026-09-28.json",
+    "measuredOperations": 1008,
+    "successfulOperations": 1005,
+    "largeTwoIndexP50Ms": {
+      "snapshot": 6824.246,
+      "trie": 8278.351
+    }
   }
 }

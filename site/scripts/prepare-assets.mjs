@@ -34,6 +34,12 @@ await copyFile(sourceLogo, path.join(assetsDirectory, "logo.png"));
 for (const file of [
   "r2-current-layout-multiregion-2026-09-25.json",
   "r2-current-layout-summary-2026-09-25.csv",
+  "write-scaling-regional-worker-2026-09-27.json",
+  "write-scaling-regional-worker-2026-09-28.json",
+  "write-scaling-local-2026-09-27.json",
+  "write-scaling-local-2026-09-28.json",
+  "write-scaling-local-baseline-rerun-2026-09-28.json",
+  "write-scaling-comparison-2026-09-28.csv",
 ]) {
   const source = await readFile(
     path.join(repositoryRoot, "evidence", file),

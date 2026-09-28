@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "./client-runner.ts",
+    "./scenario.ts",
+    "./vite.config.ts",
+    "./worker.ts"
+  ]
+}

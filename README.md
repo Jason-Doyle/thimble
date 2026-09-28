@@ -339,6 +339,13 @@ Azure regions against a temporary Cloudflare Worker and R2 bucket:
 - `evidence/r2-current-layout-multiregion-2026-09-25.json`
 - `evidence/r2-current-layout-summary-2026-09-25.csv`
 
+A separate post-merge write-scaling run retained 1,008 writes and compares the
+current bounded scheduler with the historical pre-scheduler matrix:
+
+- `evidence/write-scaling-regional-worker-2026-09-28.json`
+- `evidence/write-scaling-regional-worker-2026-09-27.json`
+- `evidence/write-scaling-comparison-2026-09-28.csv`
+
 The measurements show:
 
 - snapshots had lower pooled cold point-read p95 than tries at 128, 5,000,
@@ -354,6 +361,11 @@ The measurements show:
   writes produced failures and very high tail latency for both layouts
 - all 14 regional runs rejected a gzip envelope that expanded beyond the
   16 MiB decoded-object limit
+- post-merge two-index p50 amplification fell by 48-72 percent relative to
+  each run's no-index floor, while current absolute writes still remained
+  multi-second
+- the post-merge write run retained three R2 internal failures and recorded
+  zero CAS retries
 - cold reads and large indexed writes remain too slow for latency-sensitive
   request paths; production fit depends on warm browser cache hits dominating
   user activity

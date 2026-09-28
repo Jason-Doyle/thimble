@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+- Published a post-merge 1,008-write scaling matrix across seven regions,
+  three collection sizes, and zero, one, and two indexes, including three
+  retained R2 failures and the historical comparison.
 - Applied every supported lower and upper bound from a conjunctive range query
   before loading secondary-index candidates.
 - Bounded parallel secondary-index uploads to three operations, overlapped

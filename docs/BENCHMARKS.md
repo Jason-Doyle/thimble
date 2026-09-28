@@ -204,7 +204,7 @@ samples failed with client transport timeouts and remain in the evidence.
 
 Snapshots remain the correct current layout for scan-heavy collections.
 
-## Writes
+## Historical pre-scheduler writes
 
 The write workload updated one document in the 25,000-document indexed
 collection. Each of seven regional callers used its own collection, so these
@@ -243,6 +243,80 @@ Both layouts are poor fits for sustained globally contended writes. The retry
 protocol preserved successful updates, but latency and availability degraded
 far beyond a reasonable interactive target.
 
+## Post-merge write scaling
+
+The 28 September run measured the bounded immutable-write scheduler merged
+after the current-layout benchmark.
+
+Production source commit:
+
+```text
+2c648a603d21f69872839272b560a547abb13a9b
+```
+
+Raw artifacts:
+
+- [Post-merge regional JSON](https://thimbledb.com/evidence/write-scaling-regional-worker-2026-09-28.json)
+- [Historical regional JSON](https://thimbledb.com/evidence/write-scaling-regional-worker-2026-09-27.json)
+- [Comparison CSV](https://thimbledb.com/evidence/write-scaling-comparison-2026-09-28.csv)
+- `evidence/write-scaling-regional-worker-2026-09-28.json`
+- `evidence/write-scaling-regional-worker-2026-09-27.json`
+- `evidence/write-scaling-comparison-2026-09-28.csv`
+
+SHA-256:
+
+```text
+Post-merge A433E2729528787929FCAED89448FBBCE3ED51977DEC6D8B95C06BC40BAD09DD
+Historical FB922BE12A86631482FC4EA52C21F8D29FD211F42E3C7C45765CC23E157FB0A3
+```
+
+![Post-merge write p50](https://thimbledb.com/benchmarks/write-scaling-p50.svg)
+
+| Documents | Indexes | Snapshot p50 | Snapshot p95 | Trie p50 | Trie p95 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 128 | 0 | 2,978.32 ms | 4,505.01 ms | 5,368.26 ms | 8,351.43 ms |
+| 128 | 1 | 3,204.00 ms | 5,091.59 ms | 6,174.99 ms | 9,647.55 ms |
+| 128 | 2 | 3,823.22 ms | 6,161.79 ms | 6,662.93 ms | 10,443.30 ms |
+| 5,000 | 0 | 2,989.05 ms | 5,242.72 ms | 5,409.68 ms | 9,037.61 ms |
+| 5,000 | 1 | 3,326.31 ms | 5,572.12 ms | 6,231.32 ms | 10,327.19 ms |
+| 5,000 | 2 | 4,180.63 ms | 7,494.76 ms | 6,917.44 ms | 10,634.01 ms |
+| 25,000 | 0 | 3,397.36 ms | 5,317.22 ms | 5,291.72 ms | 8,486.50 ms |
+| 25,000 | 1 | 5,538.96 ms | 9,553.94 ms | 6,882.60 ms | 11,607.23 ms |
+| 25,000 | 2 | 6,824.25 ms | 13,563.15 ms | 8,278.35 ms | 13,070.55 ms |
+
+The run retained 1,005 successful writes and three R2 internal failures. All
+three failures affected the small no-index Snapshot case in one replicate.
+There were no CAS retries.
+
+Absolute no-index latency was 25-42 percent higher than the historical run at
+p50. The code change did not add operations or bytes, and the same-machine
+local rerun was effectively neutral. Current no-index R2 read duration was
+15-53 percent higher and write duration was 34-63 percent higher. Cross-day
+absolute latency changes therefore describe the observed environment and
+cannot be assigned to the scheduler.
+
+The scheduler did reduce index amplification. The two-index p50 increase
+relative to the no-index case changed as follows:
+
+| Documents | Layout | Historical increase | Post-merge increase |
+| ---: | --- | ---: | ---: |
+| 128 | Snapshot | +103.12% | +28.37% |
+| 128 | Trie | +59.13% | +24.12% |
+| 5,000 | Snapshot | +97.27% | +39.86% |
+| 5,000 | Trie | +70.99% | +27.87% |
+| 25,000 | Snapshot | +197.61% | +100.87% |
+| 25,000 | Trie | +107.58% | +56.44% |
+
+This is a 48-72 percent reduction in relative two-index amplification. It
+confirms that the bounded scheduler removes avoidable serial index-upload
+time. It does not remove the fixed Snapshot or Trie state-load path, the
+dependent Trie node path, or final HEAD publication.
+
+See the
+[write-scaling report](https://github.com/Jason-Doyle/thimble/blob/main/benchmarks/write-scaling/RESULTS.md)
+for the regional breakdown, local comparison, exact hashes, failures, and
+method.
+
 ## Envelope limit validation
 
 Every one of the 14 regional read runs fetched a 16,336-byte gzip envelope
@@ -256,7 +330,7 @@ ThimbleDB's small-app target.
 
 ## Current recommendation
 
-Most measured cold reads and every large write result exceed normal
+Most measured cold reads and every post-merge write result exceed normal
 interactive latency targets. Current production use therefore depends on warm
 browser cache hits dominating user activity. Cold storage access should be
 treated as initial loading, recovery, or background work rather than a
