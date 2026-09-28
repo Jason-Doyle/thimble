@@ -99,6 +99,9 @@ async function main() {
   const samples = Object.fromEntries(
     cases.map((value) => [value.name, []]),
   ) as Record<string, unknown[]>;
+  const revisions = new Map(
+    cases.map((value) => [value.name, 1]),
+  );
 
   for (
     let iteration = 0;
@@ -106,9 +109,18 @@ async function main() {
     iteration += 1
   ) {
     for (const value of rotate(cases, iteration)) {
-      samples[value.name]!.push(
-        await invokeGroup(value, iteration),
+      const sample = await invokeGroup(
+        value,
+        iteration,
+        revisions.get(value.name) ?? 1,
       );
+      samples[value.name]!.push(sample);
+      if (typeof sample.revision === "number") {
+        revisions.set(
+          value.name,
+          sample.revision,
+        );
+      }
     }
   }
 
@@ -164,18 +176,13 @@ async function invokeGroup(
     strategy: MutationBatchStrategy;
   },
   iteration: number,
+  currentRevision: number,
 ) {
   const documents = mutationDocuments(
     MUTATION_BATCH_DOCUMENTS,
     value.batchSize,
     iteration,
   );
-  const expectedRevision =
-    1 +
-    (iteration + 1) *
-      (value.strategy === "batch"
-        ? 1
-        : value.batchSize);
   const started = performance.now();
   const responses: WriteResponse[] = [];
   if (value.strategy === "batch") {
@@ -201,6 +208,11 @@ async function invokeGroup(
     performance.now() - started,
   );
   const aggregated = aggregateResponses(responses);
+  const successfulHeadWrites =
+    aggregated.storage.byKind.head
+      ?.writes.count ?? 0;
+  const expectedRevision =
+    currentRevision + successfulHeadWrites;
   const verificationStarted = performance.now();
   const verification = await verify(
     value,
@@ -227,6 +239,7 @@ async function invokeGroup(
     verificationPassed:
       verification.verificationPassed,
     expectedRevision,
+    successfulHeadWrites,
     revision: verification.revision,
     verifiedDocuments:
       verification.verifiedDocuments,
