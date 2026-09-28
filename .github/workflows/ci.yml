@@ -70,7 +70,7 @@ jobs:
           docker build --tag thimbledb:ci .
           docker run --rm thimbledb:ci node --input-type=module -e "await Promise.all([import('@aws-sdk/client-s3'), import('@azure/storage-blob')])"
 
-      - name: Build AWS Lambda container
+      - name: Build AWS Lambda application runtime
         run: |
-          docker build --file Dockerfile.aws --tag thimbledb-aws:ci .
+          docker build --file Dockerfile.aws --target runtime-base --tag thimbledb-aws:ci .
           docker run --rm thimbledb-aws:ci node --input-type=module -e "await import('@aws-sdk/client-s3'); try { await import('@azure/storage-blob'); process.exit(1) } catch (error) { if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error }"
