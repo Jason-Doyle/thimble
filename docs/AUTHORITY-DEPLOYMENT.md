@@ -55,6 +55,7 @@ import {
 export default createCloudflareAuthority({
   studio: true,
   readBundles: true,
+  mutationBatches: true,
   collections: ["notes"],
   collectionIndexes,
   collectionLayouts,
@@ -78,6 +79,7 @@ import {
 await startNodeAuthority({
   studio: true,
   readBundles: true,
+  mutationBatches: true,
   collections: ["notes"],
   collectionIndexes,
   collectionLayouts,
@@ -187,6 +189,11 @@ optional endpoint from `/api/config`.
 Enable them explicitly with `readBundles: true` or
 `THIMBLE_READ_BUNDLES=true`. Existing deployments retain the individual TDB1
 object path until that capability is enabled.
+
+Bounded mutation batches are also opt-in through `mutationBatches: true` or
+`THIMBLE_MUTATION_BATCHES=true`. The capability is advertised independently
+from read bundles. It changes write grouping, not authority placement or the
+collection HEAD contention boundary.
 
 The trusted authority assembles bundle cache values after decrypting storage
 objects and sends them over HTTPS with `no-store`. Leave the capability

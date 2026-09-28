@@ -9,6 +9,7 @@ export * from "./engines/immutable-snapshot.js";
 export * from "./envelope-store.js";
 export * from "./envelope.js";
 export * from "./layout-advisor.js";
+export * from "./mutation-batch.js";
 export * from "./prefix-store.js";
 export * from "./query.js";
 export * from "./secondary-index.js";

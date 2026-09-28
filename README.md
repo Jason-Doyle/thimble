@@ -12,8 +12,9 @@ ThimbleDB is a Cloudflare-first database for small, read-heavy web
 applications. Browsers read through an authenticated authority and retain
 scope-separated data in memory and encrypted IndexedDB caches. The default
 read path returns encrypted immutable objects; deployments can explicitly
-enable bounded decoded read bundles for eligible cold point reads. Writes and
-key grants use the same small authority.
+enable bounded decoded read bundles for eligible cold point reads and bounded
+mutation batches for bursty writes. Writes and key grants use the same small
+authority.
 
 Cloudflare Workers and R2 are the reference deployment. Azure Blob Storage,
 Amazon S3, and a local filesystem adapter implement the same provider-neutral
@@ -200,6 +201,7 @@ before horizontally scaling a Node authority.
 - immutable snapshot and content-addressed trie collection layouts
 - typed collections, bounded predicates, and declared secondary indexes
 - bounded cold point-read bundles with object-path fallback
+- opt-in bounded mutation batches with one collection revision
 - explicit covering index fields and typed projections
 - versioned logical archives and explicit migration adapters
 - local application scaffolding and diagnostics

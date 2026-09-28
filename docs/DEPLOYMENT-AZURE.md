@@ -94,6 +94,7 @@ collection-layout, and retention settings. It does not currently expose:
 - `THIMBLE_HEAD_TTL_MS`
 - `THIMBLE_STUDIO` or `THIMBLE_STUDIO_ORIGIN`
 - `THIMBLE_READ_BUNDLES`
+- `THIMBLE_MUTATION_BATCHES`
 
 The supplied deployment therefore leaves Studio, covering indexes, and read
 bundles disabled. Use a reviewed derived template or another Container Apps
@@ -110,6 +111,8 @@ readable.
 - The auth container is not exposed through any SAS or public endpoint.
 - Browser object requests use the authenticated `/api/objects` broker.
 - Eligible cold point reads use the advertised bounded read-bundle route.
+- Bounded `putMany()` requests use the advertised mutation-batch route and
+  publish one collection revision.
 - Object bodies begin with `TDB1`.
 - The Container App can seed and mutate data.
 - Direct browser reads cannot write or delete blobs.

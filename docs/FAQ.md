@@ -110,6 +110,18 @@ repository includes implementation prompts and complete use-case guides for
 coding tools. There is no published evidence that quantifies what proportion
 of vibe-coded applications fit these constraints.
 
+## Does ThimbleDB support batched writes?
+
+Yes, when the authority explicitly enables `mutationBatches`. A typed
+collection can publish 1-20 documents through `putMany()` in one collection
+revision. The complete request is validated before writes, and success is
+returned only after immutable objects and final HEAD publication complete.
+
+Batching is intended for existing bursts such as imports, generated content,
+or coordinated autosave changes. It does not make an isolated write faster,
+and the complete group remains one conflict and retry unit. Authorities that
+do not advertise the capability continue using ordinary single writes.
+
 ## Who owns the data and deployment?
 
 The application operator does. The domain, object storage, identity provider,

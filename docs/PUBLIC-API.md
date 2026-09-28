@@ -12,6 +12,7 @@ The root export contains:
 - `ThimbleClient` and browser cache/read primitives
 - `createThimbleClient` and `createThimbleConnection`
 - typed collections, fluent bounded queries, and index definitions
+- bounded mutation request, response, and limit types
 - `ContentAddressedTrieEngine`
 - `ImmutableSnapshotEngine`
 - TDB1 envelope encode/decode helpers
@@ -69,6 +70,34 @@ const result = await db
   .get();
 ```
 
+Bounded mutation batch:
+
+```ts
+const result = await db.collection(notes).putMany([
+  {
+    id: "note-1",
+    title: "First",
+    lastModified: Date.now(),
+  },
+  {
+    id: "note-2",
+    title: "Second",
+    lastModified: Date.now(),
+  },
+]);
+
+console.log(result.revision);
+console.log(result.documents);
+console.log(result.cacheComplete);
+```
+
+`putMany()` requires an authority that advertises mutation batching. It
+accepts 1-20 unique document IDs in at most 1 MiB of JSON and publishes one
+collection revision. `cacheComplete` reports whether every changed document
+path was returned for immediate cache use; secondary-index pages still load
+through the normal object path. The method does not silently fall back to
+separate writes.
+
 See [Queries and secondary indexes](QUERIES-INDEXES.md).
 
 Connections created by `createThimbleClient()` use an advertised bounded
@@ -101,6 +130,7 @@ import { startNodeAuthority } from "thimbledb/authority/node";
 await startNodeAuthority({
   studio: true,
   readBundles: true,
+  mutationBatches: true,
   studioOrigin: "https://database.example.com",
   collections: ["notes"],
   collectionLayouts: {
@@ -128,6 +158,7 @@ import {
 export default createCloudflareAuthority({
   studio: true,
   readBundles: true,
+  mutationBatches: true,
   studioOrigin: "https://database.example.com",
   collections: ["notes"],
   collectionLayouts: {

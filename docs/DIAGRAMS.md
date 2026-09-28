@@ -280,7 +280,7 @@ sequenceDiagram
   participant Cache as Current browser caches
   participant Tabs as Other browser tabs
 
-  App->>Authority: Mutation + session + CSRF + scope + generation
+  App->>Authority: Mutation or bounded batch + session + CSRF + scope + generation
   Authority->>Auth: Reload user and recalculate grants
   Auth-->>Authority: Current write grant or denial
   Authority->>Store: Read HEAD and affected immutable objects

@@ -55,6 +55,11 @@ import {
   type SecondaryIndexReferences,
 } from "../secondary-index.js";
 import {
+  mutationBatchBundleFromJson,
+  mutationBatchDocuments,
+  type MutationBatchBundle,
+} from "../mutation-batch.js";
+import {
   type BrowserCacheMetrics,
   type CachedJsonObject,
   TieredObjectCache,
@@ -119,6 +124,7 @@ export class ThimbleClient {
       cache: TieredObjectCache;
       headTtlMs: number;
       writeBaseUrl?: string;
+      mutationBatchBaseUrl?: string;
       csrfToken?: string;
       scopeId?: string;
       scopeKeyId?: string | null;
@@ -696,6 +702,96 @@ export class ThimbleClient {
       throw new Error("ThimbleDB client is logged out");
     }
     await this.applyBundle(bundle, true, generation);
+    return bundle;
+  }
+
+  async writeBatch(
+    collection: string,
+    documents: JsonDocument[],
+  ): Promise<MutationBatchBundle> {
+    this.requireActive();
+    if (!this.options.mutationBatchBaseUrl) {
+      throw new Error(
+        "Mutation batching is not enabled by the authority",
+      );
+    }
+    await this.ensureLayoutCurrent(true);
+    this.requireActive();
+    const parsed = mutationBatchDocuments({
+      version: 1,
+      documents,
+    });
+    const generation = this.lifecycleGeneration;
+    const fetchImplementation =
+      this.options.fetchImplementation ?? fetch;
+    const response = await fetchImplementation.call(
+      globalThis,
+      `${this.options.mutationBatchBaseUrl.replace(/\/+$/, "")}/${encodeURIComponent(collection)}`,
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          ...(this.options.csrfToken
+            ? { "x-thimble-csrf": this.options.csrfToken }
+            : {}),
+          ...(this.options.scopeId
+            ? { "x-thimble-scope": this.options.scopeId }
+            : {}),
+          ...(this.options.layoutGeneration
+            ? {
+                "x-thimble-layout-generation":
+                  this.options.layoutGeneration,
+              }
+            : {}),
+        },
+        body: JSON.stringify({
+          version: 1,
+          documents: parsed,
+        }),
+      },
+    );
+    if (!response.ok) {
+      await this.handleMutationAuthorizationFailure(
+        response.status,
+      );
+      throw new Error(
+        `Mutation batch failed with ${response.status}: ${await response.text()}`,
+      );
+    }
+    const bundle = mutationBatchBundleFromJson(
+      await response.json(),
+    );
+    if (
+      bundle.collection !== collection ||
+      bundle.documents.length !== parsed.length ||
+      bundle.documents.some(
+        (document, index) =>
+          document.id !== parsed[index]!.id,
+      )
+    ) {
+      throw new Error(
+        "Mutation batch response does not match the request",
+      );
+    }
+    if (
+      !this.active ||
+      generation !== this.lifecycleGeneration
+    ) {
+      throw new Error("ThimbleDB client is logged out");
+    }
+    await this.applyBundle(
+      {
+        collection: bundle.collection,
+        id: bundle.documents[0]!.id,
+        revision: bundle.revision,
+        document: bundle.documents[0]!,
+        objects: bundle.objects,
+        layout: bundle.layout,
+      },
+      true,
+      generation,
+    );
     return bundle;
   }
 

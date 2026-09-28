@@ -9,6 +9,9 @@ import {
   validateThimbleQuery,
 } from "../query.js";
 import type { TrieReadBundle } from "../trie-protocol.js";
+import type {
+  MutationBatchBundle,
+} from "../mutation-batch.js";
 import {
   createDictionary,
   validateName,
@@ -67,6 +70,12 @@ export type QueryPlan = {
   reason: string;
 };
 
+export type MutationBatchResult<
+  T extends { id: string },
+> = Omit<MutationBatchBundle, "documents"> & {
+  documents: T[];
+};
+
 export interface CollectionClient {
   get(collection: string, id: string): Promise<JsonDocument | null>;
   scan(collection: string): Promise<JsonDocument[]>;
@@ -75,6 +84,10 @@ export interface CollectionClient {
     id: string,
     document: JsonDocument,
   ): Promise<TrieReadBundle>;
+  writeBatch?(
+    collection: string,
+    documents: JsonDocument[],
+  ): Promise<MutationBatchBundle>;
   delete(collection: string, id: string): Promise<TrieReadBundle>;
   restore(collection: string, id: string): Promise<TrieReadBundle>;
   queryDocuments?<T extends { id: string }>(
@@ -187,6 +200,29 @@ export class ThimbleCollection<T extends { id: string }> {
       parsed.id,
       parsed as unknown as JsonDocument,
     );
+  }
+
+  async putMany(
+    documents: T[],
+  ): Promise<MutationBatchResult<T>> {
+    if (!this.client.writeBatch) {
+      throw new Error(
+        "Mutation batching is not supported by this client",
+      );
+    }
+    const parsed = documents.map(
+      (document) => this.parse(document),
+    );
+    const result = await this.client.writeBatch(
+      this.definition.name,
+      parsed as unknown as JsonDocument[],
+    );
+    return {
+      ...result,
+      documents: result.documents.map(
+        (document) => this.parse(document),
+      ),
+    };
   }
 
   async delete(id: string): Promise<TrieReadBundle> {

@@ -18,6 +18,9 @@ import {
   type AsyncOperationLimiter,
   validateName,
 } from "../shared-utils.js";
+import type {
+  MutationBatchBundle,
+} from "../mutation-batch.js";
 import {
   isTrieTombstone,
   trieCollectionPrefix,
@@ -929,6 +932,233 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     };
   }
 
+  async readMutationBundle(
+    collection: string,
+    documents: JsonDocument[],
+    limits: ReadBundleLimits,
+  ): Promise<MutationBatchBundle> {
+    const normalized = validateName(collection, "Collection");
+    const head = await this.loadHead(normalized);
+    const objects: MutationBatchBundle["objects"] = [];
+    let decodedBytes = 0;
+
+    if (head.object !== null) {
+      decodedBytes = addBundleObject(
+        objects,
+        decodedBytes,
+        {
+          key: trieHeadKey(normalized),
+          etag: head.object.etag,
+          value: head.state as unknown as JsonValue,
+        },
+        head.object.bytes.byteLength,
+        limits,
+      );
+    }
+    const fallback = () =>
+      trieMutationBundle(
+        normalized,
+        head.state.revision,
+        documents,
+        objects,
+        false,
+      );
+    if (head.state.rootHash === null) {
+      return fallback();
+    }
+
+    try {
+      const paths = await Promise.all(
+        documents.map(async (document) => {
+          const [first, second] =
+            await this.pathFor(document.id);
+          return {
+            id: document.id,
+            first,
+            second,
+          };
+        }),
+      );
+      const root =
+        await this.loadNodeObject<TrieRootNode>(
+          normalized,
+          head.state.rootHash,
+          "root",
+        );
+      decodedBytes = addBundleObject(
+        objects,
+        decodedBytes,
+        {
+          key: trieNodeKey(
+            normalized,
+            head.state.rootHash,
+          ),
+          etag: root.object.etag,
+          value:
+            root.value as unknown as JsonValue,
+        },
+        root.object.bytes.byteLength,
+        limits,
+      );
+
+      const branchHashByFirst = new Map<
+        string,
+        string
+      >();
+      for (const path of paths) {
+        const branchHash =
+          root.value.children[path.first];
+        if (!branchHash) {
+          throw new Error(
+            `Document ${path.id} is missing after mutation batch`,
+          );
+        }
+        branchHashByFirst.set(
+          path.first,
+          branchHash,
+        );
+      }
+      const branchEntries = await Promise.all(
+        [...new Set(branchHashByFirst.values())]
+          .sort()
+          .map(async (hash) => ({
+            hash,
+            loaded:
+              await this.loadNodeObject<TrieBranchNode>(
+                normalized,
+                hash,
+                "branch",
+              ),
+          })),
+      );
+      const branches = new Map(
+        branchEntries.map(({ hash, loaded }) => [
+          hash,
+          loaded,
+        ]),
+      );
+      for (const { hash, loaded } of branchEntries) {
+        decodedBytes = addBundleObject(
+          objects,
+          decodedBytes,
+          {
+            key: trieNodeKey(normalized, hash),
+            etag: loaded.object.etag,
+            value:
+              loaded.value as unknown as JsonValue,
+          },
+          loaded.object.bytes.byteLength,
+          limits,
+        );
+      }
+
+      const leafReferences = new Map<
+        string,
+        TrieLeafMetadata
+      >();
+      const leafHashById = new Map<string, string>();
+      for (const path of paths) {
+        const branchHash =
+          branchHashByFirst.get(path.first)!;
+        const branch = branches.get(branchHash)!;
+        const leafHash =
+          branch.value.children[path.second];
+        const metadata =
+          branch.value.leafMetadata?.[path.second];
+        if (!leafHash || !metadata) {
+          throw new Error(
+            `Document ${path.id} is missing after mutation batch`,
+          );
+        }
+        leafHashById.set(path.id, leafHash);
+        leafReferences.set(leafHash, metadata);
+      }
+      assertBundleCapacity(
+        objects.length + leafReferences.size,
+        decodedBytes +
+          [...leafReferences.values()].reduce(
+            (total, metadata) =>
+              total + metadata.decodedBytes,
+            0,
+          ),
+        limits,
+      );
+      const leafEntries = await Promise.all(
+        [...leafReferences.keys()]
+          .sort()
+          .map(async (hash) => ({
+            hash,
+            loaded:
+              await this.loadNodeObject<TrieLeafNode>(
+                normalized,
+                hash,
+                "leaf",
+              ),
+          })),
+      );
+      const leaves = new Map(
+        leafEntries.map(({ hash, loaded }) => [
+          hash,
+          loaded,
+        ]),
+      );
+      for (const { hash, loaded } of leafEntries) {
+        const metadata =
+          leafReferences.get(hash)!;
+        if (
+          loaded.object.bytes.byteLength !==
+          metadata.decodedBytes
+        ) {
+          throw new Error(
+            `Trie leaf metadata does not match ${hash}`,
+          );
+        }
+        decodedBytes = addBundleObject(
+          objects,
+          decodedBytes,
+          {
+            key: trieNodeKey(normalized, hash),
+            etag: loaded.object.etag,
+            value:
+              loaded.value as unknown as JsonValue,
+          },
+          loaded.object.bytes.byteLength,
+          limits,
+        );
+      }
+
+      const storedDocuments = paths.map((path) => {
+        const leafHash =
+          leafHashById.get(path.id)!;
+        const leaf = leaves.get(leafHash)!;
+        const document = visibleTrieDocument(
+          ownValue(
+            leaf.value.documents,
+            path.id,
+          ),
+        );
+        if (!document) {
+          throw new Error(
+            `Document ${path.id} is missing after mutation batch`,
+          );
+        }
+        return document;
+      });
+      return trieMutationBundle(
+        normalized,
+        head.state.revision,
+        storedDocuments,
+        objects,
+        true,
+      );
+    } catch (error) {
+      if (error instanceof BoundedReadError) {
+        return fallback();
+      }
+      throw error;
+    }
+  }
+
   private async loadHead(collection: string): Promise<LoadedHead> {
     const object = await this.store.get(trieHeadKey(collection));
     if (object === null) {
@@ -1442,6 +1672,26 @@ function addBundleObject(
   }
   objects.push(object);
   return nextBytes;
+}
+
+function trieMutationBundle(
+  collection: string,
+  revision: number,
+  documents: JsonDocument[],
+  objects: MutationBatchBundle["objects"],
+  cacheComplete: boolean,
+): MutationBatchBundle {
+  return {
+    version: 1,
+    collection,
+    revision,
+    documents: documents.map((document) =>
+      structuredClone(document),
+    ),
+    objects,
+    layout: "trie",
+    cacheComplete,
+  };
 }
 
 function assertBundleCapacity(

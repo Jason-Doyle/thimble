@@ -188,6 +188,30 @@ describe("Cloudflare Worker request parsing", () => {
       environment as never,
     );
     expect(bundle.status).toBe(401);
+
+    const disabledBatch = await createCloudflareAuthority().fetch(
+      new Request(
+        "https://db.example.test/api/mutation-batches/notes",
+        {
+          method: "POST",
+        },
+      ),
+      environment as never,
+    );
+    expect(disabledBatch.status).toBe(404);
+
+    const batch = await createCloudflareAuthority({
+      mutationBatches: true,
+    }).fetch(
+      new Request(
+        "https://db.example.test/api/mutation-batches/notes",
+        {
+          method: "POST",
+        },
+      ),
+      environment as never,
+    );
+    expect(batch.status).toBe(401);
   });
 
   it("does not apply Studio catalog limits when Studio is disabled", async () => {
