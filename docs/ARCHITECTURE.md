@@ -110,9 +110,11 @@ private.
    gzip-compressed when useful, and encrypted.
 5. Every configured secondary index and declared covering projection is
    updated or rebuilt.
-6. New immutable document and index objects are created.
-7. HEAD publishes the document root and all active index references with one
-   ETag compare-and-swap.
+6. New immutable document and index objects are created. Secondary-index
+   uploads use a concurrency bound of three and overlap independent Snapshot
+   or Trie object writes.
+7. After every immutable upload completes, HEAD publishes the document root
+   and all active index references with one ETag compare-and-swap.
 8. The response includes the new HEAD, changed immutable objects, and
    document.
 9. The writing tab updates its cache and broadcasts the bundle to other tabs.

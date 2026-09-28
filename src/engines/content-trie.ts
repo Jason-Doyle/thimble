@@ -9,11 +9,13 @@ import {
   type StoredObject,
 } from "../core.js";
 import {
+  createAsyncOperationLimiter,
   createDictionary,
   decodeJson,
   encodeJson,
   isPreconditionFailure,
   ownValue,
+  type AsyncOperationLimiter,
   validateName,
 } from "../shared-utils.js";
 import {
@@ -66,6 +68,8 @@ type PreparedSecondaryIndex = {
   name: string;
   reference: SecondaryIndexReference;
 };
+
+const MAX_PARALLEL_INDEX_WRITES = 3;
 
 export class ContentAddressedTrieEngine implements DatabaseEngine {
   readonly name = "content-addressed-trie";
@@ -547,108 +551,29 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         head.state,
         collapsedChanges,
       );
-      const root =
-        head.state.rootHash === null
-          ? this.emptyRoot()
-          : await this.readNode<TrieRootNode>(
-              normalized,
-              head.state.rootHash,
-              "root",
-            );
-      const nextRoot: TrieRootNode = {
-        kind: "root",
-        children: { ...root.children },
-      };
-
-      const byBranch = groupUpdates(updates);
-      const changedBranches = await Promise.all(
-        [...byBranch].map(async ([first, byLeaf]) => {
-          const currentBranchHash = root.children[first];
-          const currentBranch = currentBranchHash
-            ? await this.readNode<TrieBranchNode>(
-                normalized,
-                currentBranchHash,
-                "branch",
-              )
-            : this.emptyBranch();
-          const nextBranch: TrieBranchNode = {
-            kind: "branch",
-            children: { ...currentBranch.children },
-            leafMetadata: createDictionary(
-              currentBranch.leafMetadata,
-            ),
-          };
-
-          const changedLeaves = await Promise.all(
-            [...byLeaf].map(async ([second, leafUpdates]) => {
-              const currentLeafHash =
-                currentBranch.children[second];
-              const currentLeaf = currentLeafHash
-                ? await this.readNode<TrieLeafNode>(
-                    normalized,
-                    currentLeafHash,
-                    "leaf",
-                  )
-                : this.emptyLeaf();
-              const nextLeaf: TrieLeafNode = {
-                kind: "leaf",
-                documents: createDictionary(
-                  currentLeaf.documents,
-                ),
-              };
-              for (const update of leafUpdates) {
-                if (update.document === null) {
-                  delete nextLeaf.documents[update.id];
-                } else {
-                  nextLeaf.documents[update.id] = update.document;
-                }
-              }
-              if (Object.keys(nextLeaf.documents).length === 0) {
-                return [second, null] as const;
-              }
-              return [
-                second,
-                await this.writeLeafNode(normalized, nextLeaf),
-              ] as const;
-            }),
-          );
-          for (const [second, leafResult] of changedLeaves) {
-            if (leafResult === null) {
-              delete nextBranch.children[second];
-              delete nextBranch.leafMetadata?.[second];
-            } else {
-              nextBranch.children[second] = leafResult.hash;
-              nextBranch.leafMetadata ??=
-                createDictionary<TrieLeafMetadata>();
-              nextBranch.leafMetadata[second] =
-                leafResult.metadata;
-            }
-          }
-          if (Object.keys(nextBranch.children).length === 0) {
-            return [first, null] as const;
-          }
-
-          return [
-            first,
-            await this.writeNode(normalized, nextBranch),
-          ] as const;
-        }),
+      const limitIndexWrite = createAsyncOperationLimiter(
+        MAX_PARALLEL_INDEX_WRITES,
       );
-      for (const [first, branchHash] of changedBranches) {
-        if (branchHash === null) {
-          delete nextRoot.children[first];
-        } else {
-          nextRoot.children[first] = branchHash;
-        }
+      const [indexCommit, treeCommit] =
+        await Promise.allSettled([
+          this.commitIndexes(
+            preparedIndexes,
+            limitIndexWrite,
+          ),
+          this.commitTreeChanges(
+            normalized,
+            head.state,
+            updates,
+          ),
+        ]);
+      if (indexCommit.status === "rejected") {
+        throw indexCommit.reason;
       }
-
-      const rootHash =
-        Object.keys(nextRoot.children).length === 0
-          ? null
-          : await this.writeNode(normalized, nextRoot);
-      const indexes = await this.commitIndexes(
-        preparedIndexes,
-      );
+      if (treeCommit.status === "rejected") {
+        throw treeCommit.reason;
+      }
+      const indexes = indexCommit.value;
+      const rootHash = treeCommit.value;
       const nextHead: TrieHead = {
         revision: head.state.revision + 1,
         rootHash,
@@ -683,6 +608,121 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     throw new Error(
       `Content-addressed trie write exceeded ${this.maxRetries} retries`,
     );
+  }
+
+  private async commitTreeChanges(
+    collection: string,
+    head: TrieHead,
+    updates: TrieUpdate[],
+  ): Promise<string | null> {
+    const root =
+      head.rootHash === null
+        ? this.emptyRoot()
+        : await this.readNode<TrieRootNode>(
+            collection,
+            head.rootHash,
+            "root",
+          );
+    const nextRoot: TrieRootNode = {
+      kind: "root",
+      children: { ...root.children },
+    };
+
+    const byBranch = groupUpdates(updates);
+    const changedBranches = await Promise.all(
+      [...byBranch].map(async ([first, byLeaf]) => {
+        const currentBranchHash = root.children[first];
+        const currentBranch = currentBranchHash
+          ? await this.readNode<TrieBranchNode>(
+              collection,
+              currentBranchHash,
+              "branch",
+            )
+          : this.emptyBranch();
+        const nextBranch: TrieBranchNode = {
+          kind: "branch",
+          children: { ...currentBranch.children },
+          leafMetadata: createDictionary(
+            currentBranch.leafMetadata,
+          ),
+        };
+
+        const changedLeaves = await Promise.all(
+          [...byLeaf].map(async ([second, leafUpdates]) => {
+            const currentLeafHash =
+              currentBranch.children[second];
+            const currentLeaf = currentLeafHash
+              ? await this.readNode<TrieLeafNode>(
+                  collection,
+                  currentLeafHash,
+                  "leaf",
+                )
+              : this.emptyLeaf();
+            const nextLeaf: TrieLeafNode = {
+              kind: "leaf",
+              documents: createDictionary(
+                currentLeaf.documents,
+              ),
+            };
+            for (const update of leafUpdates) {
+              if (update.document === null) {
+                delete nextLeaf.documents[update.id];
+              } else {
+                nextLeaf.documents[update.id] =
+                  update.document;
+              }
+            }
+            if (Object.keys(nextLeaf.documents).length === 0) {
+              return [second, null] as const;
+            }
+            return [
+              second,
+              await this.writeLeafNode(
+                collection,
+                nextLeaf,
+              ),
+            ] as const;
+          }),
+        );
+        for (const [second, leafResult] of changedLeaves) {
+          if (leafResult === null) {
+            delete nextBranch.children[second];
+            delete nextBranch.leafMetadata?.[second];
+          } else {
+            nextBranch.children[second] = leafResult.hash;
+            nextBranch.leafMetadata ??=
+              createDictionary<TrieLeafMetadata>();
+            nextBranch.leafMetadata[second] =
+              leafResult.metadata;
+          }
+        }
+        if (Object.keys(nextBranch.children).length === 0) {
+          return [first, null] as const;
+        }
+
+        return [
+          first,
+          await this.writeNode(
+            collection,
+            nextBranch,
+          ),
+        ] as const;
+      }),
+    );
+    for (const [first, branchHash] of changedBranches) {
+      if (branchHash === null) {
+        delete nextRoot.children[first];
+      } else {
+        nextRoot.children[first] = branchHash;
+      }
+    }
+
+    return Object.keys(nextRoot.children).length === 0
+      ? null
+      : this.writeNode(
+          collection,
+          nextRoot,
+        );
   }
 
   async compact(collection: string): Promise<void> {
@@ -1016,22 +1056,46 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
 
   private async commitIndexes(
     prepared: PreparedSecondaryIndex[],
+    limitWrite: AsyncOperationLimiter =
+      createAsyncOperationLimiter(
+        MAX_PARALLEL_INDEX_WRITES,
+      ),
   ): Promise<SecondaryIndexReferences> {
     const references =
       createDictionary<SecondaryIndexReference>();
-    for (const index of prepared) {
-      try {
-        await this.store.put(
-          index.key,
-          index.bytes,
-          { ifNoneMatch: true },
-        );
-      } catch (error) {
-        if (!isPreconditionFailure(error)) {
-          throw error;
-        }
+    const committed = await Promise.allSettled(
+      prepared.map((index) =>
+        limitWrite(async () => {
+          try {
+            await this.store.put(
+              index.key,
+              index.bytes,
+              { ifNoneMatch: true },
+            );
+          } catch (error) {
+            if (!isPreconditionFailure(error)) {
+              throw error;
+            }
+          }
+          return index;
+        }),
+      ),
+    );
+    const failure = committed.find(
+      (
+        result,
+      ): result is PromiseRejectedResult =>
+        result.status === "rejected",
+    );
+    if (failure) {
+      throw failure.reason;
+    }
+    for (const result of committed) {
+      if (result.status === "fulfilled") {
+        const index = result.value;
+        references[index.name] =
+          index.reference;
       }
-      references[index.name] = index.reference;
     }
     return references;
   }
@@ -1250,9 +1314,13 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     const bytes = encodeJson(node as unknown as JsonValue);
     const hash = await this.addressNode(bytes);
     try {
-      await this.store.put(this.nodeKey(collection, hash), bytes, {
-        ifNoneMatch: true,
-      });
+      await this.store.put(
+        this.nodeKey(collection, hash),
+        bytes,
+        {
+          ifNoneMatch: true,
+        },
+      );
       this.nodesCreated += 1;
     } catch (error) {
       if (!isPreconditionFailure(error)) {
@@ -1273,9 +1341,13 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     const bytes = encodeJson(leaf as unknown as JsonValue);
     const hash = await this.addressNode(bytes);
     try {
-      await this.store.put(this.nodeKey(collection, hash), bytes, {
-        ifNoneMatch: true,
-      });
+      await this.store.put(
+        this.nodeKey(collection, hash),
+        bytes,
+        {
+          ifNoneMatch: true,
+        },
+      );
       this.nodesCreated += 1;
     } catch (error) {
       if (!isPreconditionFailure(error)) {

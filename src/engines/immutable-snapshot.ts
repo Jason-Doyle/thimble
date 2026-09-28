@@ -9,11 +9,13 @@ import {
   type StoredObject,
 } from "../core.js";
 import {
+  createAsyncOperationLimiter,
   createDictionary,
   decodeJson,
   encodeJson,
   isPreconditionFailure,
   ownValue,
+  type AsyncOperationLimiter,
   validateName,
 } from "../shared-utils.js";
 import {
@@ -53,6 +55,8 @@ type PreparedSecondaryIndex = {
   name: string;
   reference: SecondaryIndexReference;
 };
+
+const MAX_IMMUTABLE_WRITE_CONCURRENCY = 3;
 
 export class ImmutableSnapshotEngine implements DatabaseEngine {
   readonly name = "immutable-snapshot";
@@ -487,13 +491,32 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
       const snapshotHash =
         Object.keys(documents).length === 0
           ? null
-          : await this.writeSnapshot(
-              normalized,
-              pageBytes,
-            );
-      const indexes = await this.commitIndexes(
-        preparedIndexes,
+          : await this.addressSnapshot(pageBytes);
+      const limitWrite = createAsyncOperationLimiter(
+        MAX_IMMUTABLE_WRITE_CONCURRENCY,
       );
+      const [snapshotCommit, indexCommit] =
+        await Promise.allSettled([
+          snapshotHash === null
+            ? Promise.resolve()
+            : this.commitSnapshot(
+                normalized,
+                snapshotHash,
+                pageBytes,
+                limitWrite,
+              ),
+          this.commitIndexes(
+            preparedIndexes,
+            limitWrite,
+          ),
+        ]);
+      if (snapshotCommit.status === "rejected") {
+        throw snapshotCommit.reason;
+      }
+      if (indexCommit.status === "rejected") {
+        throw indexCommit.reason;
+      }
+      const indexes = indexCommit.value;
       const nextHead: SnapshotHead = {
         revision: loaded.head.state.revision + 1,
         snapshotHash,
@@ -567,23 +590,29 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
         };
   }
 
-  private async writeSnapshot(
+  private async commitSnapshot(
     collection: string,
+    hash: string,
     bytes: Uint8Array,
-  ): Promise<string> {
-    const hash = await this.addressSnapshot(bytes);
-    try {
-      await this.store.put(snapshotPageKey(collection, hash), bytes, {
-        ifNoneMatch: true,
-      });
-      this.snapshotsCreated += 1;
-    } catch (error) {
-      if (!isPreconditionFailure(error)) {
-        throw error;
+    limitWrite: AsyncOperationLimiter,
+  ): Promise<void> {
+    await limitWrite(async () => {
+      try {
+        await this.store.put(
+          snapshotPageKey(collection, hash),
+          bytes,
+          {
+            ifNoneMatch: true,
+          },
+        );
+        this.snapshotsCreated += 1;
+      } catch (error) {
+        if (!isPreconditionFailure(error)) {
+          throw error;
+        }
+        this.reusedSnapshots += 1;
       }
-      this.reusedSnapshots += 1;
-    }
-    return hash;
+    });
   }
 
   private async prepareIndexes(
@@ -619,22 +648,46 @@ export class ImmutableSnapshotEngine implements DatabaseEngine {
 
   private async commitIndexes(
     prepared: PreparedSecondaryIndex[],
+    limitWrite: AsyncOperationLimiter =
+      createAsyncOperationLimiter(
+        MAX_IMMUTABLE_WRITE_CONCURRENCY,
+      ),
   ): Promise<SecondaryIndexReferences> {
     const references =
       createDictionary<SecondaryIndexReference>();
-    for (const index of prepared) {
-      try {
-        await this.store.put(
-          index.key,
-          index.bytes,
-          { ifNoneMatch: true },
-        );
-      } catch (error) {
-        if (!isPreconditionFailure(error)) {
-          throw error;
-        }
+    const committed = await Promise.allSettled(
+      prepared.map((index) =>
+        limitWrite(async () => {
+          try {
+            await this.store.put(
+              index.key,
+              index.bytes,
+              { ifNoneMatch: true },
+            );
+          } catch (error) {
+            if (!isPreconditionFailure(error)) {
+              throw error;
+            }
+          }
+          return index;
+        }),
+      ),
+    );
+    const failure = committed.find(
+      (
+        result,
+      ): result is PromiseRejectedResult =>
+        result.status === "rejected",
+    );
+    if (failure) {
+      throw failure.reason;
+    }
+    for (const result of committed) {
+      if (result.status === "fulfilled") {
+        const index = result.value;
+        references[index.name] =
+          index.reference;
       }
-      references[index.name] = index.reference;
     }
     return references;
   }

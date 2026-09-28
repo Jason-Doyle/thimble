@@ -73,3 +73,53 @@ export function ownValue<T>(
     ? dictionary[key]
     : undefined;
 }
+
+export type AsyncOperationLimiter = <T>(
+  operation: () => Promise<T>,
+) => Promise<T>;
+
+export function createAsyncOperationLimiter(
+  maximumConcurrency: number,
+): AsyncOperationLimiter {
+  if (
+    !Number.isInteger(maximumConcurrency) ||
+    maximumConcurrency < 1
+  ) {
+    throw new Error(
+      "Maximum concurrency must be a positive integer",
+    );
+  }
+
+  let active = 0;
+  const waiting: Array<() => void> = [];
+
+  const acquire = async () => {
+    if (active < maximumConcurrency) {
+      active += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      waiting.push(resolve);
+    });
+  };
+
+  const release = () => {
+    const next = waiting.shift();
+    if (next) {
+      next();
+    } else {
+      active -= 1;
+    }
+  };
+
+  return async <T>(
+    operation: () => Promise<T>,
+  ): Promise<T> => {
+    await acquire();
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+}

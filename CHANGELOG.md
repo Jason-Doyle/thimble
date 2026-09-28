@@ -6,6 +6,11 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+- Applied every supported lower and upper bound from a conjunctive range query
+  before loading secondary-index candidates.
+- Bounded parallel secondary-index uploads to three operations, overlapped
+  independent immutable Snapshot or Trie writes, and kept HEAD as the final
+  awaited compare-and-swap.
 - Started the mutable-HEAD freshness interval when a successful fetch or
   conditional revalidation completes, preventing slow 304 responses from
   arriving already expired.
