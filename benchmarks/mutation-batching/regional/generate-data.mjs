@@ -23,18 +23,20 @@ import { LocalObjectStore } from "../../../src/stores.ts";
 import { scopeStoragePrefix } from "../../../src/trie-protocol.ts";
 import {
   BENCHMARK_COLLECTION,
+  BENCHMARK_INDEXES,
   BENCHMARK_KEY_ID,
-  BENCHMARK_PROFILES,
   BENCHMARK_REGIONS,
   BENCHMARK_SCOPE_ID,
-  WRITE_SCALING_INDEX_SETS,
+  MUTATION_BATCH_DOCUMENTS,
+  MUTATION_BATCH_SIZES,
+  MUTATION_BATCH_VARIANTS,
   WRITE_SCALING_LAYOUTS,
   benchmarkDocuments,
 } from "./scenario.ts";
 
 const root = path.resolve(
-  process.env.THIMBLE_WRITE_SCALING_OUTPUT ??
-    ".bench-data/write-scaling-regional",
+  process.env.THIMBLE_MUTATION_BATCH_OUTPUT ??
+    ".bench-data/mutation-batching",
 );
 await rm(root, { recursive: true, force: true });
 const baseRoot = path.join(root, "base");
@@ -44,47 +46,32 @@ await mkdir(objectsRoot, { recursive: true });
 
 const rawKey = Uint8Array.from(
   { length: 32 },
-  (_, index) => index + 141,
+  (_, index) => index + 161,
 );
 const key = await importAesGcmKey(
   rawKey,
   ["encrypt", "decrypt"],
 );
-const matrix = {};
+const documents = benchmarkDocuments(
+  MUTATION_BATCH_DOCUMENTS,
+);
+const layouts = {};
 
-for (const [profile, count] of Object.entries(
-  BENCHMARK_PROFILES,
-)) {
-  const documents = benchmarkDocuments(count);
-  matrix[profile] = {};
-  for (const [indexSet, indexes] of Object.entries(
-    WRITE_SCALING_INDEX_SETS,
-  )) {
-    matrix[profile][indexSet] = {};
-    for (const layout of WRITE_SCALING_LAYOUTS) {
-      const base = path.join(
-        baseRoot,
-        profile,
-        indexSet,
-        layout,
-      );
-      await writeLayout(
-        base,
-        layout,
-        indexes,
-        documents,
-      );
-      matrix[profile][indexSet][layout] =
-        await inventory(base);
-      for (const region of BENCHMARK_REGIONS) {
+for (const layout of WRITE_SCALING_LAYOUTS) {
+  const base = path.join(baseRoot, layout);
+  await writeLayout(base, layout, documents);
+  layouts[layout] = await inventory(base);
+  for (const region of BENCHMARK_REGIONS) {
+    for (const variant of MUTATION_BATCH_VARIANTS) {
+      for (const batchSize of MUTATION_BATCH_SIZES) {
         await cp(
           base,
           path.join(
             objectsRoot,
             "write",
             region,
-            profile,
-            indexSet,
+            variant,
+            String(batchSize),
             layout,
           ),
           { recursive: true },
@@ -106,21 +93,12 @@ const manifest = {
   keyId: BENCHMARK_KEY_ID,
   scopeId: BENCHMARK_SCOPE_ID,
   collection: BENCHMARK_COLLECTION,
-  profiles: BENCHMARK_PROFILES,
-  indexSets: Object.fromEntries(
-    Object.entries(
-      WRITE_SCALING_INDEX_SETS,
-    ).map(([name, indexes]) => [
-      name,
-      {
-        count: indexes.notes?.length ?? 0,
-        indexes,
-      },
-    ]),
-  ),
-  layouts: WRITE_SCALING_LAYOUTS,
+  documents: MUTATION_BATCH_DOCUMENTS,
+  indexes: BENCHMARK_INDEXES,
   regions: BENCHMARK_REGIONS,
-  matrix,
+  variants: MUTATION_BATCH_VARIANTS,
+  batchSizes: MUTATION_BATCH_SIZES,
+  layouts,
   total: await inventory(objectsRoot),
 };
 await writeFile(
@@ -132,8 +110,7 @@ console.log(JSON.stringify(manifest, null, 2));
 async function writeLayout(
   directory,
   layout,
-  indexes,
-  documents,
+  values,
 ) {
   await mkdir(directory, { recursive: true });
   const raw = new LocalObjectStore(directory);
@@ -156,18 +133,18 @@ async function writeLayout(
           40,
           undefined,
           false,
-          indexes,
+          BENCHMARK_INDEXES,
         )
       : new ContentAddressedTrieEngine(
           store,
           40,
           undefined,
           false,
-          indexes,
+          BENCHMARK_INDEXES,
         );
   await engine.putMany(
     BENCHMARK_COLLECTION,
-    documents,
+    values,
   );
 }
 

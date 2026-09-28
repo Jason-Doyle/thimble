@@ -47,3 +47,20 @@ export type WriteScalingLayout =
   (typeof WRITE_SCALING_LAYOUTS)[number];
 export type WriteScalingProfile =
   keyof typeof BENCHMARK_PROFILES;
+
+export const MUTATION_BATCH_DOCUMENTS =
+  BENCHMARK_PROFILES.large;
+export const MUTATION_BATCH_SIZES = [
+  1,
+  5,
+  20,
+] as const;
+export const MUTATION_BATCH_VARIANTS = [
+  "individual",
+  "batch",
+] as const;
+
+export type MutationBatchSize =
+  (typeof MUTATION_BATCH_SIZES)[number];
+export type MutationBatchVariant =
+  (typeof MUTATION_BATCH_VARIANTS)[number];

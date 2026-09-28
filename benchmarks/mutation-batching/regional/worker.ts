@@ -13,7 +13,6 @@ import {
 import { EnvelopeObjectStore } from "../../../src/envelope-store.js";
 import {
   base64ToBytes,
-  DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES,
   importAesGcmKey,
 } from "../../../src/envelope.js";
 import { PrefixObjectStore } from "../../../src/prefix-store.js";
@@ -24,16 +23,17 @@ import {
 import { scopeStoragePrefix } from "../../../src/trie-protocol.js";
 import {
   BENCHMARK_COLLECTION,
+  BENCHMARK_INDEXES,
   BENCHMARK_KEY_ID,
-  BENCHMARK_PROFILES,
   BENCHMARK_REGIONS,
   BENCHMARK_SCOPE_ID,
-  WRITE_SCALING_INDEX_SETS,
+  MUTATION_BATCH_DOCUMENTS,
+  MUTATION_BATCH_SIZES,
+  MUTATION_BATCH_VARIANTS,
   WRITE_SCALING_LAYOUTS,
-  benchmarkDocument,
-  type WriteScalingIndexSet,
+  type MutationBatchSize,
+  type MutationBatchVariant,
   type WriteScalingLayout,
-  type WriteScalingProfile,
 } from "./scenario.js";
 
 type BenchmarkBucket = R2BucketBinding & {
@@ -57,25 +57,6 @@ type Env = {
   BENCHMARK_RESULT_TOKEN: string;
   BENCHMARK_SOURCE_COMMIT: string;
   BENCHMARK_HARNESS_COMMIT: string;
-};
-
-type OperationMetric = {
-  count: number;
-  bytes: number;
-  durationMs: number;
-};
-
-type StoreMetrics = {
-  reads: OperationMetric;
-  writes: OperationMetric;
-  preconditionFailures: number;
-  byKind: Record<
-    string,
-    {
-      reads: OperationMetric;
-      writes: OperationMetric;
-    }
-  >;
 };
 
 let keyPromise: Promise<CryptoKey> | undefined;
@@ -102,19 +83,11 @@ export default {
           json({
             sourceCommit: env.BENCHMARK_SOURCE_COMMIT,
             harnessCommit: env.BENCHMARK_HARNESS_COMMIT,
-            profiles: BENCHMARK_PROFILES,
-            indexSets: Object.fromEntries(
-              Object.entries(
-                WRITE_SCALING_INDEX_SETS,
-              ).map(([name, indexes]) => [
-                name,
-                indexes.notes?.length ?? 0,
-              ]),
-            ),
+            documents: MUTATION_BATCH_DOCUMENTS,
+            batchSizes: MUTATION_BATCH_SIZES,
+            variants: MUTATION_BATCH_VARIANTS,
             layouts: WRITE_SCALING_LAYOUTS,
             regions: BENCHMARK_REGIONS,
-            decodedObjectLimit:
-              DEFAULT_MAXIMUM_DECODED_ENVELOPE_BYTES,
           }),
           request,
         );
@@ -123,7 +96,13 @@ export default {
         requirePost(request);
         requireToken(request, env);
         return withColo(
-          json(await runWrite(env, url)),
+          json(
+            await runWrite(
+              request,
+              env,
+              url,
+            ),
+          ),
           request,
         );
       }
@@ -166,86 +145,97 @@ export default {
 };
 
 async function runWrite(
+  request: Request,
   env: Env,
   url: URL,
 ) {
   const region = requireRegion(
     url.searchParams.get("region"),
   );
-  const profile = requireProfile(
-    url.searchParams.get("profile"),
-  );
-  const indexSet = requireIndexSet(
-    url.searchParams.get("indexes"),
+  const variant = requireVariant(
+    url.searchParams.get("variant"),
   );
   const layout = requireLayout(
     url.searchParams.get("layout"),
   );
-  const iteration = Number(
-    url.searchParams.get("iteration"),
+  const batchSize = requireBatchSize(
+    url.searchParams.get("batch"),
   );
-  if (
-    !Number.isInteger(iteration) ||
-    iteration < 0 ||
-    iteration > 100
-  ) {
-    throw new BenchmarkRequestError(
-      400,
-      "Iteration is invalid",
-    );
-  }
-  const count = BENCHMARK_PROFILES[profile];
-  const index =
-    (iteration * 977 +
-      BENCHMARK_REGIONS.indexOf(region) * 37) %
-    count;
-  const original = benchmarkDocument(index, count);
-  const document: JsonDocument = {
-    ...original,
-    body:
-      `${original.body} scaling ${profile} ` +
-      `${indexSet} ${layout} ${iteration}`,
-    lastModified: count + iteration,
-  };
+  const payload = await readDocuments(
+    request,
+    variant,
+    batchSize,
+  );
   const prefix =
-    `write/${region}/${profile}/${indexSet}/${layout}`;
+    `write/${region}/${variant}/${batchSize}/${layout}`;
   const runtime = await createEngine(
     env,
     prefix,
-    indexSet,
     layout,
   );
   const started = performance.now();
-  await runtime.engine.put(
-    BENCHMARK_COLLECTION,
-    document.id,
-    document,
-  );
+  if (variant === "batch") {
+    await runtime.engine.putMany(
+      BENCHMARK_COLLECTION,
+      payload,
+    );
+  } else {
+    await runtime.engine.put(
+      BENCHMARK_COLLECTION,
+      payload[0]!.id,
+      payload[0]!,
+    );
+  }
   return {
     region,
-    profile,
-    indexSet,
-    indexCount:
-      WRITE_SCALING_INDEX_SETS[indexSet]
-        .notes?.length ?? 0,
+    variant,
     layout,
-    iteration,
-    id: document.id,
+    batchSize,
+    documents: payload.length,
     workerIoTimerMs: round(
       performance.now() - started,
     ),
-    storage: runtime.counting.publicMetrics(),
+    storage: runtime.counting.metrics,
     diagnostics: runtime.engine.diagnostics(),
   };
+}
+
+async function readDocuments(
+  request: Request,
+  variant: MutationBatchVariant,
+  batchSize: MutationBatchSize,
+): Promise<JsonDocument[]> {
+  const body = await request.json();
+  const values =
+    variant === "batch"
+      ? body
+      : [body];
+  if (
+    !Array.isArray(values) ||
+    values.length !==
+      (variant === "batch" ? batchSize : 1) ||
+    !values.every(
+      (value) =>
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value) &&
+        typeof value.id === "string",
+    )
+  ) {
+    throw new BenchmarkRequestError(
+      400,
+      "Mutation payload is invalid",
+    );
+  }
+  return values as JsonDocument[];
 }
 
 async function createEngine(
   env: Env,
   prefix: string,
-  indexSet: WriteScalingIndexSet,
   layout: WriteScalingLayout,
 ) {
-  const counting = new TimingObjectStore(
+  const counting = new CountingObjectStore(
     new R2ObjectStore(env.BENCHMARK_BUCKET),
   );
   const scopePrefix = scopeStoragePrefix(
@@ -263,8 +253,6 @@ async function createEngine(
       objectKeyPrefix: scopePrefix,
     },
   );
-  const indexes =
-    WRITE_SCALING_INDEX_SETS[indexSet];
   const engine =
     layout === "snapshot"
       ? new ImmutableSnapshotEngine(
@@ -272,14 +260,14 @@ async function createEngine(
           40,
           undefined,
           false,
-          indexes,
+          BENCHMARK_INDEXES,
         )
       : new ContentAddressedTrieEngine(
           store,
           40,
           undefined,
           false,
-          indexes,
+          BENCHMARK_INDEXES,
         );
   return { engine, counting };
 }
@@ -395,26 +383,22 @@ function benchmarkKey(env: Env) {
   return keyPromise;
 }
 
-class TimingObjectStore implements ObjectStore {
-  private readonly metrics: StoreMetrics = {
-    reads: metric(),
-    writes: metric(),
+class CountingObjectStore implements ObjectStore {
+  readonly metrics = {
+    reads: 0,
+    readBytes: 0,
+    writes: 0,
+    writtenBytes: 0,
     preconditionFailures: 0,
-    byKind: {},
   };
 
   constructor(private readonly delegate: ObjectStore) {}
 
   async get(key: string): Promise<StoredObject | null> {
-    const started = performance.now();
     const result = await this.delegate.get(key);
-    record(
-      this.metrics,
-      "reads",
-      key,
-      result?.bytes.byteLength ?? 0,
-      performance.now() - started,
-    );
+    this.metrics.reads += 1;
+    this.metrics.readBytes +=
+      result?.bytes.byteLength ?? 0;
     return result;
   }
 
@@ -423,20 +407,15 @@ class TimingObjectStore implements ObjectStore {
     bytes: Uint8Array,
     conditions?: PutConditions,
   ) {
-    const started = performance.now();
     try {
       const result = await this.delegate.put(
         key,
         bytes,
         conditions,
       );
-      record(
-        this.metrics,
-        "writes",
-        key,
-        bytes.byteLength,
-        performance.now() - started,
-      );
+      this.metrics.writes += 1;
+      this.metrics.writtenBytes +=
+        bytes.byteLength;
       return result;
     } catch (error) {
       if (
@@ -457,70 +436,6 @@ class TimingObjectStore implements ObjectStore {
   list(prefix: string) {
     return this.delegate.list(prefix);
   }
-
-  publicMetrics() {
-    return structuredClone(this.metrics);
-  }
-}
-
-function record(
-  metrics: StoreMetrics,
-  operation: "reads" | "writes",
-  key: string,
-  bytes: number,
-  durationMs: number,
-) {
-  addMetric(
-    metrics[operation],
-    bytes,
-    durationMs,
-  );
-  const kind = objectKind(key);
-  metrics.byKind[kind] ??= {
-    reads: metric(),
-    writes: metric(),
-  };
-  addMetric(
-    metrics.byKind[kind]![operation],
-    bytes,
-    durationMs,
-  );
-}
-
-function addMetric(
-  value: OperationMetric,
-  bytes: number,
-  durationMs: number,
-) {
-  value.count += 1;
-  value.bytes += bytes;
-  value.durationMs = round(
-    value.durationMs + durationMs,
-  );
-}
-
-function metric(): OperationMetric {
-  return {
-    count: 0,
-    bytes: 0,
-    durationMs: 0,
-  };
-}
-
-function objectKind(key: string) {
-  if (key.endsWith("/HEAD.json")) {
-    return "head";
-  }
-  if (key.includes("/indexes/")) {
-    return "index";
-  }
-  if (key.includes("/snapshots/")) {
-    return "snapshot";
-  }
-  if (key.includes("/nodes/")) {
-    return "trie-node";
-  }
-  return "other";
 }
 
 function requireToken(
@@ -561,35 +476,37 @@ function requireRegion(value: string | null) {
   return value as (typeof BENCHMARK_REGIONS)[number];
 }
 
-function requireProfile(
+function requireVariant(
   value: string | null,
-): WriteScalingProfile {
+): MutationBatchVariant {
   if (
-    !Object.hasOwn(BENCHMARK_PROFILES, value ?? "")
-  ) {
-    throw new BenchmarkRequestError(
-      400,
-      "Profile is invalid",
-    );
-  }
-  return value as WriteScalingProfile;
-}
-
-function requireIndexSet(
-  value: string | null,
-): WriteScalingIndexSet {
-  if (
-    !Object.hasOwn(
-      WRITE_SCALING_INDEX_SETS,
-      value ?? "",
+    !MUTATION_BATCH_VARIANTS.includes(
+      value as MutationBatchVariant,
     )
   ) {
     throw new BenchmarkRequestError(
       400,
-      "Index set is invalid",
+      "Variant is invalid",
     );
   }
-  return value as WriteScalingIndexSet;
+  return value as MutationBatchVariant;
+}
+
+function requireBatchSize(
+  value: string | null,
+): MutationBatchSize {
+  const parsed = Number(value);
+  if (
+    !MUTATION_BATCH_SIZES.includes(
+      parsed as MutationBatchSize,
+    )
+  ) {
+    throw new BenchmarkRequestError(
+      400,
+      "Batch size is invalid",
+    );
+  }
+  return parsed as MutationBatchSize;
 }
 
 function requireLayout(
