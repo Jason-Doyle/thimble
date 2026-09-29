@@ -43,6 +43,10 @@ const rawKey = Uint8Array.from(
   { length: 32 },
   (_, index) => index + 173,
 );
+const contextSigningKey = Uint8Array.from(
+  { length: 32 },
+  (_, index) => 255 - index,
+);
 const key = await importAesGcmKey(
   rawKey,
   ["encrypt", "decrypt"],
@@ -93,6 +97,8 @@ const manifest = {
     process.env.THIMBLE_BENCHMARK_HARNESS_COMMIT ??
       null,
   keyBase64: bytesToBase64(rawKey),
+  contextSigningKeyBase64:
+    bytesToBase64(contextSigningKey),
   keyId: BENCHMARK_KEY_ID,
   scopeId: BENCHMARK_SCOPE_ID,
   collection: BENCHMARK_COLLECTION,

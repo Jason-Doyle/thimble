@@ -62,6 +62,7 @@ type Env = {
     fetch(request: Request): Promise<Response>;
   };
   BENCHMARK_KEY_BASE64: string;
+  BENCHMARK_CONTEXT_SIGNING_KEY_BASE64: string;
   BENCHMARK_RESULT_TOKEN: string;
   BENCHMARK_SOURCE_COMMIT: string;
   BENCHMARK_HARNESS_COMMIT: string;
@@ -648,7 +649,9 @@ async function contextSignature(
   contextKeyPromise ??= crypto.subtle.importKey(
     "raw",
     bufferView(
-      base64ToBytes(env.BENCHMARK_KEY_BASE64),
+      base64ToBytes(
+        env.BENCHMARK_CONTEXT_SIGNING_KEY_BASE64,
+      ),
     ),
     {
       name: "HMAC",

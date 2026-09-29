@@ -145,6 +145,37 @@ describe("client-assisted trie writes", () => {
     expect(store.writes).toBe(6);
   });
 
+  it("rejects context signed with a browser-visible scope key", async () => {
+    const initial = await fixture();
+    const store = initial.store.clone();
+    const forged = structuredClone(initial.fullContext);
+    forged.signature = createHmac(
+      "sha256",
+      "browser-visible-scope-key",
+    )
+      .update(signedHeadPayload(forged))
+      .digest("hex");
+    store.resetMetrics();
+
+    const result = await applyClientAssistedTrieWrite({
+      store,
+      addressNode: address,
+      verifySignature: sign,
+      scopeId,
+      collection,
+      layoutGeneration,
+      document: updatedDocument(),
+      context: forged,
+      indexConfiguration: indexes,
+    });
+
+    expect(result).toMatchObject({
+      mode: "fallback",
+      fallbackReason: "invalid",
+    });
+    expect(store.reads).toBe(8);
+  });
+
   it("falls back before candidate writes when an immutable object is tampered", async () => {
     const initial = await fixture();
     const store = initial.store.clone();

@@ -22,6 +22,10 @@ The authority:
 6. falls back to the ordinary authoritative write after a stale HEAD conflict
    or invalid, expired, or missing context
 
+The signing key must be server-only and independently derived from the
+deployment master key. It must not be the scope encryption key delivered to
+the browser.
+
 The browser never supplies database objects that bypass authority
 verification. HEAD remains the final conditional write.
 
