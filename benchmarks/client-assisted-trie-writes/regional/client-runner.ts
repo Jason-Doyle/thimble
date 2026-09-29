@@ -312,12 +312,11 @@ async function verifyCase(
     equivalent?: boolean;
     error?: string;
   };
-  if (!response.ok || !body.equivalent) {
-    throw new Error(
-      `Verification failed for ${profile}/${indexSet}: ${JSON.stringify(body)}`,
-    );
-  }
-  return body;
+  return {
+    ...body,
+    success: response.ok && body.equivalent === true,
+    status: response.status,
+  };
 }
 
 function operationUrl(

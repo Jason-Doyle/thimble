@@ -367,6 +367,35 @@ async function verifyEquivalent(
           )
         : null,
     );
+  const baselineById = new Map(
+    baselineDocuments.map((document) => [
+      document.id,
+      stableStringify(
+        document as unknown as JsonValue,
+      ),
+    ]),
+  );
+  const assistedById = new Map(
+    assistedDocuments.map((document) => [
+      document.id,
+      stableStringify(
+        document as unknown as JsonValue,
+      ),
+    ]),
+  );
+  const differingIds = [
+    ...new Set([
+      ...baselineById.keys(),
+      ...assistedById.keys(),
+    ]),
+  ]
+    .filter(
+      (id) =>
+        baselineById.get(id) !==
+        assistedById.get(id),
+    )
+    .sort()
+    .slice(0, 20);
   return {
     region,
     profile,
@@ -374,6 +403,19 @@ async function verifyEquivalent(
     documentsEqual,
     headsEqual,
     equivalent: documentsEqual && headsEqual,
+    baselineRevision: baselineHead
+      ? decodeJson<{
+          revision: number;
+        }>(baselineHead.bytes).revision
+      : 0,
+    assistedRevision: assistedHead
+      ? decodeJson<{
+          revision: number;
+        }>(assistedHead.bytes).revision
+      : 0,
+    baselineDocuments: baselineDocuments.length,
+    assistedDocuments: assistedDocuments.length,
+    differingIds,
   };
 }
 
@@ -576,21 +618,19 @@ async function regionalResult(
 }
 
 async function cleanupBucket(env: Env) {
-  let deleted = 0;
-  while (true) {
-    const page = await env.BENCHMARK_BUCKET.list({
-      limit: 1_000,
-    });
-    const keys = page.objects.map(
-      (object) => object.key,
-    );
-    if (keys.length === 0) {
-      break;
-    }
+  const page = await env.BENCHMARK_BUCKET.list({
+    limit: 1_000,
+  });
+  const keys = page.objects.map(
+    (object) => object.key,
+  );
+  if (keys.length > 0) {
     await env.BENCHMARK_BUCKET.delete(keys);
-    deleted += keys.length;
   }
-  return { deleted };
+  return {
+    deleted: keys.length,
+    truncated: page.truncated,
+  };
 }
 
 function benchmarkKey(env: Env) {
