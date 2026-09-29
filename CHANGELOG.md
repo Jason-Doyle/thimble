@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+- Corrected GHCR visibility guidance after the first image and chart packages
+  inherited public access without a manual settings change.
+
 ## 3.3.0 - 2026-09-28
 
 - Added a secure OCI Helm chart for deploying the Node authority to
@@ -22,7 +25,7 @@ The format follows Keep a Changelog and the package uses semantic versioning.
   bundle.
 - Documented same-origin Kubernetes routing, cloud storage requirements,
   workload identity, digest pinning, signature verification, upgrades,
-  scaling limits, and the one-time GHCR visibility step.
+  scaling limits, and GHCR visibility verification.
 
 ## 3.2.0 - 2026-09-28
 

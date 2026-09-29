@@ -92,12 +92,12 @@ it again. Release versions are immutable. Do not intentionally replace an
 existing npm package, image version tag, or chart version with different
 source.
 
-## First GHCR publication
+## GHCR visibility
 
-GitHub creates each new package as private. After the first workflow run,
-change the image and chart package visibility to public in GitHub package
-settings. The current GitHub API does not expose a supported first-publication
-visibility switch for the workflow.
+After the first workflow run, verify that the image and chart can be pulled
+without registry credentials. The 3.3.0 packages inherited public access and
+required no manual change. If repository or package settings leave a future
+package private, change its visibility in GitHub package settings.
 
 No registry password or personal access token is required. The release job has
 `packages: write` only for its duration.
@@ -139,7 +139,8 @@ Duplicate version:
 
 Private GHCR package:
 
-- complete the one-time visibility change for both the image and chart
+- confirm the package is linked to the public repository
+- change its visibility in GitHub package settings when anonymous pulls fail
 
 Signature verification failure:
 
