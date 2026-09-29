@@ -1,0 +1,118 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/jason-doyle/thimbledb
+  pullPolicy: IfNotPresent
+  tag: ""
+  digest: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+existingSecret: ""
+
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+strategy:
+  type: Recreate
+
+service:
+  type: ClusterIP
+  port: 8787
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+config:
+  provider: ""
+  allowedOrigin: ""
+  prefix: demo
+  secureCookies: true
+  headTtlMs: 1000
+  keyVersion: 1
+  readKeyVersions: ""
+  collectionLayouts: ""
+  collectionIndexes: "{}"
+  collections: ""
+  deleteRetentionDays: 30
+  deleteGraceDays: 7
+  maintenanceMode: false
+  studio:
+    enabled: false
+    origin: ""
+  readBundles: false
+  mutationBatches: false
+  oidc:
+    providerId: ""
+    issuer: ""
+    audience: ""
+    jwksUri: ""
+    allowedTenants: ""
+    requiredScope: ""
+    requiredRole: ""
+  extraEnv: {}
+
+localStorage:
+  enabled: false
+  sizeLimit: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  initialDelaySeconds: 3
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+terminationGracePeriodSeconds: 30
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+extraEnvFrom: []
+extraVolumes: []
+extraVolumeMounts: []

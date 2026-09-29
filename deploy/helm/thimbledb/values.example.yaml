@@ -1,0 +1,34 @@
+# existingSecret: thimbledb-secrets
+#
+# image:
+#   digest: sha256:<verified-multi-architecture-manifest-digest>
+#
+# config:
+#   provider: s3
+#   allowedOrigin: https://app.example.com
+#   prefix: production
+#   collectionLayouts: notes=snapshot
+#   collectionIndexes: '{"notes":[{"name":"by-title","fields":["title"],"mode":"equality"}]}'
+#   readBundles: true
+#   mutationBatches: true
+#   oidc:
+#     providerId: application
+#     issuer: https://identity.example.com/
+#     audience: thimbledb-api
+#     jwksUri: https://identity.example.com/.well-known/jwks.json
+#     requiredScope: thimble.access
+#
+# serviceAccount:
+#   automount: false
+#   annotations: {}
+#
+# ingress:
+#   enabled: true
+#   className: nginx
+#   hosts:
+#     - host: app.example.com
+#       paths:
+#         - path: /api
+#           pathType: Prefix
+#
+# replicaCount: 2

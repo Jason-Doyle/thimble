@@ -6,6 +6,24 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+## 3.3.0 - 2026-09-28
+
+- Added a secure OCI Helm chart for deploying the Node authority to
+  Kubernetes with an existing Secret, non-root execution, read-only root
+  filesystem, RuntimeDefault seccomp, dropped capabilities, optional Ingress,
+  and explicit local-development storage.
+- Added release automation for signed `linux/amd64` and `linux/arm64` GHCR
+  images with provenance and an SBOM, plus a signed OCI Helm chart and
+  downloadable chart archive.
+- Added unauthenticated `/healthz` and `/readyz` probes to the Node and
+  Cloudflare authorities with bounded no-store responses.
+- Added required Helm rendering and `kind` smoke coverage for OIDC login,
+  capability discovery, an authenticated write, a mutation batch, and a read
+  bundle.
+- Documented same-origin Kubernetes routing, cloud storage requirements,
+  workload identity, digest pinning, signature verification, upgrades,
+  scaling limits, and the one-time GHCR visibility step.
+
 ## 3.2.0 - 2026-09-28
 
 - Added opt-in bounded mutation batches for up to 20 documents and 1 MiB of

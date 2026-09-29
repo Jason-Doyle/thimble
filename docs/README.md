@@ -11,7 +11,7 @@
 | [Implementation prompts](IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
 | [Starter examples](EXAMPLES.md) | Checked-in examples, generated application, and maintained starter repositories |
 | [Frequently asked questions](FAQ.md) | Direct answers about fit, providers, identity, performance, and limits |
-| [npm publishing](NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
+| [Release publishing](NPM-PUBLISHING.md) | npm, GHCR image, and OCI Helm chart release process |
 | [Use cases](USE-CASES.md) | Fit criteria and application-specific guides |
 | [Database comparisons](COMPARISONS.md) | Workload comparisons with D1, SQLite, Firestore, lowdb, and direct object storage |
 | [Architecture](ARCHITECTURE.md) | Components, data flow, scopes, and provider model |
@@ -33,5 +33,6 @@
 | [Cloudflare deployment](DEPLOYMENT-CLOUDFLARE.md) | Reference Worker and R2 deployment |
 | [Azure deployment](DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
 | [AWS deployment](DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
+| [Kubernetes deployment](DEPLOYMENT-KUBERNETES.md) | Multi-architecture image, OCI Helm chart, secure defaults, routing, and scaling limits |
 | [Operations](OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
 | [Website privacy](WEBSITE-PRIVACY.md) | Static-site data handling and Cloudflare Web Analytics disclosure |

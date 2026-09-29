@@ -12,7 +12,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Check out source
@@ -67,10 +67,60 @@ jobs:
 
       - name: Build container
         run: |
-          docker build --tag thimbledb:ci .
-          docker run --rm thimbledb:ci node --input-type=module -e "await Promise.all([import('@aws-sdk/client-s3'), import('@azure/storage-blob')])"
+          docker build --provenance=false --tag thimbledb:ci .
+          docker run --rm --workdir /app thimbledb:ci node --input-type=module -e "await Promise.all([import('@aws-sdk/client-s3'), import('@azure/storage-blob')])"
 
       - name: Build AWS Lambda application runtime
         run: |
           docker build --file Dockerfile.aws --target runtime-base --tag thimbledb-aws:ci .
           docker run --rm thimbledb-aws:ci node --input-type=module -e "await import('@aws-sdk/client-s3'); try { await import('@azure/storage-blob'); process.exit(1) } catch (error) { if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error }"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5.0.1
+        with:
+          version: v3.18.3
+
+      - name: Validate Helm chart
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          chart_version="$(awk '$1 == "version:" { print $2 }' deploy/helm/thimbledb/Chart.yaml)"
+          app_version="$(awk '$1 == "appVersion:" { gsub(/"/, "", $2); print $2 }' deploy/helm/thimbledb/Chart.yaml)"
+          if [ "${chart_version}" != "${package_version}" ] || [ "${app_version}" != "${package_version}" ]; then
+            echo "Chart version ${chart_version}/${app_version} does not match package version ${package_version}."
+            exit 1
+          fi
+          helm lint deploy/helm/thimbledb --values deploy/helm/test/values.yaml
+          helm template thimbledb deploy/helm/thimbledb --namespace thimbledb --values deploy/helm/test/values.yaml > /tmp/thimbledb-rendered.yaml
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.15.0
+        with:
+          cluster_name: thimbledb
+          version: v0.33.0
+          kubectl_version: v1.37.0
+          wait: 180s
+
+      - name: Load Kubernetes smoke image
+        run: |
+          kind load docker-image --name thimbledb thimbledb:ci
+
+      - name: Deploy Helm chart to kind
+        shell: bash
+        run: |
+          kubectl create namespace thimbledb
+          kubectl --namespace thimbledb create configmap thimbledb-test-oidc \
+            --from-file=server.mjs=deploy/helm/test/oidc-server.mjs
+          kubectl apply --filename deploy/helm/test/oidc.yaml
+          master_key="$(node -e "console.log(Buffer.alloc(32, 7).toString('base64'))")"
+          kubectl --namespace thimbledb create secret generic thimbledb-secrets \
+            --from-literal=THIMBLE_MASTER_KEY="${master_key}"
+          helm upgrade --install thimbledb deploy/helm/thimbledb \
+            --namespace thimbledb \
+            --values deploy/helm/test/values.yaml \
+            --wait \
+            --timeout 5m
+          kubectl --namespace thimbledb rollout status deployment/thimbledb-test-oidc --timeout=2m
+
+      - name: Test Kubernetes deployment
+        run: node scripts/verify-kubernetes.mjs

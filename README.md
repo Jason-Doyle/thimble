@@ -214,7 +214,8 @@ before horizontally scaling a Node authority.
 - Chromium, Firefox, and WebKit recovery tests
 - typed package exports for the browser/core and auth APIs
 - reusable Node and Cloudflare authority endpoint exports
-- Docker, Wrangler, Bicep, and CloudFormation deployment paths
+- signed multi-architecture container and OCI Helm chart
+- Docker, Kubernetes, Wrangler, Bicep, and CloudFormation deployment paths
 
 The reference browser build is about 68.3 KB uncompressed and 18.7 KB gzip.
 It ships no database runtime or WASM module.
@@ -280,6 +281,11 @@ container, function, or Node service behind the same public browser origin.
 In-app deployment minimises operations. A separate authority isolates secrets,
 releases, failures, and scaling. See
 [In-app and separate authority deployment](docs/AUTHORITY-DEPLOYMENT.md).
+
+Existing Kubernetes clusters can install the separate Node authority from a
+multi-architecture GHCR image and OCI Helm chart. The chart uses non-root,
+read-only, capability-free defaults and an existing Secret. See
+[Deploy to Kubernetes](docs/DEPLOYMENT-KUBERNETES.md).
 
 After the authority session exists:
 
@@ -389,7 +395,7 @@ layout decision thresholds.
 | [Quickstart](docs/QUICKSTART.md) | Package, authority, browser client, and verification setup |
 | [Configuration reference](docs/CONFIGURATION.md) | Authority options, environment variables, provider settings, defaults, and template coverage |
 | [Implementation prompts](docs/IMPLEMENTATION-PROMPTS.md) | Copy-paste integration, deployment, migration, and review prompts |
-| [npm publishing](docs/NPM-PUBLISHING.md) | OIDC trusted publisher setup and release process |
+| [Release publishing](docs/NPM-PUBLISHING.md) | npm, GHCR image, and OCI Helm chart release process |
 | [Use cases](docs/USE-CASES.md) | Fit criteria and application-specific guides |
 | [Architecture](docs/ARCHITECTURE.md) | Components, data flow, and scope model |
 | [In-app and separate authority deployment](docs/AUTHORITY-DEPLOYMENT.md) | Topologies, scaling opportunities, trust boundaries, and decision criteria |
@@ -408,6 +414,7 @@ layout decision thresholds.
 | [Cloudflare deployment](docs/DEPLOYMENT-CLOUDFLARE.md) | Worker and R2 reference deployment |
 | [Azure deployment](docs/DEPLOYMENT-AZURE.md) | Container Apps and Blob Storage |
 | [AWS deployment](docs/DEPLOYMENT-AWS.md) | Lambda container and private S3 buckets |
+| [Kubernetes deployment](docs/DEPLOYMENT-KUBERNETES.md) | Multi-architecture image, OCI Helm chart, secure defaults, routing, and scaling limits |
 | [Operations](docs/OPERATIONS.md) | Keys, backup, metrics, incidents, and cleanup |
 | [Website privacy](docs/WEBSITE-PRIVACY.md) | Static-site data handling and Cloudflare Web Analytics disclosure |
 

@@ -166,6 +166,25 @@ Cloudflare uses a one-hour session lifetime and a bounded in-memory scope
 runtime cache. Those values are not environment-configurable in the current
 Worker authority.
 
+## Kubernetes Helm mapping
+
+The Helm chart maps non-secret `config` values to the common and Node
+environment settings. `existingSecret` supplies `THIMBLE_MASTER_KEY`, provider
+settings, and any OIDC or workload-identity settings that should not enter a
+ConfigMap.
+
+The chart:
+
+- binds `THIMBLE_HOST=0.0.0.0` and port `8787`
+- keeps read bundles, mutation batches, Studio, and Ingress opt-in
+- validates the local provider as one replica with ephemeral storage
+- validates complete generic OIDC settings when that values block is used
+- supports additional non-secret settings through `config.extraEnv`
+- supports additional Secret or ConfigMap sources through `extraEnvFrom`
+
+See [Deploy to Kubernetes](DEPLOYMENT-KUBERNETES.md) for the complete Secret,
+routing, security, scaling, and upgrade guidance.
+
 ## Maintenance command settings
 
 These settings apply to command-line maintenance. They are not all authority

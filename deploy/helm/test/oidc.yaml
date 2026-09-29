@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thimbledb-test-oidc
+  namespace: thimbledb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thimbledb-test-oidc
+  template:
+    metadata:
+      labels:
+        app: thimbledb-test-oidc
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: oidc
+          image: thimbledb:ci
+          imagePullPolicy: Never
+          command:
+            - node
+            - /test-oidc/server.mjs
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: script
+              mountPath: /test-oidc
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: thimbledb-test-oidc
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thimbledb-test-oidc
+  namespace: thimbledb
+spec:
+  selector:
+    app: thimbledb-test-oidc
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

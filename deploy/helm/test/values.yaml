@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: thimbledb
+  tag: ci
+  pullPolicy: Never
+
+existingSecret: thimbledb-secrets
+
+config:
+  provider: local
+  allowedOrigin: http://127.0.0.1:18787
+  secureCookies: false
+  collectionLayouts: notes=snapshot
+  collections: notes
+  readBundles: true
+  mutationBatches: true
+  oidc:
+    providerId: k8s
+    issuer: http://thimbledb-test-oidc.thimbledb.svc.cluster.local:8080
+    audience: thimbledb-k8s
+    jwksUri: http://thimbledb-test-oidc.thimbledb.svc.cluster.local:8080/jwks
+    requiredScope: thimble.access
+  extraEnv:
+    THIMBLE_DISABLE_IP_RATE_LIMIT: "true"
+
+localStorage:
+  enabled: true
+  sizeLimit: 512Mi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 768Mi

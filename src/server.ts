@@ -412,6 +412,27 @@ async function handleRequest(
 
   if (
     request.method === "GET" &&
+    url.pathname === "/healthz"
+  ) {
+    sendJson(response, 200, {
+      status: "ok",
+    });
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/readyz"
+  ) {
+    sendJson(response, 200, {
+      status: "ready",
+      provider: context.provider,
+    });
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
     url.pathname === "/api/auth/config"
   ) {
     sendJson(response, 200, {

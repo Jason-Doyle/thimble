@@ -123,6 +123,26 @@ The stored TDB1, Snapshot HEAD, Trie HEAD, and secondary-index formats are
 unchanged. Mutation batching is an optional authority and browser capability,
 so older clients continue using ordinary single writes.
 
+## Version 3.3
+
+Version 3.3 adds compatible Kubernetes and container distribution:
+
+- the Node authority image runs as a non-root user and supports a read-only
+  root filesystem
+- release automation builds `linux/amd64` and `linux/arm64` images with an
+  SBOM, provenance, and keyless Sigstore signature
+- an OCI Helm chart configures an existing Secret, secure Pod defaults,
+  optional Ingress, cloud storage, and explicit capabilities
+- unauthenticated `/healthz` and `/readyz` routes support container and
+  Kubernetes probes
+- required CI installs the chart into `kind` and verifies authenticated
+  single writes, mutation batches, and read bundles
+
+The TDB1 protocol, collection layouts, browser API, and object-store contract
+are unchanged. The Helm chart and image are optional distribution surfaces.
+Existing package, Worker, Lambda, and Container Apps deployments remain
+compatible.
+
 ## Object protocol version
 
 `TDB1` is stored in every object envelope. Protocol compatibility is separate

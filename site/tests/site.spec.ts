@@ -228,6 +228,7 @@ test("AI discovery routes publish explicit access and decision content", async (
   expect(llmsText).toContain("In-app and separate authority deployment");
   expect(llmsText).toContain("System diagrams");
   expect(llmsText).toContain("Configuration reference");
+  expect(llmsText).toContain("Kubernetes deployment");
 
   const full = await request.get("/llms-full.txt");
   expect(full.ok()).toBe(true);
@@ -242,8 +243,9 @@ test("AI discovery routes publish explicit access and decision content", async (
   );
   expect(fullText).toContain("# System diagrams");
   expect(fullText).toContain("# Configuration reference");
+  expect(fullText).toContain("# Deploy to Kubernetes");
   expect(fullText).toContain("# Website privacy");
-  expect(fullText).toContain("## 3.2.0");
+  expect(fullText).toContain("## 3.3.0");
 
   await page.goto("/vibe-coded-apps/");
   await expect(
