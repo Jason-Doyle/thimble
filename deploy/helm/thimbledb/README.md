@@ -76,9 +76,9 @@ placeholders.
 Set `serviceAccount.automount=true` only when the selected cloud workload
 identity requires a projected ServiceAccount token.
 
-## First GHCR publication
+## GHCR visibility
 
-GitHub creates new container packages as private. After the first release,
-open the package settings for both the image and chart and change visibility
-to public. GitHub does not currently provide an API for automating that
-one-time visibility change.
+After the first publication, verify that both the image and chart can be
+pulled without registry credentials. The 3.3.0 packages inherited public
+access and required no manual change. If repository or package settings leave
+a future package private, change its visibility in GitHub package settings.

@@ -233,12 +233,12 @@ cosign verify `
   ghcr.io/jason-doyle/charts/thimbledb@sha256:<manifest-digest>
 ```
 
-## First GHCR publication
+## GHCR visibility
 
-GitHub creates a new GHCR package as private. After the first release, change
-the visibility of both the image package and chart package to public in their
-package settings. This is a one-time manual step. The release workflow cannot
-make the first package public through the current GitHub API.
+After the first publication, verify that the image and chart can be pulled
+without registry credentials. The 3.3.0 packages inherited public access and
+required no manual change. If repository or package settings leave a future
+package private, change its visibility in GitHub package settings.
 
 ## CI smoke coverage
 
