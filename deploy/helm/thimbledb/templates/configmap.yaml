@@ -1,0 +1,46 @@
+{{- include "thimbledb.validate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "thimbledb.fullname" . }}
+  labels:
+    {{- include "thimbledb.labels" . | nindent 4 }}
+data:
+  THIMBLE_HOST: "0.0.0.0"
+  THIMBLE_PORT: "8787"
+  THIMBLE_PROVIDER: {{ required "config.provider is required" .Values.config.provider | quote }}
+  THIMBLE_ALLOWED_ORIGIN: {{ required "config.allowedOrigin is required" .Values.config.allowedOrigin | quote }}
+  THIMBLE_PREFIX: {{ .Values.config.prefix | quote }}
+  THIMBLE_SECURE_COOKIES: {{ .Values.config.secureCookies | quote }}
+  THIMBLE_HEAD_TTL_MS: {{ .Values.config.headTtlMs | quote }}
+  THIMBLE_KEY_VERSION: {{ .Values.config.keyVersion | quote }}
+  THIMBLE_READ_KEY_VERSIONS: {{ .Values.config.readKeyVersions | quote }}
+  THIMBLE_COLLECTION_LAYOUTS: {{ .Values.config.collectionLayouts | quote }}
+  THIMBLE_COLLECTION_INDEXES: {{ .Values.config.collectionIndexes | quote }}
+  THIMBLE_COLLECTIONS: {{ .Values.config.collections | quote }}
+  THIMBLE_DELETE_RETENTION_DAYS: {{ .Values.config.deleteRetentionDays | quote }}
+  THIMBLE_DELETE_GRACE_DAYS: {{ .Values.config.deleteGraceDays | quote }}
+  THIMBLE_MAINTENANCE_MODE: {{ .Values.config.maintenanceMode | quote }}
+  THIMBLE_STUDIO: {{ .Values.config.studio.enabled | quote }}
+  THIMBLE_READ_BUNDLES: {{ .Values.config.readBundles | quote }}
+  THIMBLE_MUTATION_BATCHES: {{ .Values.config.mutationBatches | quote }}
+  {{- if .Values.config.studio.origin }}
+  THIMBLE_STUDIO_ORIGIN: {{ .Values.config.studio.origin | quote }}
+  {{- end }}
+  {{- if .Values.config.oidc.providerId }}
+  OIDC_PROVIDER_ID: {{ .Values.config.oidc.providerId | quote }}
+  OIDC_ISSUER: {{ .Values.config.oidc.issuer | quote }}
+  OIDC_AUDIENCE: {{ .Values.config.oidc.audience | quote }}
+  OIDC_JWKS_URI: {{ .Values.config.oidc.jwksUri | quote }}
+  OIDC_ALLOWED_TENANTS: {{ .Values.config.oidc.allowedTenants | quote }}
+  OIDC_REQUIRED_SCOPE: {{ .Values.config.oidc.requiredScope | quote }}
+  OIDC_REQUIRED_ROLE: {{ .Values.config.oidc.requiredRole | quote }}
+  {{- end }}
+  {{- if .Values.localStorage.enabled }}
+  THIMBLE_LOCAL_DATA_ROOT: "/var/lib/thimbledb/data"
+  THIMBLE_LOCAL_AUTH_ROOT: "/var/lib/thimbledb/auth"
+  THIMBLE_LOCAL_SECRET_ROOT: "/var/lib/thimbledb/secrets"
+  {{- end }}
+  {{- range $name, $value := .Values.config.extraEnv }}
+  {{ $name }}: {{ $value | quote }}
+  {{- end }}

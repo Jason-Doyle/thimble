@@ -1,0 +1,19 @@
+apiVersion: v2
+name: thimbledb
+description: Deploy the ThimbleDB Node authority to Kubernetes.
+type: application
+version: 3.3.0
+appVersion: "3.3.0"
+kubeVersion: ">=1.28.0-0"
+home: https://thimbledb.com
+sources:
+  - https://github.com/Jason-Doyle/thimble
+maintainers:
+  - name: Jason Doyle
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://thimbledb.com/docs/deployment-kubernetes/
+    - name: Source
+      url: https://github.com/Jason-Doyle/thimble

@@ -8,6 +8,39 @@ import worker, {
 import type { R2BucketBinding } from "../src/cloudflare/r2-object-store.js";
 
 describe("Cloudflare Worker request parsing", () => {
+  it("serves unauthenticated liveness and readiness probes", async () => {
+    const bucket = emptyBucket();
+    const environment = {
+      DB: bucket,
+      AUTH_DB: bucket,
+      THIMBLE_MASTER_KEY: Buffer.alloc(32, 7).toString(
+        "base64",
+      ),
+      THIMBLE_ALLOWED_ORIGIN:
+        "https://db.example.test",
+    };
+
+    const authority = createCloudflareAuthority();
+    const health = await authority.fetch(
+      new Request("https://db.example.test/healthz"),
+      environment as never,
+    );
+    expect(health.status).toBe(200);
+    await expect(health.json()).resolves.toEqual({
+      status: "ok",
+    });
+
+    const ready = await authority.fetch(
+      new Request("https://db.example.test/readyz"),
+      environment as never,
+    );
+    expect(ready.status).toBe(200);
+    await expect(ready.json()).resolves.toEqual({
+      status: "ready",
+      provider: "r2",
+    });
+  });
+
   it("parses bounded JSON request bodies", async () => {
     await expect(
       readJsonRequest(

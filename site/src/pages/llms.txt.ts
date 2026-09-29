@@ -39,6 +39,7 @@ scope and one collection.
 - [Security](${site.url}/security/): Threat model, encryption, key handling, and browser boundaries.
 - [Authentication](${site.url}/docs/authentication/): External OIDC identities and revocable sessions.
 - [Machine and service access](${site.url}/docs/service-access/): Entra roles, service principals, live viewers, and why there is no global admin key.
+- [Kubernetes deployment](${site.url}/docs/deployment-kubernetes/): Signed multi-architecture image, OCI Helm chart, secure defaults, same-origin routing, and scaling limits.
 - [Object protocol](${site.url}/docs/protocol/): TDB1 envelopes, snapshots, tries, and conditional writes.
 - [Queries and indexes](${site.url}/docs/queries-indexes/): Typed predicates, developer-declared secondary indexes, and explicit covering projections.
 - [Deletion and retention](${site.url}/docs/deletion-retention/): Tombstones, restore windows, and physical collection.

@@ -169,6 +169,20 @@ Record:
 Never log scope keys, raw session cookies, SAS tokens, connection strings, or
 decrypted document bodies.
 
+## Health probes
+
+Node and Cloudflare authorities expose unauthenticated `GET /healthz` and
+`GET /readyz` routes. Health reports that the process is serving. Readiness
+reports completed authority initialisation and the configured provider.
+
+The routes return only bounded status metadata and do not test a live storage
+write. Keep provider operation errors, session creation, key grants, read
+latency, write latency, and conditional HEAD failures in the operational
+signal set.
+
+Kubernetes probes use these routes. See
+[Deploy to Kubernetes](DEPLOYMENT-KUBERNETES.md).
+
 ## Source-IP rate limiting
 
 The Node authority uses the direct socket peer by default and ignores

@@ -1,4 +1,4 @@
-name: Publish npm package
+name: Publish release artifacts
 
 on:
   release:
@@ -7,6 +7,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   package:
@@ -111,3 +115,212 @@ jobs:
       - name: Report existing version
         if: steps.registry.outputs.published == 'true'
         run: echo "Package version is already published; no registry change was made."
+
+  container:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Verify release tag
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Release tag ${GITHUB_REF_NAME} does not match package version ${version}."
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check image version
+        id: registry
+        shell: bash
+        run: |
+          image="ghcr.io/jason-doyle/thimbledb:${VERSION}"
+          if output="$(docker buildx imagetools inspect "${image}" 2>/dev/null)"; then
+            digest="$(printf '%s\n' "${output}" | awk '$1 == "Digest:" { print $2; exit }')"
+            if [ -z "${digest}" ]; then
+              echo "Unable to determine the existing image digest."
+              exit 1
+            fi
+            if ! grep --quiet 'linux/amd64' <<<"${output}" ||
+              ! grep --quiet 'linux/arm64' <<<"${output}"; then
+              echo "Existing image version is missing a required platform."
+              exit 1
+            fi
+            echo "published=true" >> "${GITHUB_OUTPUT}"
+            echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "published=false" >> "${GITHUB_OUTPUT}"
+          fi
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Create image metadata
+        id: metadata
+        uses: docker/metadata-action@v6.2.0
+        with:
+          images: ghcr.io/jason-doyle/thimbledb
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+
+      - name: Build and push image
+        id: image
+        if: steps.registry.outputs.published != 'true'
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            REVISION=${{ github.sha }}
+            SOURCE=${{ github.server_url }}/${{ github.repository }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=release-image
+          cache-to: type=gha,mode=max,scope=release-image
+
+      - name: Resolve image digest
+        id: digest
+        shell: bash
+        run: |
+          digest="${EXISTING_DIGEST:-${BUILT_DIGEST}}"
+          if [[ ! "${digest}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid image digest: ${digest}"
+            exit 1
+          fi
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+        env:
+          EXISTING_DIGEST: ${{ steps.registry.outputs.digest }}
+          BUILT_DIGEST: ${{ steps.image.outputs.digest }}
+
+      - name: Report existing image
+        if: steps.registry.outputs.published == 'true'
+        run: echo "Image version already exists; no registry image was replaced."
+
+      - name: Sign image
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: cosign sign --yes "ghcr.io/jason-doyle/thimbledb@${DIGEST}"
+
+  chart:
+    needs: container
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5.0.1
+        with:
+          version: v3.18.3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Verify chart version
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          chart_version="$(awk '$1 == "version:" { print $2 }' deploy/helm/thimbledb/Chart.yaml)"
+          app_version="$(awk '$1 == "appVersion:" { gsub(/"/, "", $2); print $2 }' deploy/helm/thimbledb/Chart.yaml)"
+          if [ "${chart_version}" != "${version}" ] || [ "${app_version}" != "${version}" ]; then
+            echo "Chart version ${chart_version}/${app_version} does not match ${version}."
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR for OCI signatures
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to GHCR
+        shell: bash
+        run: |
+          echo "${GITHUB_TOKEN}" | helm registry login ghcr.io \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package chart
+        run: |
+          helm lint deploy/helm/thimbledb --values deploy/helm/test/values.yaml
+          mkdir release-chart
+          helm package deploy/helm/thimbledb --destination release-chart
+
+      - name: Publish chart
+        shell: bash
+        run: |
+          chart_ref="ghcr.io/jason-doyle/charts/thimbledb"
+          chart_archive="release-chart/thimbledb-${VERSION}.tgz"
+          if existing_chart="$(helm show chart "oci://ghcr.io/jason-doyle/charts/thimbledb" \
+            --version "${VERSION}" 2>/dev/null)"; then
+            existing_version="$(printf '%s\n' "${existing_chart}" | awk '$1 == "version:" { print $2; exit }')"
+            existing_app_version="$(printf '%s\n' "${existing_chart}" | awk '$1 == "appVersion:" { gsub(/"/, "", $2); print $2; exit }')"
+            if [ "${existing_version}" != "${VERSION}" ] ||
+              [ "${existing_app_version}" != "${VERSION}" ]; then
+              echo "Existing chart metadata does not match release version ${VERSION}."
+              exit 1
+            fi
+            echo "Chart ${VERSION} already exists; no registry change was made."
+            rm --force "${chart_archive}"
+            push_output="$(helm pull "oci://ghcr.io/jason-doyle/charts/thimbledb" \
+              --version "${VERSION}" \
+              --destination release-chart 2>&1)"
+          else
+            push_output="$(helm push "${chart_archive}" \
+              "oci://ghcr.io/jason-doyle/charts" 2>&1)"
+          fi
+          echo "${push_output}"
+          digest="$(printf '%s\n' "${push_output}" | awk '$1 == "Digest:" { print $2; exit }')"
+          if [ -z "${digest}" ]; then
+            echo "Unable to determine the published chart digest."
+            exit 1
+          fi
+          cosign sign --yes "${chart_ref}@${digest}"
+          gh release upload "${GITHUB_REF_NAME}" \
+            "${chart_archive}" \
+            --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}

@@ -250,6 +250,25 @@ async function route(
 
   if (
     request.method === "GET" &&
+    url.pathname === "/healthz"
+  ) {
+    return json({
+      status: "ok",
+    });
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/readyz"
+  ) {
+    return json({
+      status: "ready",
+      provider: "r2",
+    });
+  }
+
+  if (
+    request.method === "GET" &&
     url.pathname === "/api/auth/config"
   ) {
     return json({

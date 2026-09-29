@@ -315,6 +315,14 @@ export const docs: DocMeta[] = [
     order: 30,
   },
   {
+    id: "deployment-kubernetes",
+    title: "Deploy to Kubernetes",
+    description:
+      "Install the signed multi-architecture authority image and OCI Helm chart with secure defaults and shared cloud storage.",
+    group: "Deploy and operate",
+    order: 35,
+  },
+  {
     id: "operations",
     title: "Operations",
     description:

@@ -128,6 +128,11 @@ Studio is served as static package assets and communicates only with
 authority endpoints. It starts read-only, requires explicit scope selection,
 and cannot use `thimble.admin` to bypass a missing scope grant.
 
+`GET /healthz` and `GET /readyz` are intentionally unauthenticated for
+platform probes. They return only process status and the configured provider,
+set `cache-control: no-store`, and do not expose credentials, scope IDs, or
+document data.
+
 See [Authentication and identity](AUTHENTICATION.md).
 
 ## Revocation

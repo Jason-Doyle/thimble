@@ -1,0 +1,14 @@
+ThimbleDB is running behind:
+
+  {{ include "thimbledb.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+Keep the browser and authority on one public origin. Route /api/* and, when
+enabled, /studio/* through the application Ingress or gateway.
+
+Check readiness:
+
+  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "thimbledb.fullname" . }} 8787:{{ .Values.service.port }}
+  curl http://127.0.0.1:8787/readyz
+
+The local provider is for one-pod development only. Production replicas must
+share S3, R2, or Azure Blob storage.

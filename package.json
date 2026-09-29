@@ -1,6 +1,6 @@
 {
   "name": "thimbledb",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Encrypted browser-first JSON database for small web apps, backed by object storage with in-app or separate Cloudflare and Node authorities.",
   "private": false,
   "license": "Apache-2.0",
@@ -22,6 +22,9 @@
     "database-admin",
     "browser-database",
     "json-database",
+    "kubernetes",
+    "helm",
+    "container",
     "indexeddb",
     "object-storage",
     "encryption",

@@ -104,8 +104,8 @@ authority traffic need different scaling or release controls.
 ## Separate Worker or service
 
 The authority runs in its own Worker, container, Lambda function, Container
-App, or Node service. The browser application remains a normal ThimbleDB
-client.
+App, Kubernetes Deployment, or Node service. The browser application remains
+a normal ThimbleDB client.
 
 Typical public routing:
 
@@ -159,6 +159,11 @@ isolation matter. It is not an automatic throughput improvement.
 For Node deployments, use a shared cloud object store before running multiple
 authority instances. The local filesystem provider is intentionally limited to
 one process and is not a scale-out storage backend.
+
+Kubernetes deployments can use the published multi-architecture image and OCI
+Helm chart. The chart does not provision storage or identity and does not
+remove the collection HEAD contention boundary. See
+[Deploy to Kubernetes](DEPLOYMENT-KUBERNETES.md).
 
 ## Same-origin browser boundary
 
