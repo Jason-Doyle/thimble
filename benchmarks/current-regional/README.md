@@ -4,9 +4,16 @@ This harness measures released snapshot, trie, read-bundle, secondary-index,
 scan, and write paths against a temporary Cloudflare Worker and R2 bucket.
 Disposable Azure Container Instances provide regional callers.
 
-The local machine may generate and upload deterministic fixtures. Measured
-operations execute from Azure through the temporary Worker and R2. Do not use
-the production ThimbleDB Worker, buckets, routes, or custom domain.
+## Intended use
+
+Use this harness to reproduce the published regional evidence or evaluate a
+specific ThimbleDB revision under the same deterministic workload. The local
+machine generates and uploads fixtures; measured operations execute from
+Azure through the temporary Worker and R2.
+
+Run the harness only against temporary benchmark resources. A production
+ThimbleDB Worker, bucket, route, or custom domain is outside the benchmark
+scope.
 
 ## Profiles
 

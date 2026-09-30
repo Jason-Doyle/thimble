@@ -1,14 +1,17 @@
 # Trie index-page reuse benchmark
 
-This benchmark measures a production-internal optimisation: a Trie write
-reuses each secondary-index page already loaded and validated before mutation
-preparation.
+This benchmark measures the effect of reusing a Trie secondary-index page
+after the authority has already loaded and validated it. The reuse path avoids
+fetching the same immutable index page again during write preparation.
 
-The control wraps the candidate engine and deliberately duplicates every
-index-page read. This recreates the previous operation count in the same
-process, fixture, and benchmark run.
+## What it compares
 
-## Local preflight
+The paired control wraps the same engine and deliberately duplicates each
+index-page read. This recreates the earlier operation count without
+maintaining a separate engine implementation. Both paths therefore use the
+same fixtures, write logic, process, and benchmark window.
+
+## Run the local matrix
 
 ```powershell
 npm run benchmark:trie-index-reuse
@@ -21,23 +24,25 @@ The local matrix covers:
 - eight independent updates per case
 - exact decoded protocol equivalence
 
-Acceptance requires:
+The predeclared checks are:
 
 - one authoritative read removed per configured index
 - identical decoded keys and values
 - no indexed p50 regression above 5 percent
 
-Regional evidence is required before merging the production change.
+Local timing isolates decoding, validation, index maintenance, encryption,
+and compression. It does not represent end-to-end object-storage latency.
 
-## Result
+## Published findings
 
-The completed paired local and regional result is documented in
+The paired local and regional findings are documented in
 [RESULTS.md](RESULTS.md).
 
-The candidate removed one read per index and reduced indexed read bytes by
-35-50 percent. All six regional p50 values improved by 4-13 percent, although
-the predeclared 10-percent medium/large threshold did not pass in every case.
+Index-page reuse removed one read per configured index and reduced indexed
+read bytes by 35-50 percent. All six regional p50 values improved by 4-13
+percent. The predeclared requirement for every medium and large p50 to improve
+by at least 10 percent did not pass.
 
-The production candidate is recommended for `main` because the redundant work
-is removed deterministically, protocol output is unchanged, and no material
-regression was observed.
+The implementation is present in ThimbleDB after merge commit `a7869ad`.
+Applications do not need a migration or configuration change to receive the
+reduced read count.
