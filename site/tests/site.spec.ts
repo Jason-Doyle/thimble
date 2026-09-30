@@ -367,7 +367,7 @@ test("benchmark page publishes tables, graphs, and raw evidence", async ({
   ).toBeVisible();
   await expect(
     page.locator('.prose img[src*="/benchmarks/"]'),
-  ).toHaveCount(5);
+  ).toHaveCount(6);
   await expect(page.locator(".prose table")).toHaveCount(12);
 
   const jsonResponse = await request.get(

@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the package uses semantic versioning.
 
 ## Unreleased
 
+- Reused Trie secondary-index pages already loaded during configuration
+  validation, removing one object-store read per configured index without
+  changing stored protocol objects.
 - Corrected GHCR visibility guidance after the first image and chart packages
   inherited public access without a manual settings change.
 

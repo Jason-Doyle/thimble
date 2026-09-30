@@ -372,6 +372,9 @@ The measurements show:
 - post-merge two-index p50 amplification fell by 48-72 percent relative to
   each run's no-index floor, while current absolute writes still remained
   multi-second
+- paired Trie index-page reuse removed one read per configured index, reduced
+  indexed read bytes by 35-50 percent, and improved regional p50 by 4-13
+  percent without changing stored protocol objects
 - the post-merge write run retained three R2 internal failures and recorded
   zero CAS retries
 - cold reads and large indexed writes remain too slow for latency-sensitive

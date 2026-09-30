@@ -41,6 +41,11 @@ The local artifacts isolate CPU and encoding cost. The
 historical source on the same machine and with the same eight-iteration
 configuration as the post-merge local artifact.
 
+`trie-index-page-reuse-regional-worker-2026-09-30.json` contains the paired
+672-write matrix comparing duplicate index reads with reused validated index
+pages. `trie-index-page-reuse-local-2026-09-30.json` contains the matching
+local protocol-equivalence and CPU preflight.
+
 SHA-256:
 
 ```text
@@ -49,4 +54,7 @@ Post-merge local    C3273165AEA82CDE6B0EB052D174BFEDD3D7CAA8E7BC04329FC9C9D89192
 Historical regional FB922BE12A86631482FC4EA52C21F8D29FD211F42E3C7C45765CC23E157FB0A3
 Historical local    23B461C033F5BD16CC17AA199FA526D790898EDD4A289CE30FCE6427D4BB017D
 Local baseline rerun B474B2017A0F275C0EB819B03EFA0DED469E09C82BCCBB8811788CBC183B063A
+Index-reuse regional  DC263801D5BF1C1F9CB563788F566D1A29D22DBAEEF32DDC735E20CF23CFC76F
+Index-reuse local     EED29BF6C7C547D2FAB121E024D5F6AC4FE415B3036A690C45F182E9935AC246
+Index-reuse summary   0ABD1C8229F952BE5E66C78E639FAA4188049B8CCF228373D26EC326D5F1123E
 ```
