@@ -542,7 +542,11 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       expectedHeadEtag === undefined ? this.maxRetries : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       const head = await this.loadHead(normalized);
-      await this.requireIndexConfiguration(normalized, head.state);
+      const currentIndexPages =
+        await this.requireIndexConfiguration(
+          normalized,
+          head.state,
+        );
       if (
         expectedHeadEtag !== undefined &&
         (head.object?.etag ?? null) !== expectedHeadEtag
@@ -553,6 +557,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
         normalized,
         head.state,
         collapsedChanges,
+        currentIndexPages,
       );
       const limitIndexWrite = createAsyncOperationLimiter(
         MAX_PARALLEL_INDEX_WRITES,
@@ -1175,6 +1180,10 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
     collection: string,
     head: TrieHead,
     changes: SecondaryIndexChange[],
+    currentIndexPages: ReadonlyMap<
+      string,
+      SecondaryIndexPage
+    >,
   ): Promise<PreparedSecondaryIndex[]> {
     const definitions = this.indexConfiguration[collection] ?? [];
     if (definitions.length === 0) {
@@ -1187,38 +1196,14 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       const currentReference = head.indexes?.[definition.name];
       let currentPage: SecondaryIndexPage | null = null;
       if (currentReference && !this.allowIndexConfigurationChange) {
-        const object = await this.store.get(
-          trieIndexKey(
-            collection,
-            definition.name,
-            currentReference.hash,
-          ),
-        );
-        if (!object) {
+        const validated =
+          currentIndexPages.get(definition.name);
+        if (!validated) {
           throw new Error(
-            `Secondary index ${definition.name} is missing`,
+            `Secondary index ${definition.name} was not validated`,
           );
         }
-        const loadedPage = secondaryIndexPageFromJson(
-          decodeJson<JsonValue>(object.bytes),
-        );
-        if (
-          secondaryIndexDefinitionsEqual(
-            loadedPage.definition,
-            definition,
-          )
-        ) {
-          currentPage = loadedPage;
-        } else {
-          storedDocuments ??= await this.scanStoredFromHead(
-            collection,
-            head,
-          );
-          currentPage = buildSecondaryIndexPage(
-            definition,
-            storedDocuments,
-          );
-        }
+        currentPage = validated;
       } else {
         storedDocuments ??= await this.scanStoredFromHead(
           collection,
@@ -1339,10 +1324,14 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
   private async requireIndexConfiguration(
     collection: string,
     head: TrieHead,
-  ): Promise<void> {
+  ): Promise<Map<string, SecondaryIndexPage>> {
     const active = Object.entries(head.indexes ?? {});
+    const pages = new Map<
+      string,
+      SecondaryIndexPage
+    >();
     if (this.allowIndexConfigurationChange) {
-      return;
+      return pages;
     }
     const configured = new Map(
       (this.indexConfiguration[collection] ?? []).map(
@@ -1350,7 +1339,7 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
       ),
     );
     if (head.revision === 0 && active.length === 0) {
-      return;
+      return pages;
     }
     if (active.length !== configured.size) {
       throw new Error(
@@ -1383,7 +1372,9 @@ export class ContentAddressedTrieEngine implements DatabaseEngine {
           `Collection ${collection} secondary index ${name} does not match the supplied configuration`,
         );
       }
+      pages.set(name, page);
     }
+    return pages;
   }
 
   private async readStoredAtHead(
