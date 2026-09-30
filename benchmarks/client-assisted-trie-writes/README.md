@@ -58,3 +58,15 @@ Each candidate must produce the same decoded keys and bytes as the baseline.
 
 Local timing is a CPU and operation-count preflight. A successful local result
 still requires regional object-storage evidence before production promotion.
+
+## Result
+
+The completed experiment is documented in [RESULTS.md](RESULTS.md).
+
+The tree-only context improved pooled regional p50 by 24.20 to 44.97 percent
+when it was already warm, but the largest two-index case missed the
+predeclared 25-percent threshold and a dedicated context fetch erased the
+benefit. Full index context was rejected because of request size and local
+verification cost.
+
+The prototype remains isolated from `main`.

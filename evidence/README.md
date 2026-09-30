@@ -41,6 +41,15 @@ The local artifacts isolate CPU and encoding cost. The
 historical source on the same machine and with the same eight-iteration
 configuration as the post-merge local artifact.
 
+`client-assisted-trie-writes-regional-worker-2026-09-29.json` contains the
+1,008-write signed warm-context experiment across seven regions, two pristine
+R2 replicates, three collection sizes, and zero, one, and two indexes.
+
+`client-assisted-trie-writes-local-2026-09-29.json` contains the matching
+local CPU and operation-count matrix. It includes the rejected full
+tree-plus-index context. `client-assisted-trie-writes-summary-2026-09-29.csv`
+is the compact regional projection.
+
 SHA-256:
 
 ```text
@@ -49,4 +58,7 @@ Post-merge local    C3273165AEA82CDE6B0EB052D174BFEDD3D7CAA8E7BC04329FC9C9D89192
 Historical regional FB922BE12A86631482FC4EA52C21F8D29FD211F42E3C7C45765CC23E157FB0A3
 Historical local    23B461C033F5BD16CC17AA199FA526D790898EDD4A289CE30FCE6427D4BB017D
 Local baseline rerun B474B2017A0F275C0EB819B03EFA0DED469E09C82BCCBB8811788CBC183B063A
+Client-write regional 5DF91D28F8D2ABF0140CF67D2EEA9E31BABC8BDABCC2E3CF44D1645191DFD73E
+Client-write local    E06ADA00DCF9E0121ED2CC578C8F7AE0F7BA032EDB0837D7D762E8ABB0B9132C
+Client-write summary  DE32822581956CAF24CE34B7DF120386BDFF60503EEB9B69FF98E068DFA14E0B
 ```

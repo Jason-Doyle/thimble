@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title description">
+<title id="title">Client-assisted Trie write p50 latency</title>
+<desc id="description">Baseline and warm Trie-path context p50 latency across three collection sizes and zero, one, or two indexes.</desc>
+<rect width="1200" height="620" fill="#f5f8fd"/>
+<text x="90" y="36" font-size="25" font-weight="700" fill="#0b1f3a">Warm Trie-path context reduces regional write latency</text>
+<text x="90" y="61" font-size="14" fill="#526274">Pooled p50 across seven Azure regions and two pristine R2 replicates. Lower is better.</text>
+<line x1="90" y1="510" x2="1160" y2="510" stroke="#d8e1ee"/><text x="78" y="514" text-anchor="end" font-size="12" fill="#526274">0</text>
+<line x1="90" y1="448.57" x2="1160" y2="448.57" stroke="#d8e1ee"/><text x="78" y="452.57" text-anchor="end" font-size="12" fill="#526274">1,000</text>
+<line x1="90" y1="387.14" x2="1160" y2="387.14" stroke="#d8e1ee"/><text x="78" y="391.14" text-anchor="end" font-size="12" fill="#526274">2,000</text>
+<line x1="90" y1="325.71" x2="1160" y2="325.71" stroke="#d8e1ee"/><text x="78" y="329.71" text-anchor="end" font-size="12" fill="#526274">3,000</text>
+<line x1="90" y1="264.29" x2="1160" y2="264.29" stroke="#d8e1ee"/><text x="78" y="268.29" text-anchor="end" font-size="12" fill="#526274">4,000</text>
+<line x1="90" y1="202.86" x2="1160" y2="202.86" stroke="#d8e1ee"/><text x="78" y="206.86" text-anchor="end" font-size="12" fill="#526274">5,000</text>
+<line x1="90" y1="141.43" x2="1160" y2="141.43" stroke="#d8e1ee"/><text x="78" y="145.43" text-anchor="end" font-size="12" fill="#526274">6,000</text>
+<line x1="90" y1="80" x2="1160" y2="80" stroke="#d8e1ee"/><text x="78" y="84" text-anchor="end" font-size="12" fill="#526274">7,000</text>
+<line x1="90" y1="510" x2="1160" y2="510" stroke="#0b1f3a"/>
+<rect x="119.44" y="253.75" width="28" height="256.25" fill="#0b1f3a"/>
+<rect x="151.44" y="369" width="28" height="141" fill="#1677ff"/>
+<text x="149.44" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">S0</text>
+<text x="149.44" y="566" text-anchor="middle" font-size="12" fill="#526274">-44.97%</text>
+<rect x="238.33" y="220.38" width="28" height="289.62" fill="#0b1f3a"/>
+<rect x="270.33" y="330.86" width="28" height="179.14" fill="#1677ff"/>
+<text x="268.33" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">S1</text>
+<text x="268.33" y="566" text-anchor="middle" font-size="12" fill="#526274">-38.15%</text>
+<rect x="357.22" y="188.2" width="28" height="321.8" fill="#0b1f3a"/>
+<rect x="389.22" y="298.01" width="28" height="211.99" fill="#1677ff"/>
+<text x="387.22" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">S2</text>
+<text x="387.22" y="566" text-anchor="middle" font-size="12" fill="#526274">-34.12%</text>
+<rect x="476.11" y="260.66" width="28" height="249.34" fill="#0b1f3a"/>
+<rect x="508.11" y="357.87" width="28" height="152.13" fill="#1677ff"/>
+<text x="506.11" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">M0</text>
+<text x="506.11" y="566" text-anchor="middle" font-size="12" fill="#526274">-38.99%</text>
+<rect x="595" y="210.43" width="28" height="299.57" fill="#0b1f3a"/>
+<rect x="627" y="316.18" width="28" height="193.82" fill="#1677ff"/>
+<text x="625" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">M1</text>
+<text x="625" y="566" text-anchor="middle" font-size="12" fill="#526274">-35.3%</text>
+<rect x="713.89" y="166.56" width="28" height="343.44" fill="#0b1f3a"/>
+<rect x="745.89" y="264.18" width="28" height="245.82" fill="#1677ff"/>
+<text x="743.89" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">M2</text>
+<text x="743.89" y="566" text-anchor="middle" font-size="12" fill="#526274">-28.42%</text>
+<rect x="832.78" y="260.66" width="28" height="249.34" fill="#0b1f3a"/>
+<rect x="864.78" y="362.58" width="28" height="147.42" fill="#1677ff"/>
+<text x="862.78" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">L0</text>
+<text x="862.78" y="566" text-anchor="middle" font-size="12" fill="#526274">-40.88%</text>
+<rect x="951.67" y="176.1" width="28" height="333.9" fill="#0b1f3a"/>
+<rect x="983.67" y="279.42" width="28" height="230.58" fill="#1677ff"/>
+<text x="981.67" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">L1</text>
+<text x="981.67" y="566" text-anchor="middle" font-size="12" fill="#526274">-30.94%</text>
+<rect x="1070.56" y="84.38" width="28" height="425.62" fill="#0b1f3a"/>
+<rect x="1102.56" y="187.4" width="28" height="322.6" fill="#1677ff"/>
+<text x="1100.56" y="546" text-anchor="middle" font-size="13" fill="#0b1f3a">L2</text>
+<text x="1100.56" y="566" text-anchor="middle" font-size="12" fill="#526274">-24.2%</text>
+<rect x="880" y="24" width="16" height="16" fill="#0b1f3a"/>
+<text x="904" y="37" font-size="13" fill="#0b1f3a">Baseline</text>
+<rect x="990" y="24" width="16" height="16" fill="#1677ff"/>
+<text x="1014" y="37" font-size="13" fill="#0b1f3a">Warm context</text>
+<text x="24" y="295" transform="rotate(-90 24 295)" text-anchor="middle" font-size="14" fill="#526274">p50 latency (ms)</text>
+<text x="600" y="604" text-anchor="middle" font-size="12" fill="#526274">S/M/L = 128 / 5,000 / 25,000 documents; number = index count; percentages show warm-context change.</text>
+</svg>
