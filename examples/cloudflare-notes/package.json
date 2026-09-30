@@ -10,6 +10,6 @@
     "thimbledb": "^2.0.0"
   },
   "devDependencies": {
-    "wrangler": "^4.137.0"
+    "wrangler": "^4.144.0"
   }
 }
