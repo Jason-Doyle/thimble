@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1050" height="590" viewBox="0 0 1050 590" role="img" aria-labelledby="title description">
+<title id="title">Trie index page reuse p50 latency</title>
+<desc id="description">Control with duplicate index reads and candidate with reused validated pages across collection sizes and index counts.</desc>
+<rect width="1050" height="590" fill="#f5f8fd"/>
+<text x="90" y="36" font-size="25" font-weight="700" fill="#0b1f3a">Reusing validated index pages reduces every regional p50</text>
+<text x="90" y="61" font-size="14" fill="#526274">Pooled p50 across seven Azure regions and two pristine R2 replicates. Lower is better.</text>
+<line x1="90" y1="485" x2="1010" y2="485" stroke="#d8e1ee"/><text x="78" y="489" text-anchor="end" font-size="12" fill="#526274">0</text>
+<line x1="90" y1="427.14" x2="1010" y2="427.14" stroke="#d8e1ee"/><text x="78" y="431.14" text-anchor="end" font-size="12" fill="#526274">1,000</text>
+<line x1="90" y1="369.29" x2="1010" y2="369.29" stroke="#d8e1ee"/><text x="78" y="373.29" text-anchor="end" font-size="12" fill="#526274">2,000</text>
+<line x1="90" y1="311.43" x2="1010" y2="311.43" stroke="#d8e1ee"/><text x="78" y="315.43" text-anchor="end" font-size="12" fill="#526274">3,000</text>
+<line x1="90" y1="253.57" x2="1010" y2="253.57" stroke="#d8e1ee"/><text x="78" y="257.57" text-anchor="end" font-size="12" fill="#526274">4,000</text>
+<line x1="90" y1="195.71" x2="1010" y2="195.71" stroke="#d8e1ee"/><text x="78" y="199.71" text-anchor="end" font-size="12" fill="#526274">5,000</text>
+<line x1="90" y1="137.86" x2="1010" y2="137.86" stroke="#d8e1ee"/><text x="78" y="141.86" text-anchor="end" font-size="12" fill="#526274">6,000</text>
+<line x1="90" y1="80" x2="1010" y2="80" stroke="#d8e1ee"/><text x="78" y="84" text-anchor="end" font-size="12" fill="#526274">7,000</text>
+<line x1="90" y1="485" x2="1010" y2="485" stroke="#0b1f3a"/>
+<rect x="125.67" y="174.28" width="38" height="310.72" fill="#0b1f3a"/>
+<rect x="169.67" y="214.99" width="38" height="270.01" fill="#1677ff"/>
+<text x="166.67" y="520" text-anchor="middle" font-size="14" fill="#0b1f3a">S1</text>
+<text x="166.67" y="541" text-anchor="middle" font-size="12" fill="#526274">-13.1%</text>
+<rect x="279" y="151.43" width="38" height="333.57" fill="#0b1f3a"/>
+<rect x="323" y="177.83" width="38" height="307.17" fill="#1677ff"/>
+<text x="320" y="520" text-anchor="middle" font-size="14" fill="#0b1f3a">S2</text>
+<text x="320" y="541" text-anchor="middle" font-size="12" fill="#526274">-7.91%</text>
+<rect x="432.33" y="181.25" width="38" height="303.75" fill="#0b1f3a"/>
+<rect x="476.33" y="195.57" width="38" height="289.43" fill="#1677ff"/>
+<text x="473.33" y="520" text-anchor="middle" font-size="14" fill="#0b1f3a">M1</text>
+<text x="473.33" y="541" text-anchor="middle" font-size="12" fill="#526274">-4.72%</text>
+<rect x="585.67" y="145.05" width="38" height="339.95" fill="#0b1f3a"/>
+<rect x="629.67" y="166.6" width="38" height="318.4" fill="#1677ff"/>
+<text x="626.67" y="520" text-anchor="middle" font-size="14" fill="#0b1f3a">M2</text>
+<text x="626.67" y="541" text-anchor="middle" font-size="12" fill="#526274">-6.34%</text>
+<rect x="739" y="171.51" width="38" height="313.49" fill="#0b1f3a"/>
+<rect x="783" y="184.8" width="38" height="300.2" fill="#1677ff"/>
+<text x="780" y="520" text-anchor="middle" font-size="14" fill="#0b1f3a">L1</text>
+<text x="780" y="541" text-anchor="middle" font-size="12" fill="#526274">-4.24%</text>
+<rect x="892.33" y="90.08" width="38" height="394.92" fill="#0b1f3a"/>
+<rect x="936.33" y="128.34" width="38" height="356.66" fill="#1677ff"/>
+<text x="933.33" y="520" text-anchor="middle" font-size="14" fill="#0b1f3a">L2</text>
+<text x="933.33" y="541" text-anchor="middle" font-size="12" fill="#526274">-9.69%</text>
+<rect x="740" y="24" width="16" height="16" fill="#0b1f3a"/>
+<text x="764" y="37" font-size="13" fill="#0b1f3a">Duplicate reads</text>
+<rect x="880" y="24" width="16" height="16" fill="#1677ff"/>
+<text x="904" y="37" font-size="13" fill="#0b1f3a">Reuse</text>
+<text x="24" y="282.5" transform="rotate(-90 24 282.5)" text-anchor="middle" font-size="14" fill="#526274">p50 latency (ms)</text>
+<text x="525" y="576" text-anchor="middle" font-size="12" fill="#526274">S/M/L = 128 / 5,000 / 25,000 documents; number = index count.</text>
+</svg>

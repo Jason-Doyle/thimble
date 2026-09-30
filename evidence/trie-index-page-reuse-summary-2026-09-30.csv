@@ -1,0 +1,7 @@
+profile,documents,index_set,index_count,baseline_p50_ms,candidate_p50_ms,p50_change_percent,baseline_p95_ms,candidate_p95_ms,p95_change_percent,baseline_reads,candidate_reads,read_byte_change_percent
+small,128,one,1,5370.461,4666.812,-13.1,8739.036,8670.088,-0.79,6,5,-35.22
+small,128,two,2,5765.41,5309.08,-7.91,9581.24,8998.601,-6.08,8,6,-41.57
+medium,5000,one,1,5250.03,5002.49,-4.72,8497.837,8558.276,0.71,6,5,-49
+medium,5000,two,2,5875.732,5503.139,-6.34,9702.225,8980.712,-7.44,8,6,-49.53
+large,25000,one,1,5418.358,5188.63,-4.24,9505.719,8956.486,-5.78,6,5,-49.65
+large,25000,two,2,6825.799,6164.567,-9.69,11467.727,10657.092,-7.07,8,6,-49.84

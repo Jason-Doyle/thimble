@@ -40,6 +40,9 @@ for (const file of [
   "write-scaling-local-2026-09-28.json",
   "write-scaling-local-baseline-rerun-2026-09-28.json",
   "write-scaling-comparison-2026-09-28.csv",
+  "trie-index-page-reuse-regional-worker-2026-09-30.json",
+  "trie-index-page-reuse-local-2026-09-30.json",
+  "trie-index-page-reuse-summary-2026-09-30.csv",
 ]) {
   const source = await readFile(
     path.join(repositoryRoot, "evidence", file),

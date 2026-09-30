@@ -1,0 +1,1669 @@
+{
+  "generatedAt": "2026-09-30T02:25:03.900Z",
+  "sourceCommit": "dbfa505e09b38e03ca2e9dbf0396b27190414291",
+  "iterations": 8,
+  "warning": "Local in-memory CPU and operation-count preflight. Regional cloud evidence remains required for end-to-end latency conclusions.",
+  "acceptance": {
+    "protocolEquivalent": "Every candidate must retain identical decoded keys and bytes.",
+    "reads": "Reuse must remove exactly one read per configured index.",
+    "indexedP50": "Indexed candidate p50 must not regress by more than 5%."
+  },
+  "results": {
+    "small-none": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "none",
+      "indexCount": 0,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 1.561,
+          "p95Ms": 2.71,
+          "meanMs": 1.895,
+          "meanReads": 4,
+          "meanIndexReads": 0,
+          "meanReadBytes": 1645,
+          "meanWrites": 4,
+          "meanWriteBytes": 1660
+        },
+        "samples": [
+          {
+            "elapsedMs": 2.451,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1534,
+            "writes": 4,
+            "writeBytes": 1549,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.303,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1621,
+            "writes": 4,
+            "writeBytes": 1632,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.689,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1660,
+            "writes": 4,
+            "writeBytes": 1681,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.542,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1789,
+            "writes": 4,
+            "writeBytes": 1806,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.71,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1527,
+            "writes": 4,
+            "writeBytes": 1540,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.561,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1665,
+            "writes": 4,
+            "writeBytes": 1676,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.474,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1612,
+            "writes": 4,
+            "writeBytes": 1623,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.433,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1752,
+            "writes": 4,
+            "writeBytes": 1771,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 1.381,
+          "p95Ms": 2.162,
+          "meanMs": 1.533,
+          "meanReads": 4,
+          "meanIndexReads": 0,
+          "meanReadBytes": 1645,
+          "meanWrites": 4,
+          "meanWriteBytes": 1660
+        },
+        "samples": [
+          {
+            "elapsedMs": 1.773,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1534,
+            "writes": 4,
+            "writeBytes": 1549,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.162,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1621,
+            "writes": 4,
+            "writeBytes": 1632,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.258,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1660,
+            "writes": 4,
+            "writeBytes": 1681,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.648,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1789,
+            "writes": 4,
+            "writeBytes": 1806,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.305,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1527,
+            "writes": 4,
+            "writeBytes": 1540,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.381,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1665,
+            "writes": 4,
+            "writeBytes": 1676,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.434,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1612,
+            "writes": 4,
+            "writeBytes": 1623,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.303,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 1752,
+            "writes": 4,
+            "writeBytes": 1771,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -11.53,
+        "p95ChangePercent": -20.22,
+        "readCountChangePercent": 0,
+        "readByteChangePercent": 0
+      }
+    },
+    "small-one": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "one",
+      "indexCount": 1,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 2.99,
+          "p95Ms": 3.623,
+          "meanMs": 3.02,
+          "meanReads": 6,
+          "meanIndexReads": 2,
+          "meanReadBytes": 5793,
+          "meanWrites": 5,
+          "meanWriteBytes": 3783
+        },
+        "samples": [
+          {
+            "elapsedMs": 3.623,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5682,
+            "writes": 5,
+            "writeBytes": 3673,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.035,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5769,
+            "writes": 5,
+            "writeBytes": 3754,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.777,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5808,
+            "writes": 5,
+            "writeBytes": 3806,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.382,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5937,
+            "writes": 5,
+            "writeBytes": 3931,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.458,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5675,
+            "writes": 5,
+            "writeBytes": 3660,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.56,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5813,
+            "writes": 5,
+            "writeBytes": 3799,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.99,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5760,
+            "writes": 5,
+            "writeBytes": 3746,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.333,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 5900,
+            "writes": 5,
+            "writeBytes": 3896,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 2.206,
+          "p95Ms": 3.137,
+          "meanMs": 2.431,
+          "meanReads": 5,
+          "meanIndexReads": 1,
+          "meanReadBytes": 3767,
+          "meanWrites": 5,
+          "meanWriteBytes": 3783
+        },
+        "samples": [
+          {
+            "elapsedMs": 2.206,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3656,
+            "writes": 5,
+            "writeBytes": 3673,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.553,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3743,
+            "writes": 5,
+            "writeBytes": 3754,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.07,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3782,
+            "writes": 5,
+            "writeBytes": 3806,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.137,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3911,
+            "writes": 5,
+            "writeBytes": 3931,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.021,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3649,
+            "writes": 5,
+            "writeBytes": 3660,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.13,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3787,
+            "writes": 5,
+            "writeBytes": 3799,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.605,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3734,
+            "writes": 5,
+            "writeBytes": 3746,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.727,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 3874,
+            "writes": 5,
+            "writeBytes": 3896,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -26.22,
+        "p95ChangePercent": -13.41,
+        "readCountChangePercent": -16.67,
+        "readByteChangePercent": -34.97
+      }
+    },
+    "small-two": {
+      "profile": "small",
+      "documents": 128,
+      "indexSet": "two",
+      "indexCount": 2,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 3.52,
+          "p95Ms": 4.908,
+          "meanMs": 3.684,
+          "meanReads": 8,
+          "meanIndexReads": 4,
+          "meanReadBytes": 10504,
+          "meanWrites": 6,
+          "meanWriteBytes": 6173
+        },
+        "samples": [
+          {
+            "elapsedMs": 3.52,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10393,
+            "writes": 6,
+            "writeBytes": 6063,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.377,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10480,
+            "writes": 6,
+            "writeBytes": 6139,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.212,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10519,
+            "writes": 6,
+            "writeBytes": 6199,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.906,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10648,
+            "writes": 6,
+            "writeBytes": 6322,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 4.053,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10386,
+            "writes": 6,
+            "writeBytes": 6052,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 4.908,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10524,
+            "writes": 6,
+            "writeBytes": 6187,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.541,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10471,
+            "writes": 6,
+            "writeBytes": 6137,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.952,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 10611,
+            "writes": 6,
+            "writeBytes": 6288,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 2.882,
+          "p95Ms": 4.509,
+          "meanMs": 3.002,
+          "meanReads": 6,
+          "meanIndexReads": 2,
+          "meanReadBytes": 6155,
+          "meanWrites": 6,
+          "meanWriteBytes": 6173
+        },
+        "samples": [
+          {
+            "elapsedMs": 2.893,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6044,
+            "writes": 6,
+            "writeBytes": 6063,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.882,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6131,
+            "writes": 6,
+            "writeBytes": 6139,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.045,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6170,
+            "writes": 6,
+            "writeBytes": 6199,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.68,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6299,
+            "writes": 6,
+            "writeBytes": 6322,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.081,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6037,
+            "writes": 6,
+            "writeBytes": 6052,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 4.509,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6175,
+            "writes": 6,
+            "writeBytes": 6187,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.481,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6122,
+            "writes": 6,
+            "writeBytes": 6137,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.444,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 6262,
+            "writes": 6,
+            "writeBytes": 6288,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -18.12,
+        "p95ChangePercent": -8.13,
+        "readCountChangePercent": -25,
+        "readByteChangePercent": -41.4
+      }
+    },
+    "medium-none": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "none",
+      "indexCount": 0,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 1.412,
+          "p95Ms": 3.09,
+          "meanMs": 1.896,
+          "meanReads": 4,
+          "meanIndexReads": 0,
+          "meanReadBytes": 2616,
+          "meanWrites": 4,
+          "meanWriteBytes": 2630
+        },
+        "samples": [
+          {
+            "elapsedMs": 1.26,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2488,
+            "writes": 4,
+            "writeBytes": 2504,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.651,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2657,
+            "writes": 4,
+            "writeBytes": 2672,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 3.09,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2617,
+            "writes": 4,
+            "writeBytes": 2628,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.412,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2498,
+            "writes": 4,
+            "writeBytes": 2513,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.356,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2610,
+            "writes": 4,
+            "writeBytes": 2620,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.463,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2779,
+            "writes": 4,
+            "writeBytes": 2795,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.344,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2672,
+            "writes": 4,
+            "writeBytes": 2687,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.591,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2608,
+            "writes": 4,
+            "writeBytes": 2622,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 1.119,
+          "p95Ms": 1.503,
+          "meanMs": 1.164,
+          "meanReads": 4,
+          "meanIndexReads": 0,
+          "meanReadBytes": 2616,
+          "meanWrites": 4,
+          "meanWriteBytes": 2630
+        },
+        "samples": [
+          {
+            "elapsedMs": 1.257,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2488,
+            "writes": 4,
+            "writeBytes": 2504,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.101,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2657,
+            "writes": 4,
+            "writeBytes": 2672,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.119,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2617,
+            "writes": 4,
+            "writeBytes": 2628,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.165,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2498,
+            "writes": 4,
+            "writeBytes": 2513,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 0.951,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2610,
+            "writes": 4,
+            "writeBytes": 2620,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.043,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2779,
+            "writes": 4,
+            "writeBytes": 2795,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.17,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2672,
+            "writes": 4,
+            "writeBytes": 2687,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.503,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 2608,
+            "writes": 4,
+            "writeBytes": 2622,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -20.75,
+        "p95ChangePercent": -51.36,
+        "readCountChangePercent": 0,
+        "readByteChangePercent": 0
+      }
+    },
+    "medium-one": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "one",
+      "indexCount": 1,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 26.065,
+          "p95Ms": 28.363,
+          "meanMs": 26.455,
+          "meanReads": 6,
+          "meanIndexReads": 2,
+          "meanReadBytes": 134412,
+          "meanWrites": 5,
+          "meanWriteBytes": 68580
+        },
+        "samples": [
+          {
+            "elapsedMs": 28.363,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134284,
+            "writes": 5,
+            "writeBytes": 68457,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 26.301,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134453,
+            "writes": 5,
+            "writeBytes": 68622,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 24.883,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134413,
+            "writes": 5,
+            "writeBytes": 68576,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 25.945,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134294,
+            "writes": 5,
+            "writeBytes": 68461,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 25.196,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134406,
+            "writes": 5,
+            "writeBytes": 68567,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 28.19,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134575,
+            "writes": 5,
+            "writeBytes": 68746,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 26.699,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134468,
+            "writes": 5,
+            "writeBytes": 68638,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 26.065,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 134404,
+            "writes": 5,
+            "writeBytes": 68574,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 23.418,
+          "p95Ms": 25.864,
+          "meanMs": 23.782,
+          "meanReads": 5,
+          "meanIndexReads": 1,
+          "meanReadBytes": 68562,
+          "meanWrites": 5,
+          "meanWriteBytes": 68580
+        },
+        "samples": [
+          {
+            "elapsedMs": 23.045,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68434,
+            "writes": 5,
+            "writeBytes": 68457,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 23.816,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68603,
+            "writes": 5,
+            "writeBytes": 68622,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 23.418,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68563,
+            "writes": 5,
+            "writeBytes": 68576,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 25.864,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68444,
+            "writes": 5,
+            "writeBytes": 68461,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 23.251,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68556,
+            "writes": 5,
+            "writeBytes": 68567,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 22.34,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68725,
+            "writes": 5,
+            "writeBytes": 68746,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 24.547,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68618,
+            "writes": 5,
+            "writeBytes": 68638,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 23.972,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 68554,
+            "writes": 5,
+            "writeBytes": 68574,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -10.16,
+        "p95ChangePercent": -8.81,
+        "readCountChangePercent": -16.67,
+        "readByteChangePercent": -48.99
+      }
+    },
+    "medium-two": {
+      "profile": "medium",
+      "documents": 5000,
+      "indexSet": "two",
+      "indexCount": 2,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 56.84,
+          "p95Ms": 66.306,
+          "meanMs": 58.458,
+          "meanReads": 8,
+          "meanIndexReads": 4,
+          "meanReadBytes": 294707,
+          "meanWrites": 6,
+          "meanWriteBytes": 148765
+        },
+        "samples": [
+          {
+            "elapsedMs": 60.799,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294579,
+            "writes": 6,
+            "writeBytes": 148641,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 56.501,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294748,
+            "writes": 6,
+            "writeBytes": 148807,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 66.306,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294708,
+            "writes": 6,
+            "writeBytes": 148760,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 56.305,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294589,
+            "writes": 6,
+            "writeBytes": 148646,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 57.53,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294701,
+            "writes": 6,
+            "writeBytes": 148752,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 56.84,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294870,
+            "writes": 6,
+            "writeBytes": 148935,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 58.636,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294763,
+            "writes": 6,
+            "writeBytes": 148823,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 54.749,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 294699,
+            "writes": 6,
+            "writeBytes": 148759,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 52.825,
+          "p95Ms": 54.945,
+          "meanMs": 53.171,
+          "meanReads": 6,
+          "meanIndexReads": 2,
+          "meanReadBytes": 148743,
+          "meanWrites": 6,
+          "meanWriteBytes": 148765
+        },
+        "samples": [
+          {
+            "elapsedMs": 52.825,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148615,
+            "writes": 6,
+            "writeBytes": 148641,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 52.482,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148784,
+            "writes": 6,
+            "writeBytes": 148807,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 54.381,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148744,
+            "writes": 6,
+            "writeBytes": 148760,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 53.858,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148625,
+            "writes": 6,
+            "writeBytes": 148646,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 53.397,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148737,
+            "writes": 6,
+            "writeBytes": 148752,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 54.945,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148906,
+            "writes": 6,
+            "writeBytes": 148935,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 52.718,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148799,
+            "writes": 6,
+            "writeBytes": 148823,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 50.76,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 148735,
+            "writes": 6,
+            "writeBytes": 148759,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -7.06,
+        "p95ChangePercent": -17.13,
+        "readCountChangePercent": -25,
+        "readByteChangePercent": -49.53
+      }
+    },
+    "large-none": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "none",
+      "indexCount": 0,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 2.328,
+          "p95Ms": 2.914,
+          "meanMs": 2.365,
+          "meanReads": 4,
+          "meanIndexReads": 0,
+          "meanReadBytes": 4467,
+          "meanWrites": 4,
+          "meanWriteBytes": 4486
+        },
+        "samples": [
+          {
+            "elapsedMs": 2.914,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4178,
+            "writes": 4,
+            "writeBytes": 4198,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.328,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4425,
+            "writes": 4,
+            "writeBytes": 4439,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.08,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4507,
+            "writes": 4,
+            "writeBytes": 4522,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.525,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4294,
+            "writes": 4,
+            "writeBytes": 4313,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.297,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4510,
+            "writes": 4,
+            "writeBytes": 4529,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.942,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4506,
+            "writes": 4,
+            "writeBytes": 4528,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.381,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4497,
+            "writes": 4,
+            "writeBytes": 4517,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 2.453,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4820,
+            "writes": 4,
+            "writeBytes": 4843,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 1.562,
+          "p95Ms": 2.598,
+          "meanMs": 1.749,
+          "meanReads": 4,
+          "meanIndexReads": 0,
+          "meanReadBytes": 4467,
+          "meanWrites": 4,
+          "meanWriteBytes": 4486
+        },
+        "samples": [
+          {
+            "elapsedMs": 2.598,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4178,
+            "writes": 4,
+            "writeBytes": 4198,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.741,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4425,
+            "writes": 4,
+            "writeBytes": 4439,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.537,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4507,
+            "writes": 4,
+            "writeBytes": 4522,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.829,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4294,
+            "writes": 4,
+            "writeBytes": 4313,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.549,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4510,
+            "writes": 4,
+            "writeBytes": 4529,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.519,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4506,
+            "writes": 4,
+            "writeBytes": 4528,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.66,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4497,
+            "writes": 4,
+            "writeBytes": 4517,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 1.562,
+            "reads": 4,
+            "indexReads": 0,
+            "readBytes": 4820,
+            "writes": 4,
+            "writeBytes": 4843,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -32.9,
+        "p95ChangePercent": -10.84,
+        "readCountChangePercent": 0,
+        "readByteChangePercent": 0
+      }
+    },
+    "large-one": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "one",
+      "indexCount": 1,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 139.26,
+          "p95Ms": 142.883,
+          "meanMs": 140.44,
+          "meanReads": 6,
+          "meanIndexReads": 2,
+          "meanReadBytes": 656692,
+          "meanWrites": 5,
+          "meanWriteBytes": 330651
+        },
+        "samples": [
+          {
+            "elapsedMs": 138.576,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 656403,
+            "writes": 5,
+            "writeBytes": 330363,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 142.883,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 656650,
+            "writes": 5,
+            "writeBytes": 330603,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 140.889,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 656732,
+            "writes": 5,
+            "writeBytes": 330687,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 142.846,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 656519,
+            "writes": 5,
+            "writeBytes": 330475,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 139.26,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 656735,
+            "writes": 5,
+            "writeBytes": 330692,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 139.154,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 656731,
+            "writes": 5,
+            "writeBytes": 330695,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 141.279,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 656722,
+            "writes": 5,
+            "writeBytes": 330683,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 138.635,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 657045,
+            "writes": 5,
+            "writeBytes": 331010,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 129.258,
+          "p95Ms": 132.135,
+          "meanMs": 128.682,
+          "meanReads": 5,
+          "meanIndexReads": 1,
+          "meanReadBytes": 330628,
+          "meanWrites": 5,
+          "meanWriteBytes": 330651
+        },
+        "samples": [
+          {
+            "elapsedMs": 130.058,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330339,
+            "writes": 5,
+            "writeBytes": 330363,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 126.313,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330586,
+            "writes": 5,
+            "writeBytes": 330603,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 126.221,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330668,
+            "writes": 5,
+            "writeBytes": 330687,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 132.135,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330455,
+            "writes": 5,
+            "writeBytes": 330475,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 130.478,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330671,
+            "writes": 5,
+            "writeBytes": 330692,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 124.187,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330667,
+            "writes": 5,
+            "writeBytes": 330695,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 129.258,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330658,
+            "writes": 5,
+            "writeBytes": 330683,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 130.808,
+            "reads": 5,
+            "indexReads": 1,
+            "readBytes": 330981,
+            "writes": 5,
+            "writeBytes": 331010,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": -7.18,
+        "p95ChangePercent": -7.52,
+        "readCountChangePercent": -16.67,
+        "readByteChangePercent": -49.65
+      }
+    },
+    "large-two": {
+      "profile": "large",
+      "documents": 25000,
+      "indexSet": "two",
+      "indexCount": 2,
+      "duplicate": {
+        "summary": {
+          "p50Ms": 308.507,
+          "p95Ms": 316.911,
+          "meanMs": 311.327,
+          "meanReads": 8,
+          "meanIndexReads": 4,
+          "meanReadBytes": 1450752,
+          "meanWrites": 6,
+          "meanWriteBytes": 727722
+        },
+        "samples": [
+          {
+            "elapsedMs": 307.918,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1450463,
+            "writes": 6,
+            "writeBytes": 727426,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 309.21,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1450710,
+            "writes": 6,
+            "writeBytes": 727673,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 315.51,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1450792,
+            "writes": 6,
+            "writeBytes": 727758,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 307.823,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1450579,
+            "writes": 6,
+            "writeBytes": 727545,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 316.707,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1450795,
+            "writes": 6,
+            "writeBytes": 727764,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 316.911,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1450791,
+            "writes": 6,
+            "writeBytes": 727770,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 308.029,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1450782,
+            "writes": 6,
+            "writeBytes": 727757,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 308.507,
+            "reads": 8,
+            "indexReads": 4,
+            "readBytes": 1451105,
+            "writes": 6,
+            "writeBytes": 728084,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "reuse": {
+        "summary": {
+          "p50Ms": 314.394,
+          "p95Ms": 321.036,
+          "meanMs": 313.463,
+          "meanReads": 6,
+          "meanIndexReads": 2,
+          "meanReadBytes": 727692,
+          "meanWrites": 6,
+          "meanWriteBytes": 727722
+        },
+        "samples": [
+          {
+            "elapsedMs": 293.203,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 727403,
+            "writes": 6,
+            "writeBytes": 727426,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 313.518,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 727650,
+            "writes": 6,
+            "writeBytes": 727673,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 321.036,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 727732,
+            "writes": 6,
+            "writeBytes": 727758,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 314.394,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 727519,
+            "writes": 6,
+            "writeBytes": 727545,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 317.349,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 727735,
+            "writes": 6,
+            "writeBytes": 727764,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 318.73,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 727731,
+            "writes": 6,
+            "writeBytes": 727770,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 315.688,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 727722,
+            "writes": 6,
+            "writeBytes": 727757,
+            "preconditionFailures": 0
+          },
+          {
+            "elapsedMs": 313.783,
+            "reads": 6,
+            "indexReads": 2,
+            "readBytes": 728045,
+            "writes": 6,
+            "writeBytes": 728084,
+            "preconditionFailures": 0
+          }
+        ]
+      },
+      "comparison": {
+        "p50ChangePercent": 1.91,
+        "p95ChangePercent": 1.3,
+        "readCountChangePercent": -25,
+        "readByteChangePercent": -49.84
+      }
+    }
+  }
+}

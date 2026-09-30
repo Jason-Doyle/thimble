@@ -28,3 +28,16 @@ Acceptance requires:
 - no indexed p50 regression above 5 percent
 
 Regional evidence is required before merging the production change.
+
+## Result
+
+The completed paired local and regional result is documented in
+[RESULTS.md](RESULTS.md).
+
+The candidate removed one read per index and reduced indexed read bytes by
+35-50 percent. All six regional p50 values improved by 4-13 percent, although
+the predeclared 10-percent medium/large threshold did not pass in every case.
+
+The production candidate is recommended for `main` because the redundant work
+is removed deterministically, protocol output is unchanged, and no material
+regression was observed.

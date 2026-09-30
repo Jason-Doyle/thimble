@@ -317,6 +317,32 @@ See the
 for the regional breakdown, local comparison, exact hashes, failures, and
 method.
 
+## Trie index-page reuse
+
+A paired 672-write regional matrix compared the production Trie candidate
+with a control that duplicates every index-page read. The candidate removed
+one read per configured index, reduced indexed read bytes by 35-50 percent,
+and preserved active protocol state in all 84 post-run comparisons.
+
+Pooled p50 improved by 4.24-13.10 percent across 128, 5,000, and 25,000
+documents with one and two indexes. The predeclared 10-percent threshold did
+not pass in every medium and large case. The result is still promoted because
+the operation removal is deterministic, all six p50 values improved, and no
+material regression or protocol change was observed.
+
+![Trie index-page reuse p50](https://thimbledb.com/benchmarks/trie-index-page-reuse-p50.svg)
+
+Raw artifacts:
+
+- `evidence/trie-index-page-reuse-regional-worker-2026-09-30.json`
+- `evidence/trie-index-page-reuse-local-2026-09-30.json`
+- `evidence/trie-index-page-reuse-summary-2026-09-30.csv`
+
+See the
+[index-page reuse report](https://github.com/Jason-Doyle/thimble/blob/main/benchmarks/trie-index-page-reuse/RESULTS.md)
+for the paired method, exact tables, hashes, local preflight, and acceptance
+result.
+
 ## Envelope limit validation
 
 Every one of the 14 regional read runs fetched a 16,336-byte gzip envelope
