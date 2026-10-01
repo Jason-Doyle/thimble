@@ -1,7 +1,6 @@
-# Production write-scaling experiment
+# Write-scaling benchmark
 
-This benchmark measures the unchanged production Snapshot and Trie write
-paths across:
+This benchmark characterises Snapshot and Trie write behaviour across:
 
 - 128 documents
 - 5,000 documents
@@ -27,4 +26,16 @@ The matching local benchmark uses an in-memory object store without simulated
 latency to isolate encoding, encryption, compression, and index-maintenance
 cost.
 
-No production code, Worker, bucket, route, or custom domain is changed.
+## How to use the results
+
+Use the regional evidence to estimate the observed object-storage latency
+floor, index amplification, and regional spread for small read-heavy
+applications. Use the local evidence to separate CPU and encoding work from
+network and provider latency.
+
+The results are workload-specific observations, not general latency or cost
+guarantees. The complete interpretation and raw artifact hashes are in
+[RESULTS.md](RESULTS.md).
+
+The harness uses temporary Workers, buckets, and Azure callers. It does not
+modify a production ThimbleDB deployment.

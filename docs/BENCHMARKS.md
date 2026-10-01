@@ -4,6 +4,10 @@ This page reports live multi-region measurements against Cloudflare Workers
 and R2. Results describe the tested data, routes, regions, and time period.
 They do not establish database-wide superiority over another system.
 
+The [benchmark index](https://github.com/Jason-Doyle/thimble/tree/main/benchmarks)
+links the reproducibility harnesses and explains the evidence conventions used
+by each report.
+
 ## Current-layout benchmark
 
 The 25 September 2026 run measured the released snapshot, trie, read-bundle,
@@ -319,10 +323,10 @@ method.
 
 ## Trie index-page reuse
 
-A paired 672-write regional matrix compared the production Trie candidate
-with a control that duplicates every index-page read. The candidate removed
-one read per configured index, reduced indexed read bytes by 35-50 percent,
-and preserved active protocol state in all 84 post-run comparisons.
+A paired 672-write regional matrix compared Trie index-page reuse with a
+control that duplicates every index-page read. The reuse path removed one
+read per configured index, reduced indexed read bytes by 35-50 percent, and
+preserved active protocol state in all 84 post-run comparisons.
 
 Pooled p50 improved by 4.24-13.10 percent across 128, 5,000, and 25,000
 documents with one and two indexes. The predeclared 10-percent threshold did
