@@ -2,9 +2,7 @@
 
 Date: 29 September 2026
 
-Branch: `perf/reuse-trie-index-pages`
-
-Production candidate:
+Tested implementation:
 
 ```text
 bd8af6eec98b8f4a745d90327e96534c4a09fac0
@@ -16,11 +14,13 @@ Regional harness:
 a1a1d02d9ce71318956e5a5cb9574eed43314c04
 ```
 
-## Decision
+The implementation was merged through pull request
+[#35](https://github.com/Jason-Doyle/thimble/pull/35) and is present after
+merge commit `a7869ad055d4bc303b1f4e86855bcd70d656e3a2`.
 
-Promote the production candidate to `main`.
+## Findings
 
-The candidate reuses each secondary-index page already loaded during
+The reuse path consumes each secondary-index page already loaded during
 fail-closed configuration validation instead of reading it again during
 update preparation.
 
@@ -29,7 +29,7 @@ every medium and large case. Pooled p50 improved by 4.24 to 13.10 percent,
 with the largest two-index case improving by 9.69 percent. The narrower
 latency gate therefore failed.
 
-The change is still worth promoting because:
+The evidence supports the following narrower conclusions:
 
 - every one-index write removes one remote read
 - every two-index write removes two remote reads
@@ -44,8 +44,19 @@ The change is still worth promoting because:
   rejection limit
 - there is no API, request, trust, storage-format, or migration change
 
-This is a deterministic removal of redundant work with a modest but consistent
-regional latency benefit.
+The operation reduction is deterministic. The observed latency benefit is
+modest and workload-dependent.
+
+## Applicability
+
+Applications using Trie collections with secondary indexes receive the
+reduced read count automatically. No migration, new option, or browser change
+is required.
+
+The optimisation does not change the four-read no-index Trie state-load path,
+the collection-wide index-page format, index update CPU, immutable writes, or
+final HEAD publication. Large indexed writes can therefore remain
+multi-second operations.
 
 ## Implementation
 
@@ -60,7 +71,8 @@ checking:
 `prepareIndexes()` consumes those exact validated pages. It does not fetch the
 same objects again.
 
-Validation still finishes before candidate immutable objects are written.
+Validation still finishes before immutable objects for the proposed write are
+created.
 Missing, partial, or mismatched index configuration still fails closed.
 
 ## Method
@@ -75,7 +87,7 @@ The paired regional matrix covered:
 - two pristine R2 bucket replicates
 - 672 measured writes
 
-The control used the same candidate engine and wrapped the object store to
+The control used the same implementation and wrapped the object store to
 duplicate each index-page `get`. This reproduced the old operation count in
 the same Worker deployment and time window without maintaining a second
 engine implementation.
@@ -84,7 +96,7 @@ Every region, profile, index set, and mode used an isolated prefix.
 Authentication and browser rendering were excluded.
 
 The local matrix ran eight updates per case and compared decoded object keys
-and bytes after every control/candidate pair.
+and bytes after every control/reuse pair.
 
 All temporary Workers, R2 buckets, Azure container groups, and the resource
 group were deleted.
@@ -104,7 +116,7 @@ group were deleted.
 
 ## Remote-read reduction
 
-| Indexes | Previous reads | Candidate reads | Read-count change |
+| Indexes | Duplicate-read control | Reuse path | Read-count change |
 | ---: | ---: | ---: | ---: |
 | 1 | 6 | 5 | -16.67% |
 | 2 | 8 | 6 | -25.00% |
@@ -133,7 +145,8 @@ while the unchanged HEAD and Trie-path reads remained small.
 | Failed protocol comparisons | 0 |
 
 Local protocol-equivalence tests also compare every stored key and decoded
-byte. Partial index configurations fail before any candidate write.
+byte. Partial index configurations fail before any immutable write is
+attempted.
 
 ## Local result
 
@@ -160,9 +173,9 @@ compression cost without network latency.
 | No p95 regresses by more than 10% | Pass |
 | No local indexed p50 regresses by more than 5% | Pass |
 
-The missed latency threshold is retained rather than redefined. Promotion is
-based on the deterministic operation and byte reduction, complete
-equivalence, low implementation risk, and absence of a material regression.
+The missed latency threshold is retained rather than redefined. The report
+therefore supports the deterministic operation and byte reduction, while
+limiting the latency claim to the measured 4.24-13.10 percent p50 range.
 
 ## Raw evidence
 

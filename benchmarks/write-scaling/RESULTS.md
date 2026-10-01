@@ -1,10 +1,8 @@
-# Post-merge write-scaling benchmark
+# Write scaling after bounded immutable scheduling
 
 Date: 28 September 2026
 
-Branch: `benchmark/post-merge-write-scaling`
-
-Production source commit:
+Tested implementation:
 
 ```text
 2c648a603d21f69872839272b560a547abb13a9b
@@ -16,19 +14,19 @@ Regional harness commit:
 33cfe72cfeef885ff5cfbb618b2dd24687ba8bca
 ```
 
-Historical baseline source commit:
+Comparison implementation:
 
 ```text
 b0471ad20e05bd07b4a42f15bc1fc0d152fa1735
 ```
 
-## Decision
+## Findings
 
-The merged bounded write scheduler reduced the additional p50 cost of two
+The bounded immutable-write scheduler reduced the additional p50 cost of two
 indexes by 48 to 72 percent, depending on layout and collection size. It did
 not make writes interactive.
 
-The current pooled p50 floor was:
+The measured pooled p50 floor was:
 
 - 2.98 to 3.40 seconds for Snapshot without indexes
 - 5.29 to 5.41 seconds for Trie without indexes
@@ -39,8 +37,8 @@ The run retained three R2 internal failures. All three affected the
 128-document no-index Snapshot case in one replicate. There were no CAS
 retries.
 
-Absolute latency was higher than the historical 27 September run even for
-no-index paths that received no meaningful scheduling benefit. Current
+Absolute latency was higher than the 27 September comparison run even for
+no-index paths that received no meaningful scheduling benefit. Measured
 no-index R2 read duration was 15 to 53 percent higher, and write duration was
 34 to 63 percent higher. The cross-day absolute difference therefore cannot
 be assigned to the code change.
@@ -50,8 +48,17 @@ The useful conclusion is:
 > Parallel immutable commits materially reduce index amplification, but fixed
 > object-store latency still defines a multi-second write floor.
 
-The next write experiment should test authoritative mutation batches of 1, 5,
-and 20 documents.
+## Applicability
+
+These measurements describe single-document writes through a temporary
+Cloudflare Worker and R2 bucket. They are useful for sizing the write latency
+and index cost of small, read-heavy applications. They do not establish a
+general service-level objective, cost comparison, or interactive-write
+guarantee.
+
+Applications that require sub-second writes, hot shared state, or sustained
+multi-region write concurrency should use another write system for those
+paths.
 
 ## Method
 
@@ -78,9 +85,9 @@ as the historical evidence without relying on anonymous Docker Hub pulls.
 Authentication, browser rendering, and residential last-mile latency were
 excluded.
 
-## Current pooled latency
+## Measured pooled latency
 
-![Post-merge write p50](https://thimbledb.com/benchmarks/write-scaling-p50.svg)
+![Bounded-scheduler write p50](https://thimbledb.com/benchmarks/write-scaling-p50.svg)
 
 | Documents | Indexes | Snapshot p50 | Snapshot p95 | Trie p50 | Trie p95 |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -124,7 +131,7 @@ The table compares the two-index p50 increase relative to the no-index case in
 the same run. This normalization reduces the effect of different R2 conditions
 between days.
 
-| Documents | Layout | Historical increase | Post-merge increase | Relative reduction |
+| Documents | Layout | Comparison increase | Scheduled-write increase | Relative reduction |
 | ---: | --- | ---: | ---: | ---: |
 | 128 | Snapshot | +103.12% | +28.37% | 72.49% |
 | 128 | Trie | +59.13% | +24.12% | 59.21% |
@@ -143,10 +150,10 @@ Operation counts and transferred bytes remained unchanged.
 
 ## Local CPU comparison
 
-The current and historical commits were rerun on the same machine with eight
+The tested and comparison commits were rerun on the same machine with eight
 iterations per case.
 
-| Case | Historical p50 | Post-merge p50 | Change |
+| Case | Comparison p50 | Tested p50 | Change |
 | --- | ---: | ---: | ---: |
 | Large no-index Snapshot | 169.59 ms | 167.59 ms | -1.18% |
 | Large one-index Snapshot | 996.45 ms | 983.06 ms | -1.34% |
@@ -172,7 +179,7 @@ produce a summed duration greater than wall time.
 | Large two-index Snapshot | 2,469 ms | 12,722 ms | 8,116 ms |
 | Large two-index Trie | 4,638 ms | 7,318 ms | 8,655 ms |
 
-The no-index paths show the current fixed object-store floor. The indexed
+The no-index paths show the measured fixed object-store floor. The indexed
 paths show why summed per-object duration must not be treated as serial wall
 time after bounded parallel commits.
 
@@ -235,7 +242,7 @@ Users should:
 
 ## Historical comparison limits
 
-The historical and current regional runs used the same deterministic data,
+The comparison and tested regional runs used the same deterministic data,
 matrix, Node version, regions, operation order, and R2 account. They ran on
 different days and reached different Cloudflare colos in several regions.
 
@@ -245,39 +252,39 @@ supports these narrower claims:
 - operation counts and bytes did not change
 - local CPU remained effectively neutral
 - two-index amplification relative to the same run's no-index floor decreased
-- current absolute write limits remain multi-second
+- measured absolute write limits remain multi-second
 
 ## Raw evidence
 
-Post-merge regional evidence:
+28 September regional evidence:
 
 ```text
 evidence/write-scaling-regional-worker-2026-09-28.json
 SHA-256 A433E2729528787929FCAED89448FBBCE3ED51977DEC6D8B95C06BC40BAD09DD
 ```
 
-Post-merge local evidence:
+28 September local evidence:
 
 ```text
 evidence/write-scaling-local-2026-09-28.json
 SHA-256 C3273165AEA82CDE6B0EB052D174BFEDD3D7CAA8E7BC04329FC9C9D891924D63
 ```
 
-Historical regional baseline:
+27 September regional comparison:
 
 ```text
 evidence/write-scaling-regional-worker-2026-09-27.json
 SHA-256 FB922BE12A86631482FC4EA52C21F8D29FD211F42E3C7C45765CC23E157FB0A3
 ```
 
-Historical local baseline:
+27 September local comparison:
 
 ```text
 evidence/write-scaling-local-2026-09-27.json
 SHA-256 23B461C033F5BD16CC17AA199FA526D790898EDD4A289CE30FCE6427D4BB017D
 ```
 
-Same-machine historical local rerun:
+Same-machine comparison rerun:
 
 ```text
 evidence/write-scaling-local-baseline-rerun-2026-09-28.json
