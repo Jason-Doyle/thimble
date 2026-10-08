@@ -5,6 +5,7 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { markdownHeadingAnchor } from "./markdown-heading-anchor.mjs";
 
 const root = process.cwd();
 const docsRoot = path.join(root, "docs");
@@ -377,14 +378,7 @@ function markdownAnchors(file) {
   const duplicateCounts = new Map();
   const content = withoutFencedCode(readFileSync(file, "utf8"));
   for (const match of content.matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
-    const base = match[1]
-      .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
-      .replace(/<[^>]+>/g, "")
-      .replace(/[`*_~]/g, "")
-      .toLowerCase()
-      .trim()
-      .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-      .replace(/\s+/g, "-");
+    const base = markdownHeadingAnchor(match[1]);
     const count = duplicateCounts.get(base) ?? 0;
     duplicateCounts.set(base, count + 1);
     anchors.add(count === 0 ? base : `${base}-${count}`);
