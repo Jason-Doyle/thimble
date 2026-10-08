@@ -160,7 +160,7 @@ implements PointReadBundleReader {
   ): Promise<RemoteReadBundle> {
     const url = new URL(this.baseUrl, this.origin);
     url.pathname = [
-      url.pathname.replace(/\/+$/, ""),
+      withoutTrailingSlashes(url.pathname),
       encodeURIComponent(this.scopeId),
       encodeURIComponent(collection),
       encodeURIComponent(id),
@@ -305,7 +305,7 @@ export function objectUrl(
   const url = new URL(baseUrl, origin);
   const query = url.search;
   url.search = "";
-  const basePath = url.pathname.replace(/\/+$/, "");
+  const basePath = withoutTrailingSlashes(url.pathname);
   const objectPath = key
     .split("/")
     .map((segment) => encodeURIComponent(segment))
@@ -313,6 +313,14 @@ export function objectUrl(
   url.pathname = `${basePath}/${objectPath}`;
   url.search = query;
   return url.toString();
+}
+
+function withoutTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
 }
 
 function readBundleFromJson(value: unknown): TrieReadBundle {

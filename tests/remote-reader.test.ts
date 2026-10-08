@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EnvelopeJsonObjectReader,
   HttpJsonObjectReader,
+  HttpPointReadBundleReader,
   ScopedJsonObjectReader,
   type ByteObjectReader,
 } from "../src/browser/remote-reader.js";
@@ -35,7 +36,7 @@ describe("HttpJsonObjectReader", () => {
     } as typeof fetch;
 
     const reader = new HttpJsonObjectReader(
-      "https://storage.example.test/base?sig=read",
+      "https://storage.example.test/base///?sig=read",
       receiverSensitiveFetch,
     );
 
@@ -114,5 +115,30 @@ describe("HttpJsonObjectReader", () => {
     await expect(reader.get("oversized.json")).rejects.toThrow(
       "exceeds",
     );
+  });
+});
+
+describe("HttpPointReadBundleReader", () => {
+  it("handles slash-heavy base paths without regex backtracking", async () => {
+    const slashRun = "/".repeat(4_096);
+    const requests: string[] = [];
+    const reader = new HttpPointReadBundleReader(
+      `https://storage.example.test/${slashRun}bundles///`,
+      "user:user-1",
+      (input) => {
+        requests.push(String(input));
+        return Promise.resolve(
+          new Response(null, { status: 404 }),
+        );
+      },
+    );
+
+    await expect(
+      reader.get("notes", "note-1"),
+    ).resolves.toEqual({ status: "fallback" });
+    expect(requests).toEqual([
+      `https://storage.example.test/${slashRun}` +
+        "bundles/user%3Auser-1/notes/note-1",
+    ]);
   });
 });
