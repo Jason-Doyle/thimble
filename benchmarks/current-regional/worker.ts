@@ -591,29 +591,29 @@ function withColo(response: Response, request: Request): Response {
       request as Request & {
         cf?: { colo?: string };
       }
-
-      function withStorageMetrics(
-        response: Response,
-        metrics: StoreCounters,
-      ): Response {
-        const headers = new Headers(response.headers);
-        headers.set(
-          "x-benchmark-storage-reads",
-          String(metrics.reads),
-        );
-        headers.set(
-          "x-benchmark-storage-bytes",
-          String(metrics.readBytes),
-        );
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        });
-      }
     ).cf?.colo ?? "unknown";
   const headers = new Headers(response.headers);
   headers.set("x-benchmark-colo", colo);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function withStorageMetrics(
+  response: Response,
+  metrics: StoreCounters,
+): Response {
+  const headers = new Headers(response.headers);
+  headers.set(
+    "x-benchmark-storage-reads",
+    String(metrics.reads),
+  );
+  headers.set(
+    "x-benchmark-storage-bytes",
+    String(metrics.readBytes),
+  );
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
